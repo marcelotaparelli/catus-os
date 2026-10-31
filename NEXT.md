@@ -1,7 +1,7 @@
 # Próximas etapas
 
 1. **P0 — Identidade e autorização antes de piloto:** definir organização, usuários e papéis; integrar OIDC ou sessões seguras; substituir token e ator fixo; testes de isolamento por organização e autorização negativa por rota.
-2. **P0 — Revisar e publicar o bootstrap no Git:** repositório remoto ainda sem refs/main; revisar commit na branch `feat/m0-mission-control`, definir branch base e então abrir PR. Não criar/mesclar main automaticamente.
+2. **P0 — Revisar e publicar o bootstrap no Git:** branch de feature já publicada, mas remoto sem main ou outra base; revisar commit na branch `feat/m0-mission-control`, definir branch base e então abrir PR. Não criar/mesclar main automaticamente.
 3. **P1 — Robustez operacional:** idempotência de criação, paginação real, busca, limites de volume, testes de conexão interrompida, papéis separados no banco e backup/restauração; migrar responsáveis textuais para usuários.
 4. **P1 — Aprimorar UX de contexto:** telas dedicadas, histórico de atendimentos com data/tipo, edição controlada do contexto, acesso à auditoria, filtros por projeto/responsável, confirmação clara de conflito e testes de acessibilidade completos.
 5. **P1 — Extração com revisão:** escolher provedor e política de dados/custos; implementar porta existente; persistir propostas/evidências/perguntas e execução rastreável. Nenhum dado real deve ser enviado antes da política aprovada.
