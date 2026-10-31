@@ -24,7 +24,7 @@ Baseline limpo `43183a3` na própria branch `feat/m1-identity-security`, preserv
 - Testes PostgreSQL comprovam worker sem INSERT requests/UPDATE propostas, runtime sem alteração de estado dos jobs, auditoria humana correta e nenhuma demanda antes da confirmação. Histórico original não muda após edição do PO. Backup/restauração continuam exercitados com pg_dump/pg_restore reais e jobs restaurados bloqueados para reenvio.
 - `npm run ai:worker -- --once`: worker restrito iniciou e informou LLM indisponível, sem chamadas externas. `npm run ai:check`: código 2 com configuração ausente, sem segredo impresso ou requisição enviada.
 
-CI atualizado para Validate M2, preservando todos os checks anteriores e incluindo as novas suítes. Execução remota será verificada após publicar os commits; CI M1.1 não é prova M2.
+CI **Validate M2 aprovado** no [run 41239116737](https://github.com/marcelotaparelli/catus-os/actions/runs/41239116737), commit `da5a6e3`, confirmado na página pública como `Success` / `completed successfully`. Preservados todos os checks anteriores, com novas suítes incluídas. `npm run format:check`, `git diff --check` e `npm audit --omit=dev` também aprovados localmente (0 vulnerabilidades de runtime reportadas). CI M1.1 não foi usado como prova M2.
 
 ### Limitação de aceite externo e retomada
 
