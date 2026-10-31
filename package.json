@@ -10,13 +10,16 @@
     "check": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit",
     "db": "node scripts/postgres.mjs",
     "migrate": "bun scripts/migrate.ts",
-    "test": "bun test ./tests",
+    "test": "bun test --preload ./tests/setup.ts ./tests",
     "test:e2e": "playwright test",
     "env:init": "node scripts/init-env.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:db": "bun scripts/test-db.ts",
+    "bootstrap:admin": "bun scripts/bootstrap-admin.ts"
   },
   "dependencies": {
+    "openid-client": "6.8.8",
     "pg": "8.16.3",
     "svelte": "5.57.3"
   },
@@ -27,6 +30,7 @@
     "@types/pg": "8.16.0",
     "bun": "1.4.4",
     "embedded-postgres": "18.3.0-beta.17",
+    "jose": "6.2.14",
     "prettier": "3.8.1",
     "prettier-plugin-svelte": "3.4.1",
     "svelte-check": "4.4.2",

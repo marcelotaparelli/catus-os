@@ -63,6 +63,7 @@ export interface WorkRequest {
   description: string;
   status: Status;
   owner: string;
+  owner_user_id: string | null;
   next_action: string;
   version: number;
   client_name: string;

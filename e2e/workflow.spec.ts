@@ -1,129 +1,157 @@
 import { test, expect } from '@playwright/test';
-import pg from 'pg';
-test('manual client → project → meeting → request → Mission Control → update → reload', async ({
+import type { Page } from '@playwright/test';
+import { codeFor } from '../tests/support/oidc-provider';
+async function login(page: Page, email: string) {
+  // Simulate only the IdP authorization screen. Execute the real login endpoint,
+  // preserve its state cookie, then return a code to the real callback without DNS/network to .test.
+  await page.route('**/api/auth/login', async (route) => {
+    const start = await route.fetch({ maxRedirects: 0 });
+    expect(start.status()).toBe(303);
+    const auth = new URL(start.headers().location!);
+    await route.fulfill({
+      response: start,
+      headers: {
+        ...start.headers(),
+        location: `http://127.0.0.1:5173/api/auth/callback?state=${auth.searchParams.get('state')}&code=${codeFor(auth, email)}`,
+      },
+    });
+  });
+  await page.goto('/');
+  await page
+    .getByRole('link', { name: 'Entrar com conta corporativa' })
+    .click();
+  await expect(page).toHaveURL('http://127.0.0.1:5173/');
+  await expect(page.getByText(email, { exact: false }).first()).toBeVisible();
+}
+test('PO completes M0, developer executes assigned work, session survives reload, logout revokes access', async ({
   page,
+  browser,
 }) => {
-  const suffix = crypto.randomUUID().slice(0, 8);
-  const clientName = `E2E Cliente ${suffix}`;
-  const projectName = `E2E Loja ${suffix}`;
-  const title = `E2E Checkout ${suffix}`;
-  const browserErrors: string[] = [];
-  page.on('pageerror', (error) => browserErrors.push(error.message));
-  const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    await page.goto('/');
-    await page
-      .getByLabel('Token de desenvolvimento')
-      .fill(process.env.DEV_TOKEN!);
-    await page.getByRole('button', { name: 'Conectar', exact: true }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Registrar contexto' }),
-    ).toBeVisible();
-    await page.getByLabel('Nome do cliente', { exact: true }).fill(clientName);
-    await page.getByRole('button', { name: 'Cadastrar cliente' }).click();
-    const clientForm = page
-      .locator('form')
-      .filter({ has: page.getByRole('heading', { name: '02 · Projeto' }) });
-    await clientForm
-      .getByRole('combobox', { name: 'Cliente', exact: true })
-      .selectOption({ label: clientName });
-    await page.getByLabel('Nome do projeto').fill(projectName);
-    await page
-      .getByRole('button', { name: 'Criar projeto', exact: true })
-      .click();
-    await page
-      .getByRole('combobox', { name: 'Projeto', exact: true })
-      .selectOption({ label: `${clientName} / ${projectName}` });
-    await page
-      .getByLabel('Resumo e contexto')
-      .fill(`Pedido de melhoria no checkout ${suffix}`);
-    await page
-      .getByRole('button', { name: 'Registrar atendimento', exact: true })
-      .click();
-    await page
-      .getByRole('combobox', { name: 'Atendimento de origem', exact: true })
-      .selectOption({
-        label: `${projectName} · Pedido de melhoria no checkout ${suffix}`,
-      });
-    await page.getByLabel('Título', { exact: true }).fill(title);
-    await page
-      .getByLabel('Descrição', { exact: true })
-      .fill('Investigar abandono do checkout');
-    await page.getByLabel('Responsável', { exact: true }).fill('PO de teste');
-    await page
-      .getByLabel('Próxima ação', { exact: true })
-      .fill('Confirmar requisitos com cliente');
-    await page
-      .getByRole('button', { name: 'Criar solicitação', exact: true })
-      .click();
-    const card = page
-      .locator('article')
-      .filter({ has: page.getByRole('heading', { name: title, exact: true }) });
-    await expect(card).toContainText('Nova');
-    await expect(card).toContainText('PO de teste');
-    await expect(card).toContainText('Confirmar requisitos com cliente');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await login(page, 'po@browser.test');
+  await expect(
+    page.getByRole('heading', { name: 'Registrar contexto' }),
+  ).toBeVisible();
+  await page.getByLabel('Nome do cliente', { exact: true }).fill('E2E Cliente');
+  await page.getByRole('button', { name: 'Cadastrar cliente' }).click();
+  await page
+    .getByRole('combobox', { name: 'Cliente', exact: true })
+    .selectOption({ label: 'E2E Cliente' });
+  await page.getByLabel('Nome do projeto').fill('E2E Loja');
+  await page
+    .getByRole('button', { name: 'Criar projeto', exact: true })
+    .click();
+  await page
+    .getByRole('combobox', { name: 'Projeto', exact: true })
+    .selectOption({ label: 'E2E Cliente / E2E Loja' });
+  await page.getByLabel('Resumo e contexto').fill('Melhorar checkout');
+  await page
+    .getByRole('button', { name: 'Registrar atendimento', exact: true })
+    .click();
+  await page
+    .getByRole('combobox', { name: 'Atendimento de origem', exact: true })
+    .selectOption({ label: 'E2E Loja · Melhorar checkout' });
+  await page.getByLabel('Título', { exact: true }).fill('Revisar checkout');
+  await page
+    .getByLabel('Descrição', { exact: true })
+    .fill('Investigar abandono');
+  await page
+    .getByRole('combobox', { name: 'Responsável', exact: true })
+    .selectOption({ label: 'Dev Browser · dev@browser.test' });
+  await page
+    .getByLabel('Próxima ação', { exact: true })
+    .fill('Confirmar requisitos');
+  await page
+    .getByRole('button', { name: 'Criar solicitação', exact: true })
+    .click();
+  const card = page.locator('article').filter({
+    has: page.getByRole('heading', { name: 'Revisar checkout', exact: true }),
+  });
+  await expect(card).toContainText('Nova');
+  await expect(card).toContainText('Dev Browser');
+  await expect(card).toContainText('Confirmar requisitos');
+  for (const state of ['triage', 'ready']) {
     await card.getByRole('button', { name: 'Atualizar solicitação' }).click();
     const edit = page.getByRole('region', { name: 'Editar solicitação' });
     await edit
       .getByRole('combobox', { name: 'Estado', exact: true })
-      .selectOption('triage');
-    await edit.getByLabel('Responsável').fill('Engenharia');
-    await edit.getByLabel('Próxima ação').fill('Estimar esforço');
+      .selectOption(state);
     await edit.getByRole('button', { name: 'Salvar atualização' }).click();
-    await expect(card).toContainText('Em triagem');
-    await expect(card).toContainText('Engenharia');
-    await expect(card).toContainText('Estimar esforço');
-    await page.reload();
-    await page
-      .getByLabel('Token de desenvolvimento')
-      .fill(process.env.DEV_TOKEN!);
-    await page.getByRole('button', { name: 'Conectar', exact: true }).click();
-    await expect(card).toContainText('Em triagem');
-    await expect(card).toContainText('Estimar esforço');
-    await page.screenshot({
-      path: 'test-results/mission-control.png',
+    await expect(edit).toHaveCount(0);
+  }
+  await page.reload();
+  await expect(card).toContainText('Pronta');
+  await expect(
+    page.getByText('po@browser.test', { exact: false }).first(),
+  ).toBeVisible();
+  const context = await browser.newContext();
+  const dev = await context.newPage();
+  dev.on('pageerror', (e) => errors.push(e.message));
+  try {
+    await login(dev, 'dev@browser.test');
+    await expect(
+      dev.getByRole('heading', { name: 'Registrar contexto' }),
+    ).toHaveCount(0);
+    const devCard = dev.locator('article').filter({
+      has: dev.getByRole('heading', {
+        name: 'Revisar checkout',
+        exact: true,
+      }),
+    });
+    await devCard
+      .getByRole('button', { name: 'Atualizar solicitação' })
+      .click();
+    const edit = dev.getByRole('region', { name: 'Editar solicitação' });
+    await expect(
+      edit.getByRole('combobox', { name: 'Responsável', exact: true }),
+    ).toBeDisabled();
+    await edit
+      .getByRole('combobox', { name: 'Estado', exact: true })
+      .selectOption('in_progress');
+    await edit.getByLabel('Próxima ação').fill('Implementar teste');
+    await edit.getByRole('button', { name: 'Salvar atualização' }).click();
+    await expect(devCard).toContainText('Em execução');
+    await expect(devCard).toContainText('Implementar teste');
+    const session = await (await dev.request.get('/api/session')).json();
+    const denied = await dev.request.post('/api/clients', {
+      headers: {
+        Origin: 'http://127.0.0.1:5173',
+        'X-CSRF-Token': session.csrfToken,
+      },
+      data: { name: 'Not allowed' },
+    });
+    expect(denied.status()).toBe(403);
+    await dev.screenshot({
+      path: 'test-results/mission-control-m1.png',
       fullPage: true,
     });
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(
-      page.getByRole('heading', { name: 'Mission Control', exact: true }),
-    ).toBeVisible();
+    await dev.setViewportSize({ width: 390, height: 844 });
     expect(
-      await page.evaluate(
+      await dev.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
-    expect(browserErrors).toEqual([]);
+    await dev.getByRole('button', { name: 'Sair', exact: true }).click();
+    await expect(
+      dev.getByRole('link', { name: 'Entrar com conta corporativa' }),
+    ).toBeVisible();
+    expect((await dev.request.get('/api/mission-control')).status()).toBe(401);
   } finally {
-    const c = await db.connect();
-    try {
-      await c.query('BEGIN');
-      const ids = (
-        await c.query('SELECT id FROM clients WHERE name=$1', [clientName])
-      ).rows.map((r: { id: string }) => r.id);
-      for (const id of ids) {
-        await c.query(
-          'DELETE FROM audit_events WHERE request_id IN (SELECT r.id FROM requests r JOIN interactions i ON i.id=r.interaction_id JOIN projects p ON p.id=i.project_id WHERE p.client_id=$1)',
-          [id],
-        );
-        await c.query(
-          'DELETE FROM requests WHERE interaction_id IN (SELECT i.id FROM interactions i JOIN projects p ON p.id=i.project_id WHERE p.client_id=$1)',
-          [id],
-        );
-        await c.query(
-          'DELETE FROM interactions WHERE project_id IN (SELECT id FROM projects WHERE client_id=$1)',
-          [id],
-        );
-        await c.query('DELETE FROM projects WHERE client_id=$1', [id]);
-        await c.query('DELETE FROM clients WHERE id=$1', [id]);
-      }
-      await c.query('COMMIT');
-    } catch (e) {
-      await c.query('ROLLBACK');
-      throw e;
-    } finally {
-      c.release();
-      await db.end();
-    }
+    await context.close();
   }
+  const outsider = await browser.newContext();
+  const other = await outsider.newPage();
+  try {
+    await login(other, 'outsider@browser.test');
+    await expect(
+      other.getByRole('heading', { name: 'Revisar checkout', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      other.getByText('Browser Other', { exact: false }).first(),
+    ).toBeVisible();
+  } finally {
+    await outsider.close();
+  }
+  expect(errors).toEqual([]);
 });

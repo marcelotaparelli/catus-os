@@ -1,12 +1,10 @@
-# Próximas etapas
+# Próximas etapas após M1
 
-1. **P0 — Identidade e autorização antes de piloto:** definir organização, usuários e papéis; integrar OIDC ou sessões seguras; substituir token e ator fixo; testes de isolamento por organização e autorização negativa por rota.
-2. **P0 — Revisar e publicar o bootstrap no Git:** branch de feature já publicada, mas remoto sem main ou outra base; revisar commit na branch `feat/m0-mission-control`, definir branch base e então abrir PR. Não criar/mesclar main automaticamente.
-3. **P1 — Robustez operacional:** idempotência de criação, paginação real, busca, limites de volume, testes de conexão interrompida, papéis separados no banco e backup/restauração; migrar responsáveis textuais para usuários.
-4. **P1 — Aprimorar UX de contexto:** telas dedicadas, histórico de atendimentos com data/tipo, edição controlada do contexto, acesso à auditoria, filtros por projeto/responsável, confirmação clara de conflito e testes de acessibilidade completos.
-5. **P1 — Extração com revisão:** escolher provedor e política de dados/custos; implementar porta existente; persistir propostas/evidências/perguntas e execução rastreável. Nenhum dado real deve ser enviado antes da política aprovada.
-6. **P1 — Escopos e contratos:** versões, critérios de aceite, alçadas e aprovações com usuário/data; preparar entrada do motor econômico.
-7. **P1 — Economia:** definir fórmulas e fontes de taxas, moedas, impostos/custos, capacidade e margens; testes de precisão; só então exibir indicadores econômicos.
-8. **P2 — Agentes e gestão:** elegibilidade, execução isolada, outbox/jobs, orçamento, testes e PR revisável; depois métricas reais de operação e rentabilidade.
+1. **P0 — Validar OIDC corporativo real em desenvolvimento:** configurar issuer Google Workspace, client ID/secret, domínio `hd`, redirect URI exato e rede para discovery/token/JWKS; provisionar primeiro administrador; testar login, dois funcionários reais autorizados, revogação e acesso negado de conta não convidada. Segredos somente no ambiente, nunca no Git/chat. Sem OIDC, o aplicativo permanece bloqueado.
+2. **P0 — Revisão de Git/CI:** revisar M0 e M1; seguir `docs/GIT_REVIEW.md` para criar main a partir do M0 aprovado somente após autorização. Não mudar branch padrão nem fazer merge automático. Confirmar execução remota do workflow: API GitHub está bloqueada com 403 no proxy; os checks locais não equivalem a GitHub Actions verde.
+3. **P0 — Hardening antes de exposição:** separar privilégios DB runtime/migration, TLS e servidor de assets seguro, rate limit, backup/restauração, revisão de privacidade/retencão, limpeza periódica de sessões expiradas e auditoria. Considerar RLS como defesa adicional; o isolamento atual é de aplicação + FKs compostas.
+4. **P1 — Operação de usuários:** perfil/inativação global controlada, administração de organizações, convites com expiração, revisão de acesso e auditoria de diffs. Responsáveis M0 continuam como snapshot textual até vínculo explícito, sem inferência por nome.
+5. **P1 — Confiabilidade e UX:** idempotência de POST, paginação/busca, filtros por projeto/responsável, edição de contexto com histórico, testes de acessibilidade e carga. Listagens recentes continuam limitadas a 500 atendimentos/solicitações.
+6. **Somente em marco posterior — M2:** política de dados/custos e provedor de extração com evidências, revisão humana, orçamento e rastreabilidade. Não iniciar IA, contratos, finanças ou execução agêntica durante M1.
 
-Antes de cada etapa, ler `ARCHITECTURE.md`, `MASTER_PLAN.md` e `PROGRESS.md`; preservar dados e mudanças existentes. A tarefa de nuvem já é isolada: usar o checkout existente, sem criar worktree salvo pedido explícito.
+Antes de continuar, ler `ARCHITECTURE.md`, `MASTER_PLAN.md` e `PROGRESS.md`. Usar checkout existente da tarefa isolada, sem worktree salvo pedido explícito; preservar alterações, `.env` e dados do usuário. Testes usam banco separado e descartável; nunca apontar para produção.

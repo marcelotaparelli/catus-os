@@ -14,25 +14,23 @@ export default defineConfig({
     launchOptions: process.env.CHROMIUM_PATH
       ? {
           executablePath: process.env.CHROMIUM_PATH,
-          args: [
-            '--no-sandbox',
-            '--disable-dev-shm-usage',
-            '--single-process',
-            '--no-zygote',
-          ],
+          args: ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'],
         }
       : {},
   },
   webServer: [
     {
-      command: 'npm run dev',
+      command:
+        'NODE_ENV=test node_modules/.bin/bun tests/support/browser-server.ts',
       url: 'http://127.0.0.1:3000/api/health',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
     },
     {
       command: 'npm run web',
       url: 'http://127.0.0.1:5173',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
     },
   ],
   reporter: 'list',

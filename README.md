@@ -1,54 +1,81 @@
-# CATUS OS
+# CATUS OS — M1
 
-Primeira fatia M0 de um sistema operacional AI-First para uma agência de e-commerce. Cadastro manual e persistente de clientes, projetos, atendimentos/reuniões e solicitações, com responsável, estado, próxima ação e Mission Control. **A extração por IA não está implementada.**
+Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. IA não implementada.
 
-## Executar localmente
+## Instalação reproduzível
 
-Requisitos: Node.js >=22.12, npm e Linux/macOS compatível com os binários PostgreSQL. Bun 1.4.4 é instalado como ferramenta local pelo npm; não exige instalação global. Não execute PostgreSQL como root. Windows: use WSL2 ou um PostgreSQL externo.
+Node.js >=22.12, npm, Linux/macOS compatível com os binários PostgreSQL. Bun 1.4.4 é instalado localmente pelo npm. Não execute PostgreSQL como root; Windows requer WSL2 ou PostgreSQL externo.
 
 ```sh
-cd /workspace/catus-os # ou a pasta em que você clonou este repositório
+cd /workspace/catus-os # ou seu checkout
 npm ci
 npm run env:init
 npm run db
 ```
 
-`db` mantém PostgreSQL real 18.3 em primeiro plano, ouvindo apenas em `127.0.0.1:5432`; os dados persistem em `.local/postgres`. A senha `catus_local_only` é exclusivamente de desenvolvimento. Use Ctrl+C para parar de forma limpa. Não remova o diretório de dados para resolver problemas de inicialização. Para usar um PostgreSQL existente, pule `npm run db` e configure `DATABASE_URL` no `.env` para um banco exclusivo de desenvolvimento com permissão de criar tabelas.
+O PostgreSQL 18.3 local usa `127.0.0.1:5432`, banco `catus`, senha exclusivamente de desenvolvimento `catus_local_only` e dados em `.local/postgres`. Mantenha em terminal próprio; Ctrl+C encerra sem apagar dados. Pode substituir por banco exclusivo de desenvolvimento configurando `DATABASE_URL` e pulando `npm run db`. Nunca use produção. Não apague locks/cluster como rotina: se uma restauração interromper processos, comprove ausência de serviço vivo e preserve os arquivos antes da recuperação.
 
-Em outro terminal:
+Em outros terminais:
 
 ```sh
 npm run migrate
 npm run dev
 ```
 
-Em um terceiro terminal:
-
 ```sh
 npm run web
 ```
 
-Abra o frontend local na porta 5173. Leia o `DEV_TOKEN` do seu `.env` local e informe no formulário de acesso; nunca envie esse valor no chat ou ao Git. O token permanece apenas na memória da aba e precisa ser informado após recarregar. A API Bun usa a porta 3000. Ambos os processos escutam somente em loopback. Nenhuma credencial real é necessária.
+Frontend: porta local 5173; API: porta 3000. Ambos escutam em loopback. `env:init` preserva `.env` existente. O `DEV_TOKEN` legado é ignorado: não há fallback nem login falso no aplicativo. Sem OIDC, a página informa bloqueio e as operações protegidas retornam 503. Não exponha o servidor Vite à Internet. O build gera bundle, não realiza deploy.
 
-`env:init` preserva `.env` existente e cria um token aleatório quando ausente. O exemplo de configuração está em `.env.example`. As migrations usam lock PostgreSQL e transação, podendo ser repetidas. Após aplicada uma migration, crie outra em vez de editar seu conteúdo. Faça backup antes de evoluir um banco com dados importantes; não há reversão automática.
+## Configurar OIDC / Google Workspace
 
-## Fluxo de aceitação
+Use um projeto/cliente **de desenvolvimento** no provedor, nunca credenciais de produção. Guarde segredos apenas no ambiente ou `.env` ignorado; não os envie no chat nem os inclua no Git. Configure juntos:
 
-1. Conecte com o token local e cadastre um cliente.
-2. Selecione o cliente e crie um projeto.
-3. Selecione o projeto, escolha reunião ou atendimento, preencha data e contexto e registre.
-4. Selecione o atendimento e crie uma solicitação com título, descrição, responsável e próxima ação.
-5. Confira o cartão em Mission Control no estado **Nova**.
-6. Atualize a solicitação para **Em triagem**, altere responsável/próxima ação e salve.
-7. Recarregue, conecte novamente e confira os dados persistidos.
+- `APP_ORIGIN`: origem exata, por exemplo `http://127.0.0.1:5173` localmente; HTTPS é obrigatório fora de loopback e quando `NODE_ENV=production`.
+- `OIDC_ISSUER`: para Google, `https://accounts.google.com`; outro issuer HTTPS também pode ser usado.
+- `OIDC_CLIENT_ID` e `OIDC_CLIENT_SECRET`: cliente confidencial configurado no provedor.
+- `OIDC_HOSTED_DOMAIN`: domínio Workspace autorizado, recomendado com Google; valida o claim assinado `hd`, não apenas o sufixo do email.
 
-Datas do formulário seguem o fuso do navegador e são convertidas para ISO com fuso na API. PostgreSQL armazena `timestamptz`. Nenhum seed, métrica financeira ou resultado de IA é exibido como real.
+Cadastre no provedor o redirect URI **exato** `${APP_ORIGIN}/api/auth/callback`. O app usa Authorization Code, PKCE S256, state, nonce e scopes `openid email profile`; exige email verificado e verifica assinatura JWS/JWKS, issuer, audience, nonce e expiração sem tolerância adicional de relógio. Sincronize o relógio do host. O secret usa `client_secret_post`; não há refresh token, senha local ou persistência de tokens do provedor.
 
-## Verificar
+A rede precisa alcançar discovery, authorization, token e JWKS. No Google: `accounts.google.com`, `oauth2.googleapis.com` e `www.googleapis.com`; a descoberta determina os endpoints finais. Não desligue TLS. Neste ambiente não há credenciais OIDC e os domínios do Google ainda precisam de configuração na política de rede: login real não foi validado.
 
-Com PostgreSQL ativo e migrations aplicadas:
+## Primeiro administrador e membros
+
+A migration `002_identity.sql` coloca todos os dados do M0 na organização **Catus**, ID `00000000-0000-4000-8000-000000000001`. Não há usuário automaticamente criado ou vinculado por nome do responsável legado.
+
+Com OIDC configurado e migrations aplicadas, um operador com acesso administrativo ao banco provisiona o primeiro administrador:
 
 ```sh
+npm run bootstrap:admin -- --email admin@seu-dominio.example --name 'Administrador Catus'
+```
+
+Esse comando não faz login: cria uma autorização pendente vinculada a issuer/email. É offline, exige banco privilegiado, registra `offline-bootstrap` e recusa execução se já houver administrador ativo na organização. Não é um endpoint público. Na primeira autenticação válida, o email verificado provisionado é vinculado ao `sub`; depois a identidade é identificada por issuer/sub, sem religação automática por email. Ninguém recebe acesso apenas por pertencer ao domínio.
+
+Após entrar, o administrador usa **Acesso à organização** para autorizar/atualizar membros e revogar acesso. Papéis: `administrator`, `manager`, `po`, `developer`. O servidor recusa alteração do próprio papel e autorrevogação; PO/desenvolvedor/gestor não gerenciam membros. Para outra organização, um operador deve criar a organização e provisionar seu primeiro administrador por procedimento administrativo revisado; não existe cadastro público de empresas. Use `--organization <uuid>` no bootstrap para uma organização existente.
+
+## Sessão, autorização e fluxo
+
+Cookie de sessão opaco, HttpOnly, SameSite=Lax, Path=/; Secure e prefixo `__Host-` sob HTTPS. Somente digest SHA-256 fica no banco. Expiração absoluta: 8h; inatividade: 30min. Papéis e vínculos ativos são consultados em cada operação. Sair revoga a sessão no banco; “Encerrar todas as sessões” revoga todos os dispositivos. Revogação de membro invalida suas sessões na organização. Troca de organização requer vínculo existente e rotaciona cookie e token CSRF. Remover OIDC bloqueia inclusive sessões existentes.
+
+Escritas exigem JSON, origem exata e header `X-CSRF-Token`, fornecido por `GET /api/session` após autenticação. Sem CORS aberto. Cookies/tokens não são guardados em localStorage. O backend ignora headers de identidade e recusa campos de identidade nos payloads operacionais. Organização e autor vêm exclusivamente da sessão e do banco.
+
+| Capacidade                                       | Administrador        | Gestor | PO  | Desenvolvedor                                                  |
+| ------------------------------------------------ | -------------------- | ------ | --- | -------------------------------------------------------------- |
+| Ler operação/membros da própria organização      | Sim                  | Sim    | Sim | Sim                                                            |
+| Criar cliente, projeto, atendimento, solicitação | Sim                  | Sim    | Sim | Não                                                            |
+| Triar/repriorizar/reabrir/atribuir solicitações  | Sim                  | Sim    | Sim | Não                                                            |
+| Executar solicitação atribuída a si              | Sim                  | Sim    | Sim | Sim, sem reatribuir; estados de execução, bloqueio e conclusão |
+| Ler auditoria                                    | Sim                  | Sim    | Não | Não                                                            |
+| Gerenciar membros/papéis                         | Sim, exceto si mesmo | Não    | Não | Não                                                            |
+
+O PO cadastra cliente/projeto/atendimento e cria solicitação escolhendo um membro ativo. Solicitações começam em `new`, passam por triagem e ficam `ready` antes de execução. O desenvolvedor atualiza somente trabalho atribuído a si. Registros legados mantêm o texto original de responsável; a UI sinaliza vínculo pendente e PO/gestor/admin escolhe explicitamente o usuário. O texto legado permanece como snapshot, enquanto `owner_user_id` passa a ser a referência operacional. Nenhuma inferência por nome é realizada.
+
+## Testes (banco separado e descartável)
+
+```sh
+npm run test:db
 npm run check
 npm test
 npm run build
@@ -57,27 +84,35 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-O Playwright inicia API e frontend se ainda não estiverem ativos. A suíte Bun valida regras e APIs usando PostgreSQL real; o teste de navegador percorre o fluxo e confirma persistência após reload e layout móvel. Os testes criam dados identificados e removem apenas seus próprios registros no `finally`/`afterAll`. **Use sempre um banco exclusivo de desenvolvimento/testes; nunca aponte para produção.** Resultados de navegador e screenshot ficam em `test-results/` (ignorado pelo Git).
+`TEST_DATABASE_URL` aponta para banco local com nome terminado em `_test` (default `catus_test`), diferente de `DATABASE_URL`. A suíte recusa alvos fora de loopback e nomes inadequados. **O conteúdo desse banco de teste é limpo/truncado pelos testes.** Não use o banco do aplicativo nem execute suítes concorrentes contra o mesmo banco. As migrations de teste não tocam o banco M0 do aplicativo.
 
-Em Linux com navegador gerenciado externamente, `CHROMIUM_PATH=/caminho/chromium npm run test:e2e` permite um executável compatível. Esse modo usa flags sem sandbox apenas para o browser de testes isolado; não é configuração de execução do produto. Nesta máquina foi usado Chromium 143 fornecido por `@sparticuz/chromium@143.0.4` no tooling externo. O download padrão do Playwright foi bloqueado pela rede; não se desabilitou TLS ou integridade dos pacotes.
+Os testes de API e browser usam apenas identidades simuladas em `tests/support`, com ID tokens RS256 realmente assinados e verificados por `openid-client`. Não existe flag ou rota de bypass no servidor normal. O harness exige `NODE_ENV=test` e banco separado; o entrypoint real não importa o harness. O browser simula a tela do provedor, executando endpoints reais de login/callback, cookies, sessão e API. Isso não comprova configuração nem login no Google real.
 
-`npm run build` valida e gera o bundle em `dist`; distribuição pública/servidor de produção não fazem parte deste marco. A API recusa `NODE_ENV=production` porque o acesso atual usa um token local compartilhado, sem autenticação individual.
+Playwright inicia e encerra servidores próprios: pare processos que ocupem 3000/5173 antes de rodá-lo. Em Linux, `CHROMIUM_PATH=/caminho/chromium npm run test:e2e` aceita binário instalado externamente. Nesta máquina foi usado Chromium 143 do pacote npm `@sparticuz/chromium@143.0.4`; download padrão do Playwright é bloqueado pela política. Esse modo usa `--no-sandbox` apenas no browser de teste isolado, não no produto. Artefatos em `test-results/` são ignorados pelo Git.
 
-## API e segurança
+## API
 
-Todas as rotas exigem `Authorization: Bearer <DEV_TOKEN>`; escritas exigem JSON e têm limite de 32 KiB. Origens de navegador são restritas a localhost nas portas 3000/5173; não há CORS aberto. Entradas são validadas no backend, consultas são parametrizadas, erros internos são ocultados e respostas não podem ser cacheadas. Svelte escapa texto; nenhum HTML de usuário é renderizado.
+Rotas públicas limitadas a `GET /api/auth/config` (booleano), `/api/auth/login` e `/api/auth/callback`. Demais rotas exigem sessão e autorização.
 
-| Método | Rota                   | Operação                                                                      |
-| ------ | ---------------------- | ----------------------------------------------------------------------------- |
-| GET    | `/api/health`          | Conexão real ao banco                                                         |
-| GET    | `/api/mission-control` | Snapshot consistente de clientes, projetos, atendimentos e solicitações       |
-| POST   | `/api/clients`         | `{name}`                                                                      |
-| POST   | `/api/projects`        | `{client_id,name}`                                                            |
-| POST   | `/api/interactions`    | `{project_id,kind,summary,occurred_at}`; kind `meeting` ou `service`          |
-| POST   | `/api/requests`        | `{interaction_id,title,description,owner,next_action}`; estado inicial `new`  |
-| PATCH  | `/api/requests/:id`    | `{status,owner,next_action,version}`; atualização completa desses três campos |
-| GET    | `/api/extraction`      | Capacidade indisponível explícita, sem executar IA                            |
+| Método | Rota                              | Operação                                                                   |
+| ------ | --------------------------------- | -------------------------------------------------------------------------- |
+| GET    | `/api/session`                    | Usuário, papel, organização, expiração, organizações permitidas e CSRF     |
+| POST   | `/api/session/logout`             | Encerra sessão atual; JSON `{}`                                            |
+| POST   | `/api/session/revoke-all`         | Encerra todas as sessões do usuário                                        |
+| POST   | `/api/session/organization`       | `{organization_id}`; valida vínculo e rotaciona sessão                     |
+| GET    | `/api/health`                     | Conexão ao banco; autenticada                                              |
+| GET    | `/api/mission-control`            | Snapshot consistente da organização                                        |
+| GET    | `/api/members`                    | Membros ativos da organização                                              |
+| GET    | `/api/audit`                      | Até 500 eventos da organização; admin/gestor                               |
+| POST   | `/api/memberships`                | Admin: `{email,name,role}`; cria autorização ou atualiza papel             |
+| POST   | `/api/memberships/:userId/revoke` | Admin revoga membro da própria organização                                 |
+| POST   | `/api/clients`                    | `{name}`                                                                   |
+| POST   | `/api/projects`                   | `{client_id,name}`                                                         |
+| POST   | `/api/interactions`               | `{project_id,kind,summary,occurred_at}`; `meeting`/`service`, ISO com fuso |
+| POST   | `/api/requests`                   | `{interaction_id,title,description,owner_user_id,next_action}`             |
+| PATCH  | `/api/requests/:id`               | `{status,owner_user_id,next_action,version}`                               |
+| GET    | `/api/extraction`                 | `available:false`; nenhuma IA                                              |
 
-Respostas de criação: 201. Erros: 401 autenticação, 403 origem, 404 inexistente, 409 conflito de versão, 413 corpo excessivo, 415 tipo de conteúdo, 422 validação, 500 falha interna. Após 409, recarregue dados antes de editar novamente. O POST não oferece idempotência: em erro de rede, confira os dados antes de reenviar. O Mission Control carrega até 500 atendimentos e 500 solicitações mais recentes; os demais não são excluídos, mas paginação será necessária antes de uso em escala.
+201 criação; 401 sessão inválida; 403 permissão/CSRF; 404 recurso inexistente ou fora do escopo; 409 concorrência; 413 payload >32KiB; 415 tipo; 422 validação; 503 autenticação sem OIDC/serviço indisponível. Queries parametrizadas, constraints compostas e contexto de organização são usados em todas as operações. Após 409, recarregue antes de editar. POST ainda não tem idempotência. Mission Control limita atendimentos/solicitações a 500 recentes, sem excluir o restante.
 
-Responsáveis são texto obrigatório nesta fatia, não identidades autenticadas. Auditoria identifica `local-developer`; não representa uma pessoa específica. O banco local usa uma conta dona do schema; separar conta de migrations e runtime é requisito futuro. Não exponha este ambiente nem compartilhe o token. [ARCHITECTURE.md](ARCHITECTURE.md), [MASTER_PLAN.md](MASTER_PLAN.md), [PROGRESS.md](PROGRESS.md) e [NEXT.md](NEXT.md) detalham decisões, plano e limites.
+[ARCHITECTURE.md](ARCHITECTURE.md), [MASTER_PLAN.md](MASTER_PLAN.md), [PROGRESS.md](PROGRESS.md) e [NEXT.md](NEXT.md) detalham arquitetura, evidências, limites e próximas tarefas. O procedimento de criação de main está em [docs/GIT_REVIEW.md](docs/GIT_REVIEW.md); nenhuma main/default foi alterada automaticamente.

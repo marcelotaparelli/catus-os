@@ -3,7 +3,12 @@
   import { statuses, transitions } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
   import './style.css';
-  let token = $state('');
+  import AccessAdmin from './AccessAdmin.svelte';
+  import type { SessionView, Member } from '../shared/identity';
+  let session = $state<SessionView | null>(null);
+  let members = $state<Member[]>([]);
+  let configured = $state(false);
+  let loaded = $state(false);
   let connected = $state(false);
   let busy = $state(false);
   let error = $state('');
@@ -47,6 +52,7 @@
     occurred = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 16);
+    void execute(initialize);
   });
   async function api<T>(
     path: string,
@@ -56,17 +62,21 @@
     const res = await fetch(`/api/${path}`, {
       method,
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(session ? { 'X-CSRF-Token': session.csrfToken } : {}),
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     const result = await res.json();
+    if (res.status === 401) {
+      disconnect();
+    }
     if (!res.ok) throw new Error(result.error ?? 'Falha na requisição');
     return result as T;
   }
   async function refresh() {
     data = await api<Snapshot>('mission-control');
+    members = await api<Member[]>('members');
   }
   async function execute(action: () => Promise<void>) {
     if (busy) return;
@@ -81,10 +91,43 @@
       busy = false;
     }
   }
-  async function connect() {
+  function disconnect() {
+    connected = false;
+    session = null;
+    editing = null;
+    members = [];
+    data = { clients: [], projects: [], interactions: [], requests: [] };
+  }
+  async function initialize() {
+    configured = (await api<{ configured: boolean }>('auth/config')).configured;
+    if (!configured) {
+      disconnect();
+      loaded = true;
+      return;
+    }
+    const res = await fetch('/api/session');
+    if (res.status === 401) {
+      disconnect();
+      loaded = true;
+      return;
+    }
+    if (!res.ok) throw new Error('Não foi possível verificar a sessão');
+    session = (await res.json()) as SessionView;
+    await refresh();
+    connected = true;
+    loaded = true;
+  }
+  async function logout(all = false) {
     await execute(async () => {
-      await refresh();
-      connected = true;
+      await api(all ? 'session/revoke-all' : 'session/logout', 'POST', {});
+      disconnect();
+    });
+  }
+  async function switchOrganization(id: string) {
+    await execute(async () => {
+      await api('session/organization', 'POST', { organization_id: id });
+      disconnect();
+      await initialize();
     });
   }
   async function create(path: string, body: unknown, clear: () => void) {
@@ -98,7 +141,7 @@
   function edit(r: WorkRequest) {
     editing = r;
     editStatus = r.status;
-    editOwner = r.owner;
+    editOwner = r.owner_user_id ?? '';
     editAction = r.next_action;
   }
   async function save() {
@@ -107,7 +150,7 @@
     await execute(async () => {
       await api(`requests/${r.id}`, 'PATCH', {
         status: editStatus,
-        owner: editOwner,
+        owner_user_id: editOwner,
         next_action: editAction,
         version: r.version,
       });
@@ -130,7 +173,7 @@
     <p class="eyebrow">WORKSPACE DA AGÊNCIA</p>
     <div class="nav active">◉ &nbsp; Mission Control</div>
     <p class="aside-note">Operação conectada.<br />Decisões rastreáveis.</p>
-    <div class="local">● Ambiente local · M0</div>
+    <div class="local">● Identidade e acesso · M1</div>
   </aside>
   <main>
     <header>
@@ -145,49 +188,45 @@
     </header>
     {#if !connected}
       <section class="panel access">
-        <h2>Acesse seu ambiente local</h2>
-        <p>
-          Informe o DEV_TOKEN configurado no servidor. Ele permanece apenas na
-          memória desta página.
-        </p>
-        <form
-          onsubmit={(e) => {
-            e.preventDefault();
-            void connect();
-          }}
-        >
-          <label
-            >Token de desenvolvimento<input
-              type="password"
-              bind:value={token}
-              required
-              minlength="32"
-              autocomplete="off"
-            /></label
-          ><button disabled={busy}>Conectar</button>
-        </form>
+        <h2>Entre no Catus OS</h2>
+        {#if !loaded}<p>Verificando sessão…</p>{:else if configured}
+          <p>
+            Use sua conta corporativa previamente autorizada. O acesso depende
+            dos vínculos da sua organização.
+          </p>
+          <a class="login-button" href="/api/auth/login"
+            >Entrar com conta corporativa</a
+          >
+        {:else}<p role="status">
+            OIDC não configurado. O acesso está bloqueado; configure o provedor
+            no ambiente.
+          </p>{/if}
       </section>
-    {:else}
+    {:else if session}
       <div class="toolbar">
         <span class="muted"
-          >Dados cadastrados neste banco de desenvolvimento</span
-        ><button
+          >{session.user.name} · {session.user.email} · {session.role}<br
+          />{session.organization.name}</span
+        >
+        {#if session.organizations.length > 1}<label
+            >Organização<select
+              value={session.organization.id}
+              onchange={(e) => switchOrganization(e.currentTarget.value)}
+              >{#each session.organizations as o}<option value={o.id}
+                  >{o.name}</option
+                >{/each}</select
+            ></label
+          >{/if}
+        <button
           class="secondary"
           disabled={busy}
           onclick={() => execute(refresh)}>Atualizar dados</button
-        ><button
-          class="secondary"
-          onclick={() => {
-            connected = false;
-            token = '';
-            data = {
-              clients: [],
-              projects: [],
-              interactions: [],
-              requests: [],
-            };
-            editing = null;
-          }}>Sair</button
+        >
+        <button class="secondary" disabled={busy} onclick={() => logout()}
+          >Sair</button
+        >
+        <button class="secondary" disabled={busy} onclick={() => logout(true)}
+          >Encerrar todas as sessões</button
         >
       </div>
       <section class="stats" aria-label="Resumo operacional">
@@ -205,170 +244,191 @@
           >
         </div>
       </section>
-      <section class="panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">ENTRADA MANUAL</p>
-            <h2>Registrar contexto</h2>
+      {#if session.role === 'administrator'}<AccessAdmin
+          {members}
+          currentUserId={session.user.id}
+          {busy}
+          onProvision={(body) =>
+            execute(async () => {
+              await api('memberships', 'POST', body);
+              await refresh();
+              notice = 'Acesso atualizado.';
+            })}
+          onRevoke={(id) =>
+            execute(async () => {
+              await api(`memberships/${id}/revoke`, 'POST', {});
+              await refresh();
+              notice = 'Acesso revogado.';
+            })}
+        />{/if}
+      {#if session.role !== 'developer'}
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">ENTRADA MANUAL</p>
+              <h2>Registrar contexto</h2>
+            </div>
+            <span class="muted"
+              >Cliente → Projeto → Atendimento → Solicitação</span
+            >
           </div>
-          <span class="muted"
-            >Cliente → Projeto → Atendimento → Solicitação</span
-          >
-        </div>
-        <div class="forms">
-          <form
-            onsubmit={(e) => {
-              e.preventDefault();
-              void create(
-                'clients',
-                { name: clientName },
-                () => (clientName = ''),
-              );
-            }}
-          >
-            <h3>01 · Cliente</h3>
-            <label
-              >Nome do cliente<input
-                bind:value={clientName}
-                required
-                maxlength="200"
-              /></label
-            ><button disabled={busy}>Cadastrar cliente</button>
-          </form>
-          <form
-            onsubmit={(e) => {
-              e.preventDefault();
-              void create(
-                'projects',
-                { client_id: clientId, name: projectName },
-                () => (projectName = ''),
-              );
-            }}
-          >
-            <h3>02 · Projeto</h3>
-            <label
-              >Cliente<select bind:value={clientId} required
-                ><option value="">Selecione</option
-                >{#each data.clients as c}<option value={c.id}>{c.name}</option
-                  >{/each}</select
-              ></label
-            ><label
-              >Nome do projeto<input
-                bind:value={projectName}
-                required
-                maxlength="200"
-              /></label
-            ><button disabled={busy || !data.clients.length}
-              >Criar projeto</button
+          <div class="forms">
+            <form
+              onsubmit={(e) => {
+                e.preventDefault();
+                void create(
+                  'clients',
+                  { name: clientName },
+                  () => (clientName = ''),
+                );
+              }}
             >
-          </form>
-          <form
-            onsubmit={(e) => {
-              e.preventDefault();
-              void create(
-                'interactions',
-                {
-                  project_id: projectId,
-                  kind,
-                  summary,
-                  occurred_at: new Date(occurred).toISOString(),
-                },
-                () => (summary = ''),
-              );
-            }}
-          >
-            <h3>03 · Atendimento</h3>
-            <label
-              >Projeto<select bind:value={projectId} required
-                ><option value="">Selecione</option
-                >{#each data.projects as p}<option value={p.id}
-                    >{data.clients.find((c) => c.id === p.client_id)?.name} / {p.name}</option
-                  >{/each}</select
-              ></label
-            ><label
-              >Tipo<select bind:value={kind}
-                ><option value="meeting">Reunião</option><option value="service"
-                  >Atendimento</option
-                ></select
-              ></label
-            ><label
-              >Data e hora local<input
-                type="datetime-local"
-                bind:value={occurred}
-                required
-              /></label
-            ><label
-              >Resumo e contexto<textarea
-                bind:value={summary}
-                required
-                maxlength="10000"
-              ></textarea></label
-            ><button disabled={busy || !data.projects.length}
-              >Registrar atendimento</button
+              <h3>01 · Cliente</h3>
+              <label
+                >Nome do cliente<input
+                  bind:value={clientName}
+                  required
+                  maxlength="200"
+                /></label
+              ><button disabled={busy}>Cadastrar cliente</button>
+            </form>
+            <form
+              onsubmit={(e) => {
+                e.preventDefault();
+                void create(
+                  'projects',
+                  { client_id: clientId, name: projectName },
+                  () => (projectName = ''),
+                );
+              }}
             >
-          </form>
-          <form
-            onsubmit={(e) => {
-              e.preventDefault();
-              void create(
-                'requests',
-                {
-                  interaction_id: interactionId,
-                  title,
-                  description,
-                  owner,
-                  next_action: nextAction,
-                },
-                () => {
-                  title = '';
-                  description = '';
-                  owner = '';
-                  nextAction = '';
-                },
-              );
-            }}
-          >
-            <h3>04 · Solicitação</h3>
-            <label
-              >Atendimento de origem<select bind:value={interactionId} required
-                ><option value="">Selecione</option
-                >{#each data.interactions as i}<option value={i.id}
-                    >{data.projects.find((p) => p.id === i.project_id)?.name} · {i.summary.slice(
-                      0,
-                      60,
-                    )}</option
-                  >{/each}</select
-              ></label
-            ><label
-              >Título<input
-                bind:value={title}
-                required
-                maxlength="200"
-              /></label
-            ><label
-              >Descrição<textarea
-                bind:value={description}
-                required
-                maxlength="10000"
-              ></textarea></label
-            ><label
-              >Responsável<input
-                bind:value={owner}
-                required
-                maxlength="200"
-              /></label
-            ><label
-              >Próxima ação<textarea
-                bind:value={nextAction}
-                required
-                maxlength="2000"
-              ></textarea></label
-            ><button disabled={busy || !data.interactions.length}
-              >Criar solicitação</button
+              <h3>02 · Projeto</h3>
+              <label
+                >Cliente<select bind:value={clientId} required
+                  ><option value="">Selecione</option
+                  >{#each data.clients as c}<option value={c.id}
+                      >{c.name}</option
+                    >{/each}</select
+                ></label
+              ><label
+                >Nome do projeto<input
+                  bind:value={projectName}
+                  required
+                  maxlength="200"
+                /></label
+              ><button disabled={busy || !data.clients.length}
+                >Criar projeto</button
+              >
+            </form>
+            <form
+              onsubmit={(e) => {
+                e.preventDefault();
+                void create(
+                  'interactions',
+                  {
+                    project_id: projectId,
+                    kind,
+                    summary,
+                    occurred_at: new Date(occurred).toISOString(),
+                  },
+                  () => (summary = ''),
+                );
+              }}
             >
-          </form>
-        </div>
-      </section>
+              <h3>03 · Atendimento</h3>
+              <label
+                >Projeto<select bind:value={projectId} required
+                  ><option value="">Selecione</option
+                  >{#each data.projects as p}<option value={p.id}
+                      >{data.clients.find((c) => c.id === p.client_id)?.name} / {p.name}</option
+                    >{/each}</select
+                ></label
+              ><label
+                >Tipo<select bind:value={kind}
+                  ><option value="meeting">Reunião</option><option
+                    value="service">Atendimento</option
+                  ></select
+                ></label
+              ><label
+                >Data e hora local<input
+                  type="datetime-local"
+                  bind:value={occurred}
+                  required
+                /></label
+              ><label
+                >Resumo e contexto<textarea
+                  bind:value={summary}
+                  required
+                  maxlength="10000"
+                ></textarea></label
+              ><button disabled={busy || !data.projects.length}
+                >Registrar atendimento</button
+              >
+            </form>
+            <form
+              onsubmit={(e) => {
+                e.preventDefault();
+                void create(
+                  'requests',
+                  {
+                    interaction_id: interactionId,
+                    title,
+                    description,
+                    owner_user_id: owner,
+                    next_action: nextAction,
+                  },
+                  () => {
+                    title = '';
+                    description = '';
+                    owner = '';
+                    nextAction = '';
+                  },
+                );
+              }}
+            >
+              <h3>04 · Solicitação</h3>
+              <label
+                >Atendimento de origem<select
+                  bind:value={interactionId}
+                  required
+                  ><option value="">Selecione</option
+                  >{#each data.interactions as i}<option value={i.id}
+                      >{data.projects.find((p) => p.id === i.project_id)?.name} ·
+                      {i.summary.slice(0, 60)}</option
+                    >{/each}</select
+                ></label
+              ><label
+                >Título<input
+                  bind:value={title}
+                  required
+                  maxlength="200"
+                /></label
+              ><label
+                >Descrição<textarea
+                  bind:value={description}
+                  required
+                  maxlength="10000"
+                ></textarea></label
+              ><label
+                >Responsável<select bind:value={owner} required
+                  ><option value="">Selecione um membro</option
+                  >{#each members as m}<option value={m.id}
+                      >{m.name} · {m.email}</option
+                    >{/each}</select
+                ></label
+              ><label
+                >Próxima ação<textarea
+                  bind:value={nextAction}
+                  required
+                  maxlength="2000"
+                ></textarea></label
+              ><button disabled={busy || !data.interactions.length}
+                >Criar solicitação</button
+              >
+            </form>
+          </div>
+        </section>
+      {/if}
       <section class="panel">
         <div class="section-heading">
           <div>
@@ -404,7 +464,11 @@
                 <p class="description">{r.description}</p>
                 <dl>
                   <dt>Responsável</dt>
-                  <dd>{r.owner}</dd>
+                  <dd>
+                    {r.owner}{#if !r.owner_user_id}<span class="muted">
+                        · legado, vinculação pendente</span
+                      >{/if}
+                  </dd>
                   <dt>Próxima ação</dt>
                   <dd>{r.next_action}</dd>
                   <dt>Atendimento de origem</dt>
@@ -415,7 +479,9 @@
                 </dl>
                 <button
                   class="secondary"
-                  disabled={busy}
+                  disabled={busy ||
+                    (session.role === 'developer' &&
+                      r.owner_user_id !== session.user.id)}
                   onclick={() => edit(r)}>Atualizar solicitação</button
                 >
               </article>{/each}
@@ -432,16 +498,20 @@
             <label
               >Estado<select bind:value={editStatus}
                 ><option value={editing.status}>{labels[editing.status]}</option
-                >{#each transitions[editing.status] as s}<option value={s}
-                    >{labels[s]}</option
+                >{#each transitions[editing.status].filter((s) => session?.role !== 'developer' || ['in_progress', 'blocked', 'done'].includes(s)) as s}<option
+                    value={s}>{labels[s]}</option
                   >{/each}</select
               ></label
             ><label
-              >Responsável<input
+              >Responsável<select
                 bind:value={editOwner}
                 required
-                maxlength="200"
-              /></label
+                disabled={session.role === 'developer'}
+                ><option value="">Vincule um membro</option
+                >{#each members as m}<option value={m.id}
+                    >{m.name} · {m.email}</option
+                  >{/each}</select
+              ></label
             ><label
               >Próxima ação<textarea
                 bind:value={editAction}

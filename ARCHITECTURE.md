@@ -1,85 +1,114 @@
-# Arquitetura do Catus OS
+# Arquitetura do Catus OS — M1
 
-## Contexto e decisões M0
+## Estrutura e decisões
 
-Monólito modular em TypeScript strict. Um processo Bun atende HTTP; Svelte 5 + Vite compõem a interface; PostgreSQL é a única fonte de verdade. Não há microsserviços, fila externa, Kubernetes, provedor de IA, Google Chat ou Meet. Node é ferramenta de instalação e de desenvolvimento do PostgreSQL; o backend executa em Bun.
+Monólito modular: Bun.serve + TypeScript strict, Svelte 5 com runes/Vite, PostgreSQL como fonte de verdade. SQL explícito via `pg`, sem ORM, microserviços, Kubernetes ou fila externa. `embedded-postgres` é somente tooling local, com dados em disco e banco PostgreSQL real. A stack e o fluxo funcional M0 foram mantidos; seu token compartilhado foi removido da autenticação.
 
-- **Bun.serve em vez de framework HTTP:** superfície pequena, APIs Web padrão, menos dependências. A função `createApp` pode ser testada sem abrir porta e serve a mesma aplicação usada no navegador.
-- **pg e SQL explícito em vez de ORM:** relações, transações e locks visíveis e migrations revisáveis. `pg` é a única dependência de runtime do servidor além do Bun. Pool limitado e timeout de statement evitam ocupação ilimitada por consultas.
-- **Svelte 5 com runes:** formulários acessíveis, estado local e bundle pequeno; sem biblioteca de UI ou gerenciador global de estado nesta fatia.
-- **PostgreSQL de desenvolvimento via embedded-postgres:** binários reais, persistência em disco e execução sem Docker/root. O pacote de tooling tem versão beta; não integra o backend nem é recomendação para produção. `DATABASE_URL` permite substituí-lo por PostgreSQL gerenciado/instalado sem mudar código.
-- **Token local:** barreira inicial de acesso, não sistema de autenticação empresarial. O servidor bloqueia modo de produção. Trocar por identidade individual antes de acesso compartilhado.
+`openid-client` 6.8.8 é a dependência adicionada ao servidor para protocolo e validação OIDC. Implementar JWT/OAuth manualmente aumentaria risco. A configuração usa discovery HTTPS, Authorization Code com PKCE S256, state, nonce e verificação explícita de assinatura (`enableNonRepudiationChecks`). Claims de issuer/audience/exp/nonce são verificados pela biblioteca; email verificado e domínio Workspace são exigidos pela política local. Não há fallback quando configuração está ausente/parcial; não há bypass de login em desenvolvimento.
+
+## Módulos e fronteiras
+
+| Área                           | Responsabilidade                                                       | Código                                     |
+| ------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------ |
+| Configuração                   | Origem exata, HTTPS, conjunto OIDC completo                            | `src/server/config.ts`                     |
+| OIDC                           | Discovery, desafio, callback, claims, vinculação de identidade         | `src/server/auth/oidc.ts`                  |
+| Sessões/cookies                | Digests, expiração, CSRF, revogação e organização                      | `src/server/auth/session.ts`, `cookies.ts` |
+| Políticas/auditoria            | Permissões com negação padrão e autor verificado                       | `src/server/auth/policy.ts`                |
+| Membros                        | Provisionar, alterar papel e revogar no escopo atual                   | `src/server/modules/memberships.ts`        |
+| Clientes/projetos/atendimentos | Contexto manual no escopo da organização                               | `src/server/modules/`                      |
+| Solicitações                   | Workflow, responsável real, versão e regras do desenvolvedor           | `src/server/modules/requests.ts`           |
+| Mission Control                | Snapshot consistente, membros e auditoria da organização               | `src/server/modules/mission-control.ts`    |
+| Transporte                     | Rotas, sessão, CSRF, payload, transação e erros                        | `src/server/app.ts`                        |
+| Frontend                       | Login, sessão/organização, formulários, cartões e administração mínima | `src/web/`                                 |
+| Extração                       | Porta futura indisponível, sem simular IA                              | `src/server/extraction.ts`                 |
+
+O transporte constrói `Context` somente após consultar sessão e vínculo no banco. Esse contexto contém conexão transacional, usuário, organização e papel atual; módulos não recebem identidade do payload nem usam pool global. Cada função pública de módulo verifica sua permissão. Toda escrita de negócio e seu evento de auditoria pertencem à mesma transação. O `Context` é fronteira interna confiável, não uma estrutura deserializável do cliente.
+
+## Identidade e autorização
 
 ```mermaid
-flowchart LR
-    PO[PO no navegador] --> UI[Svelte / Mission Control]
-    UI --> HTTP[Bun / autenticação e validação HTTP]
-    HTTP --> CRM[Clientes e projetos]
-    HTTP --> Contexto[Atendimentos]
-    HTTP --> Demandas[Solicitações e workflow]
-    HTTP --> Leitura[Mission Control / snapshot]
-    CRM --> PG[(PostgreSQL)]
-    Contexto --> PG
-    Demandas --> PG
-    Leitura --> PG
-    Porta[Porta futura RequirementsExtractor] -. não implementada .-> Contexto
+sequenceDiagram
+ participant U as Funcionário
+ participant A as Catus/Bun
+ participant P as Provedor OIDC
+ participant D as PostgreSQL
+ U->>A: GET auth/login
+ A->>D: state hash + nonce + PKCE verifier (10min)
+ A-->>U: Cookie de state HttpOnly e redirect
+ U->>P: Authorization Code + PKCE S256
+ P-->>U: Redirect com code/state
+ U->>A: callback + cookie state
+ A->>D: Consome transação de login
+ A->>P: Troca code usando verifier e autenticação do cliente
+ P-->>A: ID token
+ A->>A: Verifica assinatura, issuer, audience, nonce, exp, email e hd
+ A->>D: Localiza usuário provisionado e vínculo ativo
+ A->>D: Vincula sub se pendente; cria digest de sessão e auditoria
+ A-->>U: Cookie de sessão opaco; redirect para origem fixa
+ U->>A: API com cookie; CSRF nas escritas
+ A->>D: Sessão válida + membro/usuário ativos + papel atual
+ A->>D: Operação filtrada por organização e evento atômico
 ```
 
-## Limites dos módulos
+Não há signup público ou concessão automática por domínio. O primeiro administrador é provisionado por CLI offline com acesso administrativo ao banco; esse caminho é bloqueado quando já existe administrador ativo. Ações do CLI ficam explicitamente como `offline-bootstrap`, sem inventar um autor autenticado.
 
-| Módulo                | Responsabilidade                                           | Caminho                                 |
-| --------------------- | ---------------------------------------------------------- | --------------------------------------- |
-| Clientes              | Registro do cliente                                        | `src/server/modules/clients.ts`         |
-| Projetos              | Projeto vinculado a cliente existente                      | `src/server/modules/projects.ts`        |
-| Atendimentos          | Contexto manual e data de reunião/atendimento              | `src/server/modules/interactions.ts`    |
-| Solicitações          | Criação, transições, responsável, ação, versão e auditoria | `src/server/modules/requests.ts`        |
-| Mission Control       | Leitura consistente das relações operacionais              | `src/server/modules/mission-control.ts` |
-| Extração              | Contratos de entrada/proposta e capability indisponível    | `src/server/extraction.ts`              |
-| Transporte            | Autenticação, origem, limite de corpo, despacho e erros    | `src/server/app.ts`                     |
-| Domínio compartilhado | Estados, transições, limites e tipos de leitura            | `src/shared/domain.ts`                  |
+Provisionamento cria usuário com issuer/email e `subject` nulo. Primeiro login exige email verificado do issuer configurado e vincula `sub`. Logins seguintes priorizam issuer/sub; email não religa conta já vinculada a outro subject. Administradores autorizam membros somente na organização atual. Não podem alterar o próprio papel ou revogar a si mesmos; demais papéis não gerenciam acesso. Não há endpoints para o usuário definir papel, ator ou organização arbitrária. Alterações de papel passam a valer na próxima requisição porque não são guardadas como autoridade em JWT/cookie.
 
-Módulos têm acesso ao mesmo banco; não há chamadas HTTP internas. Relações entre eles usam IDs e chaves estrangeiras. O frontend consome contratos de leitura e chama apenas a API; não acessa o banco. O único componente de página é aceitável nesta fatia pequena, mas deve ser dividido quando novas telas surgirem.
+| Operação                                      | administrator        | manager              | po                   | developer                                                                                      |
+| --------------------------------------------- | -------------------- | -------------------- | -------------------- | ---------------------------------------------------------------------------------------------- |
+| Ler operação e membros                        | Sim                  | Sim                  | Sim                  | Sim                                                                                            |
+| Criar cliente/projeto/atendimento/solicitação | Sim                  | Sim                  | Sim                  | Não                                                                                            |
+| Triar/atribuir/reabrir solicitações           | Sim                  | Sim                  | Sim                  | Não                                                                                            |
+| Atualizar solicitação                         | Todas da organização | Todas da organização | Todas da organização | Só atribuída a si, sem reatribuição; execução/bloqueio/conclusão ou manutenção do estado atual |
+| Ler auditoria                                 | Sim                  | Sim                  | Não                  | Não                                                                                            |
+| Gerenciar membros                             | Sim, exceto si mesmo | Não                  | Não                  | Não                                                                                            |
 
-## Modelo de dados
+Os estados M0 e suas transições permanecem: `new→triage`, `triage→ready/blocked`, `ready→in_progress/triage/blocked`, `in_progress→done/blocked`, `blocked→triage/ready/in_progress`, `done→triage`. Manter estado permite atualizar próxima ação/responsável conforme o papel. Desenvolvedor não assume a atribuição a si por payload, não cria demanda nem reabre para triagem.
+
+## Sessões e proteção HTTP
+
+Token opaco aleatório de 256 bits; somente SHA-256 no banco. Cookie HttpOnly, Path=/, SameSite=Lax; Secure e prefixo `__Host-` quando origem HTTPS. HTTP permitido somente em loopback fora de produção. Origem e redirect são valores fixos de ambiente, sem confiar no Host/Forwarded do cliente. Os tokens OIDC não são armazenados.
+
+Sessão expira em 8h ou após 30min de inatividade; `last_seen_at` é atualizado no máximo uma vez por minuto. Logout/revogação escrevem no banco, não apenas apagam cookie. Desativação de usuário/vínculo bloqueia sessões existentes. Troca autorizada de organização revoga a sessão antiga e emite novo cookie/CSRF; remover ou trocar issuer OIDC bloqueia uso das sessões incompatíveis. Sem auto-refresh ou sessão persistente em localStorage.
+
+Escritas exigem origem exata e token CSRF ligado à sessão via header; GET de login/callback usa state de uso único e cookie de binding. Cookies duplicados são rejeitados. API limita JSON a 32KiB, valida UUID, enum, texto e datas, usa queries parametrizadas e não expõe SQL/claims/segredos em erros. Respostas são `no-store` e não enviam CORS aberto. Conexões ao banco têm pool 10 e timeouts de conexão/statement de 5s. Sessões são travadas para atualização e vínculos para leitura durante a operação; revogação não retorna antes de escritas concorrentes previamente autorizadas terminarem.
+
+## Dados e isolamento
 
 ```mermaid
 erDiagram
-    clients ||--o{ projects : possui
-    projects ||--o{ interactions : recebe
-    interactions ||--o{ requests : origina
-    requests ||--o{ audit_events : registra
-    clients { uuid id PK text name timestamptz created_at }
-    projects { uuid id PK uuid client_id FK text name timestamptz created_at }
-    interactions { uuid id PK uuid project_id FK text kind text summary timestamptz occurred_at timestamptz created_at }
-    requests { uuid id PK uuid interaction_id FK text title text description text status text owner text next_action int version timestamptz created_at timestamptz updated_at }
-    audit_events { bigint id PK uuid request_id FK text actor text action timestamptz created_at }
+ organizations ||--o{ memberships : possui
+ users ||--o{ memberships : participa
+ memberships ||--o{ sessions : autoriza
+ organizations ||--o{ clients : isola
+ clients ||--o{ projects : possui
+ projects ||--o{ interactions : recebe
+ interactions ||--o{ requests : origina
+ memberships ||--o{ requests : responsavel
+ users ||--o{ audit_events : autor
+ organizations ||--o{ audit_events : isola
 ```
 
-`schema_migrations` registra nomes aplicados. Todas as entidades operacionais usam UUID gerado pelo servidor. Nomes não são únicos: clientes/projetos podem ter homônimos; não deduplicar por nome. Índices cobrem chaves estrangeiras de navegação. Não há remoção via API nem cascatas destrutivas. Os campos obrigatórios têm limites também no banco. Responsável é texto provisório, a migrar para `users` com estratégia de resolução explícita; não haverá associação silenciosa por nome.
+Migration `001_initial.sql` permanece intacta. `002_identity.sql` adiciona:
 
-## Workflow e consistência
+- `organizations`, `users` (únicos issuer/sub e issuer/email), `memberships` (papel e ativo), `sessions` e `oidc_transactions`.
+- `organization_id NOT NULL` em todas as entidades M0/auditoria; os registros anteriores recebem a organização Catus, sem exclusão/reescrita de conteúdo.
+- Uniques e FKs compostas `(id, organization_id)` entre clientes/projetos/atendimentos/solicitações. Um vínculo entre organizações é inválido mesmo com IDs reais.
+- `owner_user_id` opcional para registros legados, com FK composta para membro da mesma organização. Novas solicitações pela API exigem membro ativo; não aceitam só nome.
+- `actor_user_id`, tipo e ID da entidade na auditoria. Eventos históricos preservam `local-developer` e autor nulo; não são atribuídos retroativamente a uma pessoa.
 
-Solicitações novas entram sempre em `new`. Alterar o estado não representa aprovação comercial ou autorização para agentes.
+O antigo `requests.owner` fica como snapshot textual preservado, inclusive após vinculação explícita. A leitura usa nome atual do usuário quando vinculado; a coluna operacional é `owner_user_id`. Não há correspondência automática por nome. Auditoria cobre criação de todas as entidades, atualização de solicitações, membros, login, logout, revogação e troca de organização. Os eventos registram ator, entidade, ação e horário; não são um histórico completo de diffs de cada campo.
 
-| Estado atual | Próximos estados permitidos  |
-| ------------ | ---------------------------- |
-| new          | triage                       |
-| triage       | ready, blocked               |
-| ready        | in_progress, triage, blocked |
-| in_progress  | done, blocked                |
-| blocked      | triage, ready, in_progress   |
-| done         | triage                       |
+Todas as leituras/escritas de negócio usam organização obtida da sessão. IDs externos de outras organizações retornam inexistência; responsáveis externos são recusados sem expor dados do usuário. Membros e auditoria também são filtrados. O Mission Control usa uma única instrução SQL para todas as coleções, mantendo snapshot MVCC consistente sem perder o controle concorrente otimista do M0. Atualização de solicitação usa lock de linha + versão, com 409 em versão desatualizada. Migrations continuam com transação e advisory lock.
 
-É possível manter o estado para alterar responsável e próxima ação. Toda atualização exige versão atual: transação faz `SELECT FOR UPDATE`, verifica versão, valida transição, incrementa versão e registra auditoria; qualquer falha desfaz tudo. Criação e primeiro evento também são atômicos. O snapshot do Mission Control usa transação read-only repeatable-read para não misturar relacionamentos de momentos diferentes. Migrations são serializadas com advisory lock e aplicadas em transação. Não há auto-migration ao subir a API.
+Isolamento é aplicado no serviço e por constraints relacionais; **RLS não foi implementado**. Operadores com credencial direta do banco têm acesso privilegiado e estão fora da fronteira de usuários da aplicação. A conta dona do schema é só para desenvolvimento; antes de produção, separar usuário de migrations/runtime, revisar privilégios e avaliar RLS como defesa adicional.
 
-## Segurança e confiabilidade
+## Testes e limites da entrega
 
-Boundaries HTTP validam tipo, tamanho, UUID, campos e estados. Queries usam parâmetros; dados de usuário são sempre texto escapado na UI. Token com mínimo de 32 caracteres, comparação em tempo constante após verificação de tamanho, nenhum segredo no frontend ou logs. Backend e PostgreSQL bindam em loopback, sem credenciais reais. Conexões ao banco têm pool de 10 e timeout de consulta de 5s. Respostas da API usam `no-store`, `nosniff` e restrição de framing; a CSP da API não substitui a política de um futuro servidor de assets.
+Banco de teste loopback separado terminado em `_test`, com guardas contra uso do banco do aplicativo. Testes de API usam PostgreSQL real; teste de migration cria schema isolado com registros M0 e confirma preservação. Provedor OIDC simulado fica exclusivamente em `tests/support`, assina tokens RS256 e atravessa a mesma biblioteca de validação. Harness de browser exige `NODE_ENV=test`; o servidor normal não importa testes nem tem modo de impersonação. O browser cobre dois papéis e uma organização externa, sessão após reload e logout.
 
-A identidade do ator está fixa em `local-developer`: útil para eventos técnicos locais, insuficiente para auditoria individual. Antes de uso compartilhado: OIDC/sessões, usuários e papéis (PO, engenharia, gestor, administrador), autorização em cada operação e escopo de organização, cookies seguros/CSRF se houver sessões, conta de banco com privilégio mínimo, rate limit, TLS, retenção e proteção de dados, backups com restauração testada e observabilidade. Nenhuma dessas capacidades está implicitamente pronta.
+A integração Google real requer configuração/credenciais de desenvolvimento e rede; não foi validada sem esses pré-requisitos. CI foi atualizado, mas sua observação remota está bloqueada pelo proxy da API GitHub (detalhes em `docs/GIT_REVIEW.md`). Nenhuma main/default, produção, merge ou deploy foi alterado.
 
-## Porta de extração e evolução
+Hardening antes de exposição: TLS e servidor de assets com CSP própria, rate limiting de borda/login, conta DB de privilégio mínimo, backup/restauração, retenção/limpeza agendada de sessões e auditoria, métricas e logs correlacionados. Hoje requisições não fazem limpeza periódica de sessões expiradas; login limpa states vencidos. Não confundir M1 validado em testes com ambiente de produção aprovado.
 
-`RequirementsExtractor.extract(input, signal)` recebe ID e texto de origem; retorna propostas com título, descrição, evidências e perguntas. Sem implementação ou endpoint que simule inferência. A capacidade atual responde `available:false`. Próxima etapa deve adicionar rastreabilidade de versão do modelo/prompt, limites de custo/tempo, consentimento e política de dados, validação estrutural, fixtures e revisão humana. Proposta não vira escopo aprovado automaticamente.
-
-Economia, contratos, horas e execução por agentes são módulos futuros. Valores financeiros serão unidades monetárias exatas (`numeric` ou centavos), com moeda, vigência de taxas, snapshots das premissas e trilha de aprovação. Jobs futuros podem começar com tabela/outbox no PostgreSQL, com idempotência, retries limitados e revisão humana; não há justificativa atual para serviço de filas externo.
+Sem alterações nos módulos futuros de IA, contratos, horas, economia ou execução por agentes. A porta `RequirementsExtractor` continua indisponível.
