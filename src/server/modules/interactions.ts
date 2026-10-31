@@ -9,7 +9,11 @@ export async function createInteraction(
   authorize(ctx, 'create');
   const id = crypto.randomUUID();
   const projectId = uuid(body.project_id);
-  if (body.kind !== 'meeting' && body.kind !== 'service')
+  if (
+    !['meeting', 'service', 'conversation', 'observation'].includes(
+      String(body.kind),
+    )
+  )
     throw new InputError('Tipo inválido');
   const occurred = text(body.occurred_at, 'Data', 50);
   if (

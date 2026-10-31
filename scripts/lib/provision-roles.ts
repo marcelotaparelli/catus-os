@@ -11,6 +11,8 @@ import { parseEnv } from 'node:util';
 import { dirname } from 'node:path';
 import { ident, tables, applyGrants } from './privileges';
 export interface DatabaseRoles {
+  AI_WORKER_DATABASE_URL: string;
+  DB_AI_WORKER_ROLE: string;
   RUNTIME_DATABASE_URL: string;
   MIGRATION_DATABASE_URL: string;
   MAINTENANCE_DATABASE_URL: string;
@@ -37,6 +39,7 @@ export async function provisionRoles(
     runtime: dbName + '_runtime',
     migration: dbName + '_migrator',
     maintenance: dbName + '_maintenance',
+    worker: dbName + '_aiworker',
   };
   const credentials: Record<string, string> = {};
   for (const [kind, name] of Object.entries(names)) {
@@ -45,8 +48,10 @@ export async function provisionRoles(
         ? 'RUNTIME_DATABASE_URL'
         : kind === 'migration'
           ? 'MIGRATION_DATABASE_URL'
-          : 'MAINTENANCE_DATABASE_URL';
-    if (existing) {
+          : kind === 'worker'
+            ? 'AI_WORKER_DATABASE_URL'
+            : 'MAINTENANCE_DATABASE_URL';
+    if (existing?.[key]) {
       const saved = new URL(existing[key]!);
       if (
         saved.username !== name ||
@@ -74,7 +79,19 @@ export async function provisionRoles(
           [name],
         )
       ).rows[0];
-      if (row && !existing)
+      if (
+        row &&
+        !(
+          existing &&
+          Object.values(existing).some((v) => {
+            try {
+              return new URL(v ?? '').username === name;
+            } catch {
+              return false;
+            }
+          })
+        )
+      )
         throw new Error(
           'Roles already exist but credential file is absent; recover credentials rather than reset passwords',
         );
@@ -86,7 +103,9 @@ export async function provisionRoles(
             ? 'RUNTIME_DATABASE_URL'
             : kind === 'migration'
               ? 'MIGRATION_DATABASE_URL'
-              : 'MAINTENANCE_DATABASE_URL';
+              : kind === 'worker'
+                ? 'AI_WORKER_DATABASE_URL'
+                : 'MAINTENANCE_DATABASE_URL';
         const password = new URL(credentials[key]!).password;
         if (!/^[a-f0-9]{64}$/.test(password))
           throw new Error('Unexpected stored password format');
@@ -105,18 +124,18 @@ export async function provisionRoles(
     );
     await c.query(`REVOKE ALL ON DATABASE ${ident(dbName)} FROM PUBLIC`);
     await c.query(
-      `GRANT CONNECT ON DATABASE ${ident(dbName)} TO ${ident(names.runtime)},${ident(names.migration)},${ident(names.maintenance)}`,
+      `GRANT CONNECT ON DATABASE ${ident(dbName)} TO ${ident(names.runtime)},${ident(names.migration)},${ident(names.maintenance)},${ident(names.worker)}`,
     );
     await c.query(`ALTER SCHEMA public OWNER TO ${ident(names.migration)}`);
     await c.query('REVOKE ALL ON SCHEMA public FROM PUBLIC');
     await c.query(
-      `GRANT USAGE ON SCHEMA public TO ${ident(names.runtime)},${ident(names.maintenance)}`,
+      `GRANT USAGE ON SCHEMA public TO ${ident(names.runtime)},${ident(names.maintenance)},${ident(names.worker)}`,
     );
     for (const r of relations)
       await c.query(
         `ALTER TABLE ${ident(r.tablename)} OWNER TO ${ident(names.migration)}`,
       );
-    await applyGrants(c, names.runtime, names.maintenance);
+    await applyGrants(c, names.runtime, names.maintenance, names.worker);
     await c.query('COMMIT');
     if (!existing) {
       mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
@@ -126,14 +145,23 @@ export async function provisionRoles(
           ...credentials,
           DB_RUNTIME_ROLE: names.runtime,
           DB_MAINTENANCE_ROLE: names.maintenance,
+          DB_AI_WORKER_ROLE: names.worker,
         })
           .map(([k, v]) => `${k}=${v}`)
           .join('\n') + '\n',
         { flag: 'wx', mode: 0o600 },
       );
     }
+    if (existing && !existing.AI_WORKER_DATABASE_URL)
+      writeFileSync(
+        file,
+        `\nAI_WORKER_DATABASE_URL=${credentials.AI_WORKER_DATABASE_URL}\nDB_AI_WORKER_ROLE=${names.worker}\n`,
+        { flag: 'a', mode: 0o600 },
+      );
     chmodSync(file, 0o600);
     return {
+      AI_WORKER_DATABASE_URL: credentials.AI_WORKER_DATABASE_URL!,
+      DB_AI_WORKER_ROLE: names.worker,
       RUNTIME_DATABASE_URL: credentials.RUNTIME_DATABASE_URL!,
       MIGRATION_DATABASE_URL: credentials.MIGRATION_DATABASE_URL!,
       MAINTENANCE_DATABASE_URL: credentials.MAINTENANCE_DATABASE_URL!,

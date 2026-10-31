@@ -1,3 +1,4 @@
+import { dropDisposableDatabase } from './support/disposable';
 import { test, expect, beforeAll, afterAll } from 'bun:test';
 import pg from 'pg';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
@@ -76,6 +77,10 @@ beforeAll(async () => {
   restoredPool = new pg.Pool({
     connectionString: restoreCreds.MIGRATION_DATABASE_URL,
   });
+  for (const pool of [fixture, runtime, maintenance, restoredPool])
+    pool.on('error', () => {
+      throw new Error('Unexpected idle test database failure');
+    });
   await fixture.query(
     'INSERT INTO organizations(id,name) VALUES($1,$2),($3,$4)',
     [org, 'Operations A', orgB, 'Operations B'],
@@ -124,10 +129,9 @@ afterAll(async () => {
     maintenance?.end(),
     restoredPool?.end(),
   ]);
+  for (const db of [name, restoreName]) await dropDisposableDatabase(admin, db);
   for (const db of [name, restoreName])
-    await admin.query(`DROP DATABASE IF EXISTS ${ident(db)} WITH (FORCE)`);
-  for (const db of [name, restoreName])
-    for (const role of ['runtime', 'migrator', 'maintenance'])
+    for (const role of ['runtime', 'migrator', 'maintenance', 'aiworker'])
       await admin.query(`DROP ROLE IF EXISTS ${ident(db + '_' + role)}`);
   await admin.end();
 });
@@ -292,6 +296,21 @@ test('encrypted pg_dump restores business data/audit into a fresh database, reje
   const keyFile = dir + '/backup.key',
     archive = dir + '/backup.catus';
   writeFileSync(keyFile, randomBytes(32), { mode: 0o600, flag: 'wx' });
+  const context = (
+    await fixture.query(
+      'SELECT id,project_id FROM interactions WHERE organization_id=$1 LIMIT 1',
+      [org],
+    )
+  ).rows[0];
+  const queuedId = crypto.randomUUID();
+  await fixture.query(
+    "INSERT INTO ai_budget_days(organization_id,day,reserved_micro_usd,jobs) VALUES($1,(now() AT TIME ZONE 'UTC')::date,1000,1)",
+    [org],
+  );
+  await fixture.query(
+    "INSERT INTO extraction_jobs(id,organization_id,interaction_id,project_id,requested_by,idempotency_key,request_hash,source_text,source_hash,data_scope,policy_reference,provider_config,budget_day,reserved_micro_usd) VALUES($1,$2,$3,$4,$5,$6,'test-hash','Synthetic restore source','test-source','synthetic','test-policy','{}',(now() AT TIME ZONE 'UTC')::date,1000)",
+    [queuedId, org, context.id, context.project_id, user, crypto.randomUUID()],
+  );
   const saved = await backup(creds.MIGRATION_DATABASE_URL!, archive, keyFile);
   expect(saved.bytes).toBeGreaterThan(100);
   expect(readFileSync(archive).includes(Buffer.from('Idempotent Client'))).toBe(
@@ -348,6 +367,25 @@ test('encrypted pg_dump restores business data/audit into a fresh database, reje
     (await restoredPool.query('SELECT count(*)::int n FROM idempotency_keys'))
       .rows[0].n,
   ).toBe(0);
+  expect(
+    (
+      await restoredPool.query(
+        'SELECT state,failure_code FROM extraction_jobs WHERE id=$1',
+        [queuedId],
+      )
+    ).rows[0],
+  ).toMatchObject({
+    state: 'failed',
+    failure_code: 'restored_requires_review',
+  });
+  expect(
+    (
+      await restoredPool.query(
+        'SELECT reserved_micro_usd,spent_micro_usd FROM ai_budget_days WHERE organization_id=$1',
+        [org],
+      )
+    ).rows[0],
+  ).toMatchObject({ reserved_micro_usd: '0', spent_micro_usd: '1000' });
   await expect(
     restore(
       restoreCreds.MIGRATION_DATABASE_URL!,

@@ -21,7 +21,17 @@ import {
 } from './auth/session';
 import { audit, authorize } from './auth/policy';
 import { cookie } from './auth/cookies';
-import { extractionCapability } from './extraction';
+import { configuredProvider } from './ai/provider';
+import type { ExtractionProvider } from './ai/provider';
+import {
+  capability,
+  setAiPolicy,
+  enqueueExtraction,
+  listExtractions,
+  getExtraction,
+  reviewProposal,
+  approveProposals,
+} from './modules/extractions';
 import {
   getMissionControl,
   getMembers,
@@ -86,9 +96,26 @@ async function readBody(request: Request): Promise<Record<string, unknown>> {
 export function createApp(
   config: AppConfig = loadConfig(),
   provider: OidcProvider | undefined = oidcProvider(config),
-  options: { pool?: Pool; loginRate?: RatePolicy; apiRate?: RatePolicy } = {},
+  options: {
+    pool?: Pool;
+    extractionProvider?: ExtractionProvider | null;
+    loginRate?: RatePolicy;
+    apiRate?: RatePolicy;
+  } = {},
 ) {
   const pool = options.pool ?? defaultPool;
+  const extractor =
+    options.extractionProvider === null
+      ? undefined
+      : (options.extractionProvider ??
+        (() => {
+          try {
+            return configuredProvider();
+          } catch {
+            console.error('LLM configuration invalid; inference disabled');
+            return undefined;
+          }
+        })());
   return async (
     request: Request,
     peerAddress = 'unattributed',
@@ -163,10 +190,16 @@ export function createApp(
               result = response(await getMissionControl(ctx));
               break;
             case '/api/extraction':
-              result = response(extractionCapability);
+              result = response(await capability(ctx, extractor));
               break;
-            default:
-              throw new HttpError(404, 'Rota não encontrada');
+            case '/api/extractions':
+              result = response(await listExtractions(ctx));
+              break;
+            default: {
+              const match = /^\/api\/extractions\/([^/]+)$/.exec(path);
+              if (!match) throw new HttpError(404, 'Rota não encontrada');
+              result = response(await getExtraction(ctx, match[1]!));
+            }
           }
         } else {
           const body = await readBody(request);
@@ -205,6 +238,20 @@ export function createApp(
           }
           if (method === 'POST') {
             switch (path) {
+              case '/api/ai/policy':
+                result = response(await setAiPolicy(ctx, body));
+                break;
+              case '/api/extractions':
+                result = response(
+                  await enqueueExtraction(
+                    ctx,
+                    body,
+                    request.headers.get('idempotency-key'),
+                    extractor,
+                  ),
+                  202,
+                );
+                break;
               case '/api/clients':
                 result = response(await createClient(ctx, body), 201);
                 break;
@@ -275,6 +322,20 @@ export function createApp(
                 break;
               }
               default: {
+                const approval = /^\/api\/extractions\/([^/]+)\/approve$/.exec(
+                  path,
+                );
+                if (approval) {
+                  result = response(
+                    await approveProposals(
+                      ctx,
+                      approval[1]!,
+                      body,
+                      request.headers.get('idempotency-key'),
+                    ),
+                  );
+                  break;
+                }
                 const revoke = /^\/api\/memberships\/([^/]+)\/revoke$/.exec(
                   path,
                 );
@@ -283,9 +344,14 @@ export function createApp(
               }
             }
           } else {
-            const match = /^\/api\/requests\/([^/]+)$/.exec(path);
-            if (!match) throw new HttpError(404, 'Rota não encontrada');
-            result = response(await updateRequest(ctx, match[1]!, body));
+            const proposal = /^\/api\/proposals\/([^/]+)$/.exec(path);
+            if (proposal) {
+              result = response(await reviewProposal(ctx, proposal[1]!, body));
+            } else {
+              const match = /^\/api\/requests\/([^/]+)$/.exec(path);
+              if (!match) throw new HttpError(404, 'Rota não encontrada');
+              result = response(await updateRequest(ctx, match[1]!, body));
+            }
           }
           if (isCreation)
             await completeCreation(ctx, path, creationKey!, result);

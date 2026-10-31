@@ -3,6 +3,7 @@
   import { statuses, transitions } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
   import './style.css';
+  import IntelligentIntake from './IntelligentIntake.svelte';
   import AccessAdmin from './AccessAdmin.svelte';
   import type { SessionView, Member } from '../shared/identity';
   let session = $state<SessionView | null>(null);
@@ -59,6 +60,7 @@
     path: string,
     method = 'GET',
     body: unknown = undefined,
+    key?: string,
   ): Promise<T> {
     const payload = JSON.stringify(body);
     const creation =
@@ -73,6 +75,7 @@
       method,
       headers: {
         ...(creation ? { 'Idempotency-Key': attempt!.key } : {}),
+        ...(key ? { 'Idempotency-Key': key } : {}),
         ...(session ? { 'X-CSRF-Token': session.csrfToken } : {}),
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
@@ -199,7 +202,7 @@
     <p class="eyebrow">WORKSPACE DA AGÊNCIA</p>
     <div class="nav active">◉ &nbsp; Mission Control</div>
     <p class="aside-note">Operação conectada.<br />Decisões rastreáveis.</p>
-    <div class="local">● Identidade e acesso · M1</div>
+    <div class="local">● Ambiente local</div>
   </aside>
   <main>
     <header>
@@ -210,7 +213,7 @@
           Da conversa à próxima ação, com contexto e responsabilidade.
         </p>
       </div>
-      <span class="badge">Extração por IA: não implementada</span>
+      <span class="badge">IA assistida · revisão humana obrigatória</span>
     </header>
     {#if !connected}
       <section class="panel access">
@@ -455,6 +458,14 @@
           </div>
         </section>
       {/if}
+      {#if session.role !== 'developer'}<IntelligentIntake
+          {api}
+          interactions={data.interactions}
+          projects={data.projects}
+          {members}
+          role={session.role}
+          onCreated={refresh}
+        />{/if}
       <section class="panel">
         <div class="section-heading">
           <div>
@@ -488,6 +499,17 @@
                 <p class="eyebrow">{r.client_name} / {r.project_name}</p>
                 <h3>{r.title}</h3>
                 <p class="description">{r.description}</p>
+                {#if r.origin_proposal_id}<p class="muted">
+                    Origem IA revisada por humano · proposta {r.origin_proposal_id}
+                  </p>{/if}
+                {#if r.suggested_acceptance_criteria?.length}<details>
+                    <summary>Critérios revisados</summary>
+                    <ul>
+                      {#each r.suggested_acceptance_criteria as c}<li>
+                          {c.text}
+                        </li>{/each}
+                    </ul>
+                  </details>{/if}
                 <dl>
                   <dt>Responsável</dt>
                   <dd>

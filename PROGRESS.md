@@ -1,5 +1,39 @@
 # Progresso
 
+## M2 — Atendimento inteligente com revisão humana · 31/10/2026
+
+Baseline limpo `43183a3` na própria branch `feat/m1-identity-security`, preservado. Leitura dos documentos M0–M1.1 e homologação; autorização explícita M2 aplicada sem aguardar credenciais externas. Migrations anteriores intactas, 004/005 incrementais aplicadas no banco local e nos bancos descartáveis; sem merge/deploy/main/alteração de produção.
+
+### Implementado
+
+- Conversas, reuniões, atendimentos e observações manuais; sem autoenvio ao cadastrar contexto.
+- Adaptador **real** HTTPS OpenAI-compatible, configurável por ambiente, sem dependências novas e sem fallback simulado; JSON Schema e validação estrita independente. Missing config/key/policy → indisponível, não gera resultados fictícios.
+- Extração de resumo, requisitos, decisões, compromissos, informações ausentes, perguntas, propostas e critérios sugeridos; citações literais com offsets UTF-16 calculados e fonte/hash preservados. Campos de autoridade/tools/IDs externos do modelo recusados. Prompt trata origem como dados não confiáveis.
+- Fila PostgreSQL persistente, claim/lease, uma tentativa por job, nenhuma chamada LLM dentro da transação HTTP; crash/timeout/cobrança ambígua sem reenvio automático. Reservas diárias UTC, teto por job, contagem de jobs, limites de input/output/bytes/tempo, preços explícitos e revalidação de política/identidade antes/depois do provedor. Jobs de ontem não contornam orçamento de hoje.
+- Quarta conta PostgreSQL AI worker, adicionada sem trocar credenciais antigas; launcher isola URLs. Worker não cria requests, não aprova propostas, não gerencia acesso e não grava revisões humanas. Web continua com autorização individual, isolamento de tenant e CSRF.
+- Duplicidades lexicais locais por projeto/organização, com candidatos/evidência e confirmação adicional, sem fusão automática ou envio do catálogo ao LLM.
+- UI de políticas sintéticas (admin), extração, fila/histórico, origem, métricas reais quando informadas, revisão/edição/rejeição, confirmação humana e aprovação em lote. Criação transacional/idempotente de somente propostas selecionadas, com responsável/ação e link reverso no Mission Control. Histórico antes/depois e autoria individual; output original da IA imutável.
+- Restore M1.1 ampliado para impedir reenvio de jobs queued/running restaurados. Correção do teardown: aguardar fechamento observado das conexões antes de remover bancos descartáveis, em vez de FORCE; erros de pool tratados sem dump de objeto/credenciais.
+
+### Evidências reais
+
+- `npm run check`: Svelte e TypeScript sem erros/avisos; `npm run build`: bundle gerado; formatação validada.
+- Suíte completa: **38 testes aprovados, 379 assertions, 0 falhas/erros**, cobrindo M0/M1/M1.1 e M2. Saídas adversariais, evidências inventadas, campos de autoridade, tools, JSON/truncamento/oversize, prompt injection como dado, ausência de chave/política, escopo de dados, isolamento, papel/CSRF, versão, rollback do lote, replay idempotente, duplicidades, cotas, dias UTC, redução de orçamento, falta de usage, crash e revogação.
+- Playwright: **2 testes aprovados**. O M2 registrou cliente/projeto/reunião **sintéticos**, recebeu 3 propostas, editou uma, aprovou 2 e rejeitou 1; somente 2 demandas no Mission Control com responsável, ação e rastreabilidade, inclusive após reload. O cenário de regressão PO/desenvolvedor/organização externa continua aprovado.
+- O harness usa o adaptador HTTP real com **transporte LLM simulado exclusivamente nos testes**, não inferência real. OIDC também é simulado somente nos testes. Screenshot `test-results/m2-human-reviewed.png` inspecionado; não é apresentado como chamada real ao provedor.
+- Testes PostgreSQL comprovam worker sem INSERT requests/UPDATE propostas, runtime sem alteração de estado dos jobs, auditoria humana correta e nenhuma demanda antes da confirmação. Histórico original não muda após edição do PO. Backup/restauração continuam exercitados com pg_dump/pg_restore reais e jobs restaurados bloqueados para reenvio.
+- `npm run ai:worker -- --once`: worker restrito iniciou e informou LLM indisponível, sem chamadas externas. `npm run ai:check`: código 2 com configuração ausente, sem segredo impresso ou requisição enviada.
+
+CI atualizado para Validate M2, preservando todos os checks anteriores e incluindo as novas suítes. Execução remota será verificada após publicar os commits; CI M1.1 não é prova M2.
+
+### Limitação de aceite externo e retomada
+
+Foram verificadas apenas presença/nomes de LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_DATA_POLICY_ID, OPENAI_API_KEY e ANTHROPIC_API_KEY: **ausentes**. Configuração de secrets do ambiente também vazia. Não há credencial de teste legitimamente disponível; não se extraiu chave de outro serviço nem se tentou inferência externa. O egress atual não autoriza o hostname do provedor. Portanto, **compatibilidade/qualidade/usage de um modelo real ainda não foram comprovadas**. Proprietário deve seguir `docs/AI_INTAKE.md` com chave/modelo/preços/política e dados sintéticos autorizados.
+
+Schema/citações não garantem fidelidade semântica; revisão humana permanece obrigatória. Duplicidades são heurísticas limitadas; orçamento é estimado e depende de tarifas/tokenização do modelo e de teto também no provedor. Sem usage confiável, consumo de reserva é conservador, não fatura. Sem política/autorização não enviar clientes reais. Homologação Google, isolamento de SO, retenção corporativa e supervisão de workers continuam pendentes. Não foram implementados Chat/Meet, escopos/contratos, motor financeiro, agentes de desenvolvimento, merge ou deploy.
+
+---
+
 ## M1.1 — Homologação e hardening · 31/10/2026
 
 Continuação na própria `feat/m1-identity-security`, baseline limpo `a53b231`. Documentos e código M1 revisados; migrations 001/002 preservadas e migration incremental 003 aplicada/repetida em banco local. Nenhuma main, merge, produção, credencial Google real ou exposição pública.

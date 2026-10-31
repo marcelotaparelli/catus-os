@@ -37,6 +37,7 @@ try {
       client,
       process.env.DB_RUNTIME_ROLE,
       process.env.DB_MAINTENANCE_ROLE,
+      process.env.DB_AI_WORKER_ROLE,
     );
   await client.query('COMMIT');
 } catch (e) {

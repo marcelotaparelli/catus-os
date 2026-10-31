@@ -241,6 +241,17 @@ export async function restore(
           .rows[0].present
       )
         await c.query(`DELETE FROM ${table}`);
+    if (
+      (await c.query("SELECT to_regclass('public.extraction_jobs') present"))
+        .rows[0].present
+    ) {
+      await c.query(
+        "UPDATE ai_budget_days b SET reserved_micro_usd=b.reserved_micro_usd-j.amount,spent_micro_usd=b.spent_micro_usd+j.amount FROM (SELECT organization_id,budget_day,sum(reserved_micro_usd) amount FROM extraction_jobs WHERE state IN ('queued','running') GROUP BY organization_id,budget_day) j WHERE b.organization_id=j.organization_id AND b.day=j.budget_day",
+      );
+      await c.query(
+        "UPDATE extraction_jobs SET state='failed',failure_code='restored_requires_review',consumed_micro_usd=reserved_micro_usd,completed_at=now(),lease_until=NULL WHERE state IN ('queued','running')",
+      );
+    }
     await applyGrants(c, runtime, maintenance);
     await c.query('COMMIT');
     return { restored: true, sessionsInvalidated: true };

@@ -1,6 +1,6 @@
-# CATUS OS — M1.1
+# CATUS OS — M2
 
-Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. IA não implementada.
+Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. Atendimento inteligente via adaptador LLM configurável, fila persistente e revisão humana. Sem credenciais/política, inferência indisponível; nenhum mock no aplicativo.
 
 ## Instalação reproduzível
 
@@ -113,9 +113,11 @@ Rotas públicas limitadas a `GET /api/auth/config` (booleano), `/api/auth/login`
 | POST   | `/api/interactions`               | `{project_id,kind,summary,occurred_at}`; `meeting`/`service`, ISO com fuso |
 | POST   | `/api/requests`                   | `{interaction_id,title,description,owner_user_id,next_action}`             |
 | PATCH  | `/api/requests/:id`               | `{status,owner_user_id,next_action,version}`                               |
-| GET    | `/api/extraction`                 | `available:false`; nenhuma IA                                              |
+| GET    | `/api/extraction`                 | Capability LLM/política da organização; papel PO/gestor/admin              |
 
 201 criação; 401 sessão inválida; 403 permissão/CSRF; 404 recurso inexistente ou fora do escopo; 409 concorrência; 413 payload >32KiB; 415 tipo; 422 validação; 503 autenticação sem OIDC/serviço indisponível. Queries parametrizadas, constraints compostas e contexto de organização são usados em todas as operações. Após 409, recarregue antes de editar. POST de criação exige Idempotency-Key UUID e oferece replay transacional por 24h; veja o protocolo de homologação. Mission Control limita atendimentos/solicitações a 500 recentes, sem excluir o restante.
+
+**Atendimento inteligente M2:** [configuração do provedor, política, orçamento, fila e demonstração](docs/AI_INTAKE.md). Após `db:roles`/migrations, o worker usa `npm run ai:worker`; a configuração pode ser verificada com `npm run ai:check` sem enviar dados.
 
 **Homologação M1.1:** [checklist, HTTPS/Google, privilégios, manutenção, backup e restore](docs/HOMOLOGATION.md). O runtime normal recusa conta PostgreSQL privilegiada e recebe somente sua própria URL; credenciais de migrations/manutenção ficam fora do processo web. Novas migrations usam MIGRATION_DATABASE_URL. Use `npm run start` para servir o build pela origem HTTPS de homologação.
 

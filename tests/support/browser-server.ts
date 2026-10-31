@@ -32,7 +32,26 @@ for (const [email, name, role, organization] of [
     [id, organization, role],
   );
 }
-const handler = createApp(config, oidcProvider(config, await mockOidcFetch()));
+const { fixtureProvider } = await import('./extraction-fixture');
+const { processOne } = await import('../../src/server/ai/worker');
+const extractor = fixtureProvider();
+const initiator = (
+  await pool.query("SELECT id FROM users WHERE email='po@browser.test'")
+).rows[0].id;
+await pool.query(
+  "INSERT INTO ai_policies(organization_id,enabled,policy_reference,data_scope,daily_budget_micro_usd,per_job_budget_micro_usd,daily_job_limit,updated_by) VALUES($1,true,'E2E-SYNTHETIC-ONLY','synthetic',1000000,100000,20,$2)",
+  [org, initiator],
+);
+let processing: Promise<boolean> | undefined;
+const aiTimer = setInterval(() => {
+  if (!processing)
+    processing = processOne(pool, extractor).finally(
+      () => (processing = undefined),
+    );
+}, 50);
+const handler = createApp(config, oidcProvider(config, await mockOidcFetch()), {
+  extractionProvider: extractor,
+});
 const server = Bun.serve({
   hostname: '127.0.0.1',
   port: 3000,
@@ -42,39 +61,15 @@ const server = Bun.serve({
 });
 console.log('Test-only OIDC harness ready');
 async function stop() {
+  clearInterval(aiTimer);
+  await processing;
   await server.stop();
-  const c = await pool.connect();
-  try {
-    await c.query('BEGIN');
-    for (const table of [
-      'idempotency_keys',
-      'audit_events',
-      'sessions',
-      'requests',
-      'interactions',
-      'projects',
-      'clients',
-      'memberships',
-    ])
-      await c.query(
-        `DELETE FROM ${table} WHERE organization_id=ANY($1::uuid[])`,
-        [[org, orgB]],
-      );
-    await c.query(
-      "DELETE FROM users WHERE issuer=$1 AND email IN ('po@browser.test','dev@browser.test','outsider@browser.test')",
-      [config.oidc!.issuer],
-    );
-    await c.query('DELETE FROM organizations WHERE id=ANY($1::uuid[])', [
-      [org, orgB],
-    ]);
-    await c.query('COMMIT');
-  } finally {
-    c.release();
-    await pool.end();
-  }
+  await pool.query(
+    'TRUNCATE rate_limits,idempotency_keys,audit_events,sessions,oidc_transactions,requests,interactions,projects,clients,memberships,users,organizations CASCADE',
+  );
+  await pool.end();
   process.exit(0);
 }
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.on(signal, () => void stop());
-
 export {};

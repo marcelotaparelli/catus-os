@@ -71,3 +71,21 @@ test('runtime launcher strips privileged database and backup credentials from th
     RUNTIME_DATABASE_URL: 'runtime',
   });
 });
+
+test('AI worker launcher cannot inherit runtime/migration/admin database credentials', async () => {
+  const child = Bun.spawn(
+    [
+      'node',
+      '--input-type=module',
+      '-e',
+      `import {workerEnvironment} from './scripts/runtime.mjs';console.log(JSON.stringify(workerEnvironment({DATABASE_URL:'admin',RUNTIME_DATABASE_URL:'runtime',MIGRATION_DATABASE_URL:'migration',MAINTENANCE_DATABASE_URL:'maintenance'}, {LLM_MODEL:'configured'}, {AI_WORKER_DATABASE_URL:'worker'})));`,
+    ],
+    { stdout: 'pipe' },
+  );
+  const env = JSON.parse(await new Response(child.stdout).text());
+  expect(await child.exited).toBe(0);
+  expect(env).toEqual({
+    LLM_MODEL: 'configured',
+    AI_WORKER_DATABASE_URL: 'worker',
+  });
+});

@@ -173,3 +173,7 @@ npm run test:e2e
 A suíte exige CA local gerada e imagem PostgreSQL acima. Testes de operação criam/removem bancos/roles descartáveis únicos; o teste base `catus_test` é truncado e nunca pode ser o banco do aplicativo. Chromium externo compatível pode ser fornecido por CHROMIUM_PATH, mantendo verificações de TLS da suíte HTTPS ativas.
 
 Pendente do proprietário: cliente/consentimento/segredo Google de homologação, domínio Workspace, egress, distribuição segura de CA/confiança dos navegadores, contas A/B/C e aceite manual. No host compartilhado, também isolamento de SO/segredos e supervisão do worker. Não alterar main/default, fazer merge, iniciar M2 ou publicar aplicação na Internet durante esse procedimento.
+
+## Atualização M2
+
+O atendimento inteligente foi implementado após autorização explícita, sem alterar os requisitos de homologação acima. Para política de dados, credenciais LLM, nova conta AI worker, testes sintéticos e aceite externo, seguir [AI_INTAKE.md](AI_INTAKE.md). Isto não autoriza dados reais nem confirma login Google/LLM real.

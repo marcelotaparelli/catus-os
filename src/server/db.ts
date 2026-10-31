@@ -8,3 +8,5 @@ export const pool = new pg.Pool({
   connectionTimeoutMillis: 5000,
   statement_timeout: 5000,
 });
+
+pool.on('error', () => console.error('Database idle connection failure'));

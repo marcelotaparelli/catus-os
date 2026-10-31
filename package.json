@@ -25,7 +25,9 @@
     "restore:test": "bun --env-file=.local/restore.env scripts/backup.ts restore",
     "homologation:check": "bun --env-file=.local/database.env scripts/check-homologation.ts",
     "restore:prepare": "bun scripts/prepare-restore.ts",
-    "start": "node scripts/runtime.mjs"
+    "start": "node scripts/runtime.mjs",
+    "ai:worker": "node scripts/runtime.mjs --ai-worker",
+    "ai:check": "bun scripts/check-ai.ts"
   },
   "dependencies": {
     "openid-client": "6.8.8",

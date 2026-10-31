@@ -10,7 +10,7 @@ Transformar contexto manual fornecido pelos POs em trabalho rastreável, escopo 
 | ---------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | P0 · M0 (entregue)     | Stack, módulos, banco, contexto manual, solicitações, Mission Control | Fluxo cliente → projeto → atendimento → solicitação exercitado no navegador, persistente, com estado/responsável/ação; testes reais e documentação                            |
 | P0 · M1 (implementado) | Identidade e controle de acesso                                       | Usuários/papéis e organização, autorização em cada rota, testes de isolamento e auditoria por ator; requisito para uso compartilhado                                          |
-| P1 · M2                | Extração assistida e triagem                                          | Provedor atrás da porta, propostas com evidência e perguntas, revisão humana antes de criar demanda, testes com fixtures, orçamento e observabilidade de inferência           |
+| P1 · M2 (implementado) | Extração assistida e triagem                                          | Provedor atrás da porta, propostas com evidência e perguntas, revisão humana antes de criar demanda, testes com fixtures, orçamento e observabilidade de inferência           |
 | P1 · M3                | Escopo, contratos e aprovações                                        | Versões de escopo, critérios de aceite, aprovações explícitas, anexos seguros e vínculo contratual; nenhuma mudança aprovada implicitamente                                   |
 | P1 · M4                | Motor econômico e horas                                               | Taxas vigentes, capacidade, estimativas e apontamentos, custos diretos/indiretos, receita contratada, margem prevista e realizada com fórmulas auditáveis                     |
 | P2 · M5                | Delegação a agentes de engenharia                                     | Elegibilidade exige escopo aprovado, margem/regra de custo, repositório permitido; jobs idempotentes, ambiente isolado, testes e PR para revisão; sem merge/deploy automático |
@@ -28,8 +28,12 @@ Regras puras em Bun; APIs com PostgreSQL real; fluxos centrais no navegador; mig
 
 ## Atualização M1
 
-Identidade OIDC configurável, sessões, papéis, organizações, responsáveis vinculados e auditoria individual implementados. A aceitação automatizada está em PROGRESS.md. Login Google real depende de configuração/credenciais de desenvolvimento; CI remoto aprovado no run 41220332080, observado pela página pública apesar da API GitHub bloqueada. Esses impedimentos não autorizam ativar um piloto ou iniciar M2.
+Identidade OIDC configurável, sessões, papéis, organizações, responsáveis vinculados e auditoria individual implementados. A aceitação automatizada está em PROGRESS.md. Login Google real depende de configuração/credenciais de desenvolvimento; CI remoto aprovado no run 41220332080, observado pela página pública apesar da API GitHub bloqueada. Esses impedimentos não autorizam ativar piloto compartilhado. O desenvolvimento M2 foi posteriormente autorizado explicitamente, com dados sintéticos e testes isolados.
 
 ## M1.1 — Homologação e hardening
 
 Sem iniciar M2: rate limiting persistente, criação idempotente, contas PostgreSQL separadas, limpeza transiente, HTTPS local e backup/restore criptografado em banco descartável. Checklist real A/B/C em docs/HOMOLOGATION.md; configuração/aceite Google e responsabilidades do proprietário são explicitamente separados dos testes automatizados. Nenhuma main, produção ou exposição pública autorizada.
+
+## Atualização M2
+
+Fluxo de atendimento inteligente implementado: fonte manual, adaptador real configurável, fila PostgreSQL, extração com evidências, duplicidades locais, revisão humana, rejeição e criação transacional/idempotente de demandas com rastreabilidade e métricas limitadas à IA. Demonstração sintética e testes em PROGRESS.md; provedor real depende de credenciais/política/egress legítimos. Nenhum motor financeiro ou agente de desenvolvimento iniciado.

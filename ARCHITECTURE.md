@@ -1,4 +1,4 @@
-# Arquitetura do Catus OS — M1.1
+# Arquitetura do Catus OS — M2
 
 ## Estrutura e decisões
 
@@ -20,7 +20,7 @@ Monólito modular: Bun.serve + TypeScript strict, Svelte 5 com runes/Vite, Postg
 | Mission Control                | Snapshot consistente, membros e auditoria da organização               | `src/server/modules/mission-control.ts`    |
 | Transporte                     | Rotas, sessão, CSRF, payload, transação e erros                        | `src/server/app.ts`                        |
 | Frontend                       | Login, sessão/organização, formulários, cartões e administração mínima | `src/web/`                                 |
-| Extração                       | Porta futura indisponível, sem simular IA                              | `src/server/extraction.ts`                 |
+| Extração                       | Adaptador LLM HTTPS, fila persistente e revisão humana                 | `src/server/extraction.ts`                 |
 
 O transporte constrói `Context` somente após consultar sessão e vínculo no banco. Esse contexto contém conexão transacional, usuário, organização e papel atual; módulos não recebem identidade do payload nem usam pool global. Cada função pública de módulo verifica sua permissão. Toda escrita de negócio e seu evento de auditoria pertencem à mesma transação. O `Context` é fronteira interna confiável, não uma estrutura deserializável do cliente.
 
@@ -123,4 +123,18 @@ Backup usa pg_dump custom oficial 18.3 por imagem Docker fixada por digest; stre
 
 Procedimento completo e tarefas do proprietário em `docs/HOMOLOGATION.md`. Permanecem pendentes: Google real, trust dos perfis de navegador, isolamento de SO/segredos, supervisão do worker, políticas de retenção de auditoria/backups, métricas e logs correlacionados. Não confundir preparação validada com autorização de exposição/produção.
 
-Sem alterações nos módulos futuros de IA, contratos, horas, economia ou execução por agentes. A porta `RequirementsExtractor` continua indisponível.
+## M2 — Atendimento inteligente
+
+Migrations 004/005 preservam o M0/M1 e acrescentam políticas, orçamento de IA, jobs, propostas/revisões e rastreabilidade das demandas; tipos de contexto passam a incluir conversa e observação, além dos antigos meeting/service.
+
+`src/server/ai/provider.ts` implementa OpenAI-compatible Chat Completions por fetch HTTPS nativo, sem SDK/dependências extras. Schema estrito versionado, ausência de ferramentas, separação de mensagem de sistema/dados, citações literais com offsets calculados e limites de bytes/tokens/tempo. Modelo, preços e política são configurados no ambiente; sem chave legítima/configuração, inferência fica indisponível. Nenhum mock é importado pelo aplicativo/worker normal. Schema e quote não provam implicação semântica: PO confere e corrige antes de criar trabalho.
+
+`extraction_jobs` captura fonte/hash, ator solicitante, policy/model/prompt/limites/preços, estado, tentativas, lease e uso/custo estimado. API reserva orçamento por organização/dia UTC e retorna 202. Worker faz claim SKIP LOCKED e commit antes do HTTP; chamada externa não ocupa transação HTTP. Uma tentativa/job, lease 90s, deadline até 60s, sem retry automático de cobrança ambígua. Jobs interrompidos, dias expirados, mudança de configuração/política/identidade não são reenviados. Redução de orçamento é verificada antes do envio. Sem usage válido, consumo conservador da reserva não é apresentado como fatura real.
+
+A conta AI worker tem URL isolada e não pode INSERT requests, UPDATE propostas ou gerir acesso; só preenche campos não decisórios de propostas e atualiza execução/orçamento. Web não recebe a credencial desse worker. O processo web usa sessão/CSRF e papel PO/gestor/admin para revisar. Edições/rejeições gravam snapshots imutáveis com autor; aprovação em lote usa versões/locks/idempotência, cria somente as selecionadas com responsável e ação, liga proposta↔request e audita tudo na mesma transação. A geração termina em propostas não aprovadas; nem IA nem worker aprovam escopo/contrato.
+
+Duplicidades são heurísticas locais e limitadas a 500 candidatos do projeto/organização, recalculadas antes de aprovar. Nunca enviadas ao modelo nem usadas para fusão automática. Aprovar candidato exige confirmação adicional. Mission Control mostra a origem da proposta e critérios revisados.
+
+Restore invalida material de sessão e impede reexecução dos jobs queued/running restaurados, marcando falha com revisão necessária e orçamento conservador. Não há limpeza automática do histórico de IA; retenção/redação é tarefa operacional posterior.
+
+Fluxo, campos, limites, critérios de política e execução em `docs/AI_INTAKE.md`. A autorização de desenvolvimento M2 usa dados sintéticos; não conclui homologação Google/LLM real nem autoriza enviar dados reais. Contratos, horas, economia e execução agêntica continuam fora deste marco.

@@ -52,7 +52,7 @@ export interface Project {
 export interface Interaction {
   id: string;
   project_id: string;
-  kind: 'meeting' | 'service';
+  kind: 'meeting' | 'service' | 'conversation' | 'observation';
   summary: string;
   occurred_at: string;
 }
@@ -64,6 +64,8 @@ export interface WorkRequest {
   status: Status;
   owner: string;
   owner_user_id: string | null;
+  origin_proposal_id?: string | null;
+  suggested_acceptance_criteria?: import('./extraction').Grounded[] | null;
   next_action: string;
   version: number;
   client_name: string;
