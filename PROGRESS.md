@@ -40,7 +40,7 @@ Antes da migration local foi salvo `.local/backups/m0-before.json`. A tentativa 
 
 Workflow `Validate M1`: instalação congelada, PostgreSQL, migrations, test DB isolado, typecheck, testes, build, formatação e browser. Runner fixado em Ubuntu 24.04 (Playwright suportado); actions atualizadas para runtime Node 24. A página pública mostrou que o run M0 `41203424635` falhou na instalação Chromium; esse resultado não é apresentado como sucesso anterior.
 
-A API `api.github.com` recebeu bloqueio CONNECT 403 do proxy, mas leitura pública de `github.com` funcionou. Execução M1 ainda será acompanhada após publicar a branch. Nenhum status remoto é inferido a partir dos checks locais.
+A API `api.github.com` recebeu bloqueio CONNECT 403 do proxy, mas leitura pública de `github.com` funcionou. **CI M1 aprovado no GitHub Actions**, confirmado pela página pública do [run 41220332080](https://github.com/marcelotaparelli/catus-os/actions/runs/41220332080), commit `502222388d3f04fdc992166d83fa280283796421`, com conclusão `completed successfully`. A branch foi publicada em `origin/feat/m1-identity-security`; main segue inexistente e default continua `feat/m0-mission-control`. O status foi observado no GitHub, não inferido pelos checks locais; logs completos pela API continuam inacessíveis.
 
 `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` e `OIDC_HOSTED_DOMAIN` foram verificados apenas por presença: ausentes; nenhum valor foi lido/exposto. Login Google real não foi exercitado. Faltam configuração de cliente de desenvolvimento, domínios de rede apropriados, primeiro administrador e aceite com funcionários autorizados. As identidades simuladas existem somente nos testes, nunca no servidor normal.
 

@@ -28,4 +28,4 @@ Regras puras em Bun; APIs com PostgreSQL real; fluxos centrais no navegador; mig
 
 ## Atualização M1
 
-Identidade OIDC configurável, sessões, papéis, organizações, responsáveis vinculados e auditoria individual implementados. A aceitação automatizada está em PROGRESS.md. Login Google real depende de configuração/credenciais de desenvolvimento; observação remota do CI depende de acesso à API GitHub. Esses impedimentos não autorizam ativar um piloto ou iniciar M2.
+Identidade OIDC configurável, sessões, papéis, organizações, responsáveis vinculados e auditoria individual implementados. A aceitação automatizada está em PROGRESS.md. Login Google real depende de configuração/credenciais de desenvolvimento; CI remoto aprovado no run 41220332080, observado pela página pública apesar da API GitHub bloqueada. Esses impedimentos não autorizam ativar um piloto ou iniciar M2.

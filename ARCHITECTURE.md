@@ -107,7 +107,7 @@ Isolamento é aplicado no serviço e por constraints relacionais; **RLS não foi
 
 Banco de teste loopback separado terminado em `_test`, com guardas contra uso do banco do aplicativo. Testes de API usam PostgreSQL real; teste de migration cria schema isolado com registros M0 e confirma preservação. Provedor OIDC simulado fica exclusivamente em `tests/support`, assina tokens RS256 e atravessa a mesma biblioteca de validação. Harness de browser exige `NODE_ENV=test`; o servidor normal não importa testes nem tem modo de impersonação. O browser cobre dois papéis e uma organização externa, sessão após reload e logout.
 
-A integração Google real requer configuração/credenciais de desenvolvimento e rede; não foi validada sem esses pré-requisitos. CI foi atualizado, mas sua observação remota está bloqueada pelo proxy da API GitHub (detalhes em `docs/GIT_REVIEW.md`). Nenhuma main/default, produção, merge ou deploy foi alterado.
+A integração Google real requer configuração/credenciais de desenvolvimento e rede; não foi validada sem esses pré-requisitos. CI M1 passou no GitHub Actions, observado pela página pública do run 41220332080; a API de logs/status permanece bloqueada pelo proxy (detalhes em `docs/GIT_REVIEW.md`). Nenhuma main/default, produção, merge ou deploy foi alterado.
 
 Hardening antes de exposição: TLS e servidor de assets com CSP própria, rate limiting de borda/login, conta DB de privilégio mínimo, backup/restauração, retenção/limpeza agendada de sessões e auditoria, métricas e logs correlacionados. Hoje requisições não fazem limpeza periódica de sessões expiradas; login limpa states vencidos. Não confundir M1 validado em testes com ambiente de produção aprovado.
 
