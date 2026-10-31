@@ -17,7 +17,7 @@ Continuação na própria `feat/m1-identity-security`, baseline limpo `a53b231`.
 ### Evidência executada
 
 - Typecheck Svelte/TS: aprovado (0 erros/avisos); build Vite e formatação aprovados.
-- `npm test`: **26 testes aprovados**, regressão M0/M1, autorização/isolamento, OIDC negativo, privilégios SQL reais, retry concorrente/restart, quota persistente, limpeza, backup/restore e HTTPS.
+- `npm test`: **26 testes aprovados, 277 assertions**, regressão M0/M1, autorização/isolamento, OIDC negativo, privilégios SQL reais, retry concorrente/restart, quota persistente, limpeza, backup/restore e HTTPS.
 - `CHROMIUM_PATH=/tmp/chromium npm run test:e2e`: **1 aprovado**, PO → desenvolvedor, terceira organização, reload, autorização e logout; teardown corrigido para limpar também idempotência e sem falhas de limpeza na última execução.
 - Backups/restores da suíte comparam linhas de clientes/projetos/atendimentos/solicitações/usuários/membros/auditoria. Arquivo adulterado não cria objetos; alvo com dados é recusado; destino não contém sessões nem idempotência anterior. Bancos/roles da suíte são criados e removidos, sem usar dados do aplicativo.
 - Comandos manuais reais: `db:roles` (repetível, sem trocar senhas), `migrate`, `cleanup -- --once`, `backup:key`, `backup -- .local/backups/m11-local.catus`, `restore:prepare`, `restore:test`. Arquivo criptografado local de 32.450 bytes criado; restore em `catus_homolog_restore_test` completou com `sessionsInvalidated:true`. Artefatos/chaves/URLs ficam em `.local` ignorado e nunca foram impressos.
@@ -25,11 +25,11 @@ Continuação na própria `feat/m1-identity-security`, baseline limpo `a53b231`.
 - `npm audit --omit=dev`: 0 vulnerabilidades reportadas. Os testes passaram com imagem oficial verificada por checksum/digest; nenhuma dependência de aplicação nova foi necessária.
 - `npm run homologation:check` sem perfil real retornou código 2 (`Homologation requires HTTPS` na configuração default HTTP), corretamente identificando pendência, não um aceite. Testes do perfil HTTPS/Google usaram exclusivamente valores fictícios identificados como testes.
 
-CI `Validate M1.1` foi atualizado sem remover checks existentes: papéis/migrations, build antes de testes HTTPS, geração de CA local, clientes PostgreSQL por digest, todas as suítes e Playwright. Execução remota será conferida após publicação; CI M1 anterior não é apresentado como evidência M1.1.
+CI `Validate M1.1` foi atualizado sem remover checks existentes: papéis/migrations, build antes de testes HTTPS, geração de CA local, clientes PostgreSQL por digest, todas as suítes e Playwright. CI M1.1 aprovado no [run 41227344571](https://github.com/marcelotaparelli/catus-os/actions/runs/41227344571), commit `480aae5`, confirmado na página pública como `completed successfully`. CI M1 anterior não foi usado como evidência M1.1.
 
 ### Pendências e limites
 
-Independentes de segredos Google concluídas; proprietário precisa configurar cliente/consentimento/redirect/secret de homologação, egress, domínio Workspace, trust dos perfis e contas A/B/C, e registrar aceite real. Não foi feita autenticação no Google real. Isolamento entre usuários de SO e supervisão contínua do worker não foram configurados no host. RLS, retenção corporativa de auditoria/backups, observabilidade e recuperação de produção não estão implementados. Restore foi ensaiado no schema atual, não em backups históricos. TTL idempotente de 24h não é deduplicação eterna nem persiste rascunho do browser após reload.
+Independentes de segredos Google concluídas; proprietário precisa configurar cliente/consentimento/redirect/secret de homologação, egress, domínio Workspace, trust dos perfis e contas A/B/C, e registrar aceite real. Não foi feita autenticação no Google real. Isolamento entre usuários de SO e supervisão contínua do worker não foram configurados no host. O cluster de fixtures ainda tem administrador com senha pública de desenvolvimento: o proprietário deve fornecer/endurecer PostgreSQL de homologação antes de uso compartilhado, conforme checklist; grants runtime não substituem esse requisito. RLS, retenção corporativa de auditoria/backups, observabilidade e recuperação de produção não estão implementados. Restore foi ensaiado no schema atual, não em backups históricos. TTL idempotente de 24h não é deduplicação eterna nem persiste rascunho do browser após reload.
 
 ---
 

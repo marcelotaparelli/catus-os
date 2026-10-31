@@ -31,6 +31,8 @@ npm run tls:local
 
 `npm run start`/`dev` usa launcher com `--no-env-file`: o processo que serve HTTP recebe somente a URL runtime, nunca as URLs administrativas/migrations/manutenção/backup. O entrypoint recusa ambiente privilegiado e verifica privilégios no PostgreSQL antes de escutar. A conta de teste administrativa só existe nos fixtures descartáveis; testes adicionais percorrem o aplicativo com runtime limitado real.
 
+**Antes de usuários reais em host compartilhado:** o cluster `npm run db` mantém a senha pública `catus_local_only` herdada do bootstrap para fixtures/desenvolvimento descartável. Não o reutilizar como fronteira de segurança compartilhada. O proprietário deve fornecer PostgreSQL local de homologação com administrador SCRAM de senha forte/inédita e protegida (ou rotacionar a conta por procedimento administrativo revisado), atualizar a URL administrativa somente no contexto do operador e então executar `db:roles`/migrations nessa instância. Os grants mínimos não compensam uma senha administrativa conhecida. Nenhum segredo administrativo real foi solicitado ou usado aqui.
+
 **Fronteira do sistema operacional:** a conveniência `.local/database.env` é para desenvolvimento por um operador confiável. Para homologação compartilhada em host persistente, usar usuário/serviço de SO separado: runtime recebe apenas `RUNTIME_DATABASE_URL` e configuração OIDC/TLS, sem permissão de ler `.env` administrativo, arquivos de migrations/backup/role secrets ou chave CA. A geração/armazenamento dos segredos operacionais fica com o operador. Não alegamos isolamento de arquivos entre processos executados pelo mesmo usuário de SO. O launcher aceita `RUNTIME_DATABASE_URL` já injetado e não precisa ler o arquivo de papéis nesse modo.
 
 ## 2. HTTPS local com verificação ativa
@@ -161,6 +163,7 @@ npm run test:db
 npm run check
 npm run build
 # Gerar TLS apenas se ainda não houver arquivos; não sobrescrever material existente.
+test -f .local/tls/server.crt || npm run tls:local
 npm test
 npm run format:check
 npx playwright install chromium
