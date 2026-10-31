@@ -1,0 +1,8 @@
+CREATE TABLE clients (id uuid PRIMARY KEY, name text NOT NULL CHECK(length(name) BETWEEN 1 AND 200), created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE projects (id uuid PRIMARY KEY, client_id uuid NOT NULL REFERENCES clients(id), name text NOT NULL CHECK(length(name) BETWEEN 1 AND 200), created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX projects_client_idx ON projects(client_id);
+CREATE TABLE interactions (id uuid PRIMARY KEY, project_id uuid NOT NULL REFERENCES projects(id), kind text NOT NULL CHECK(kind IN ('meeting','service')), summary text NOT NULL CHECK(length(summary) BETWEEN 1 AND 10000), occurred_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX interactions_project_idx ON interactions(project_id);
+CREATE TABLE requests (id uuid PRIMARY KEY, interaction_id uuid NOT NULL REFERENCES interactions(id), title text NOT NULL CHECK(length(title) BETWEEN 1 AND 200), description text NOT NULL CHECK(length(description) BETWEEN 1 AND 10000), status text NOT NULL CHECK(status IN ('new','triage','ready','in_progress','blocked','done')), owner text NOT NULL CHECK(length(owner) BETWEEN 1 AND 200), next_action text NOT NULL CHECK(length(next_action) BETWEEN 1 AND 2000), version integer NOT NULL DEFAULT 1, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX requests_interaction_idx ON requests(interaction_id);
+CREATE TABLE audit_events (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, request_id uuid NOT NULL REFERENCES requests(id), actor text NOT NULL, action text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());

@@ -1,0 +1,30 @@
+name: Validate M0
+on:
+  pull_request:
+  push:
+    branches: ['feat/**', main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run env:init
+      - name: Start local test PostgreSQL
+        run: |
+          npm run db > /tmp/catus-postgres.log 2>&1 &
+          node_modules/.bin/bun scripts/wait-db.ts
+      - run: npm run migrate
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - run: npm run format:check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
