@@ -1,4 +1,4 @@
-# Arquitetura do Catus OS — M1
+# Arquitetura do Catus OS — M1.1
 
 ## Estrutura e decisões
 
@@ -101,7 +101,7 @@ O antigo `requests.owner` fica como snapshot textual preservado, inclusive após
 
 Todas as leituras/escritas de negócio usam organização obtida da sessão. IDs externos de outras organizações retornam inexistência; responsáveis externos são recusados sem expor dados do usuário. Membros e auditoria também são filtrados. O Mission Control usa uma única instrução SQL para todas as coleções, mantendo snapshot MVCC consistente sem perder o controle concorrente otimista do M0. Atualização de solicitação usa lock de linha + versão, com 409 em versão desatualizada. Migrations continuam com transação e advisory lock.
 
-Isolamento é aplicado no serviço e por constraints relacionais; **RLS não foi implementado**. Operadores com credencial direta do banco têm acesso privilegiado e estão fora da fronteira de usuários da aplicação. A conta dona do schema é só para desenvolvimento; antes de produção, separar usuário de migrations/runtime, revisar privilégios e avaliar RLS como defesa adicional.
+Isolamento é aplicado no serviço e por constraints relacionais; **RLS não foi implementado**. Operadores com credencial direta do banco têm acesso privilegiado e estão fora da fronteira de usuários da aplicação. A separação runtime/migrations/manutenção foi implementada no M1.1: dono do banco/schema é migrator, runtime tem grants mínimos e auditoria append-only, manutenção lê/remove só tabelas transitórias. O entrypoint verifica privilégios; launcher remove URLs elevadas e desliga carregamento automático de .env no processo web. Isolamento de SO/arquivos entre operadores e runtime ainda exige configuração do proprietário em host compartilhado. RLS continua como defesa adicional futura.
 
 ## Testes e limites da entrega
 
@@ -109,6 +109,18 @@ Banco de teste loopback separado terminado em `_test`, com guardas contra uso do
 
 A integração Google real requer configuração/credenciais de desenvolvimento e rede; não foi validada sem esses pré-requisitos. CI M1 passou no GitHub Actions, observado pela página pública do run 41220332080; a API de logs/status permanece bloqueada pelo proxy (detalhes em `docs/GIT_REVIEW.md`). Nenhuma main/default, produção, merge ou deploy foi alterado.
 
-Hardening antes de exposição: TLS e servidor de assets com CSP própria, rate limiting de borda/login, conta DB de privilégio mínimo, backup/restauração, retenção/limpeza agendada de sessões e auditoria, métricas e logs correlacionados. Hoje requisições não fazem limpeza periódica de sessões expiradas; login limpa states vencidos. Não confundir M1 validado em testes com ambiente de produção aprovado.
+## Hardening M1.1
+
+Migration incremental `003_hardening.sql` adiciona `rate_limits` e `idempotency_keys`, com índices de retenção. Incrementos de rate limit são autocommit independentes da operação: 20/min auth e 300/min API por peer TCP fornecido pelo Bun, nunca por headers de encaminhamento. Rejeição 429 inclui Retry-After; falha do limitador fecha acesso com 503. Cotas persistem entre processos/restarts.
+
+Criações exigem UUID Idempotency-Key. Chave composta por organização/usuário/rota/chave, JSON canônico e resposta persistidos na mesma transação que negócio/auditoria. Unique constraint serializa retries concorrentes; payload divergente retorna 409, rollback não deixa sucesso registrado. Autorização/CSRF atuais são verificados antes do replay. Retenção de 24h é limite da garantia, não deduplicação permanente.
+
+Worker externo `npm run cleanup` usa conta maintenance, advisory lock, lotes de 500 e timeout de 5s a cada 60s. Limpa sessões expiradas/inativas/revogadas, states, rate buckets antigos e idempotência vencida; preserva sessões ativas, negócio e auditoria. Agendamento/supervisão do processo cabe ao operador.
+
+Bun entrega build `dist` em HTTPS loopback com certificado/CA local explícitos, CSP self-only e sem proxy trust implícito. Credenciais Google reais não são usadas em testes. Perfil offline Google valida origem HTTPS, issuer, client ID e hd; protocolo, claims, cookies Secure e CSRF são exercitados em TLS real com IdP simulado apenas em testes. Teste rejeita CA não confiável.
+
+Backup usa pg_dump custom oficial 18.3 por imagem Docker fixada por digest; streaming AES-256-GCM com chave privada separada, fsync e rename. Restore valida autenticação antes de executar SQL, só em banco local vazio \*\_restore_test, transação única e ACLs reatribuídas; invalida sessões/states/cache/limites. Tests comparam conteúdo de negócio e auditoria, recusam adulteração e alvo preenchido. Não há restauração automática sobre banco existente nem recuperação de produção.
+
+Procedimento completo e tarefas do proprietário em `docs/HOMOLOGATION.md`. Permanecem pendentes: Google real, trust dos perfis de navegador, isolamento de SO/segredos, supervisão do worker, políticas de retenção de auditoria/backups, métricas e logs correlacionados. Não confundir preparação validada com autorização de exposição/produção.
 
 Sem alterações nos módulos futuros de IA, contratos, horas, economia ou execução por agentes. A porta `RequirementsExtractor` continua indisponível.

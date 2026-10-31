@@ -1,5 +1,10 @@
 import { parseArgs } from 'node:util';
-import { pool } from '../src/server/db';
+import pg from 'pg';
+if (!process.env.MIGRATION_DATABASE_URL)
+  throw new Error('MIGRATION_DATABASE_URL required for offline bootstrap');
+const pool = new pg.Pool({
+  connectionString: process.env.MIGRATION_DATABASE_URL,
+});
 import { loadConfig } from '../src/server/config';
 import { text, uuid } from '../src/shared/domain';
 const { values } = parseArgs({

@@ -1,4 +1,12 @@
-import { pool } from './db';
+import { pool as defaultPool } from './db';
+import type { Pool } from 'pg';
+import { consumeRate, loginPolicy, apiPolicy } from './rate-limit';
+import type { RatePolicy } from './rate-limit';
+import {
+  creationRoutes,
+  reserveCreation,
+  completeCreation,
+} from './idempotency';
 import { InputError, uuid } from '../shared/domain';
 import { HttpError } from './errors';
 import type { AppConfig } from './config';
@@ -78,8 +86,31 @@ async function readBody(request: Request): Promise<Record<string, unknown>> {
 export function createApp(
   config: AppConfig = loadConfig(),
   provider: OidcProvider | undefined = oidcProvider(config),
+  options: { pool?: Pool; loginRate?: RatePolicy; apiRate?: RatePolicy } = {},
 ) {
-  return async (request: Request): Promise<Response> => {
+  const pool = options.pool ?? defaultPool;
+  return async (
+    request: Request,
+    peerAddress = 'unattributed',
+  ): Promise<Response> => {
+    const pathForLimit = new URL(request.url).pathname;
+    try {
+      const policy = pathForLimit.startsWith('/api/auth/')
+        ? (options.loginRate ?? loginPolicy)
+        : (options.apiRate ?? apiPolicy);
+      // Socket peer is supplied by server, never Forwarded/X-Forwarded-For from a request.
+      const rate = await consumeRate(
+        pool,
+        `${pathForLimit.startsWith('/api/auth/') ? 'auth' : 'api'}:${peerAddress}`,
+        policy,
+      );
+      if (!rate.allowed)
+        return response({ error: 'Limite de requisições excedido' }, 429, {
+          'Retry-After': String(rate.retryAfter),
+        });
+    } catch {
+      return response({ error: 'Proteção temporariamente indisponível' }, 503);
+    }
     let db;
     try {
       db = await pool.connect();
@@ -153,6 +184,25 @@ export function createApp(
               path !== '/api/memberships'
             )
               throw new InputError('Campo de identidade não permitido');
+          const isCreation =
+            method === 'POST' &&
+            (creationRoutes as readonly string[]).includes(path);
+          const creationKey = request.headers.get('idempotency-key');
+          if (isCreation) {
+            authorize(ctx, 'create');
+            const previous = await reserveCreation(
+              ctx,
+              path,
+              creationKey,
+              body,
+            );
+            if (previous) {
+              await db.query('COMMIT');
+              return response(previous.body, previous.status, {
+                'Idempotency-Replayed': 'true',
+              });
+            }
+          }
           if (method === 'POST') {
             switch (path) {
               case '/api/clients':
@@ -237,6 +287,8 @@ export function createApp(
             if (!match) throw new HttpError(404, 'Rota não encontrada');
             result = response(await updateRequest(ctx, match[1]!, body));
           }
+          if (isCreation)
+            await completeCreation(ctx, path, creationKey!, result);
         }
       }
       result.headers.set('Cache-Control', 'no-store');

@@ -10,5 +10,6 @@ if (
 )
   throw new Error('Refusing unsafe test database');
 process.env.DATABASE_URL = target;
+process.env.RUNTIME_DATABASE_URL = target;
 
 export {};

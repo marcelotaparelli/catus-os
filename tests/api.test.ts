@@ -30,6 +30,7 @@ async function call(
         ...(actor ? { Cookie: actor.cookie, 'X-CSRF-Token': actor.csrf } : {}),
         Origin: config.origin,
         'Content-Type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
         ...headers,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -71,9 +72,12 @@ async function create(who: Actor, path: string, body: unknown) {
 let requestId: string;
 let interactionId: string;
 beforeAll(async () => {
-  app = createApp(config, oidcProvider(config, await mockOidcFetch()));
+  app = createApp(config, oidcProvider(config, await mockOidcFetch()), {
+    loginRate: { limit: 1000, windowSeconds: 60 },
+    apiRate: { limit: 5000, windowSeconds: 60 },
+  });
   await pool.query(
-    'TRUNCATE audit_events,sessions,oidc_transactions,requests,interactions,projects,clients,memberships,users,organizations CASCADE',
+    'TRUNCATE rate_limits,idempotency_keys,audit_events,sessions,oidc_transactions,requests,interactions,projects,clients,memberships,users,organizations CASCADE',
   );
   await pool.query('INSERT INTO organizations(id,name) VALUES($1,$2),($3,$4)', [
     orgA,
@@ -103,7 +107,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await pool.query(
-    'TRUNCATE audit_events,sessions,oidc_transactions,requests,interactions,projects,clients,memberships,users,organizations CASCADE',
+    'TRUNCATE rate_limits,idempotency_keys,audit_events,sessions,oidc_transactions,requests,interactions,projects,clients,memberships,users,organizations CASCADE',
   );
   await pool.end();
 });
@@ -287,6 +291,7 @@ describe('M1: authentication and session security', () => {
               'X-CSRF-Token': po.csrf,
               Origin: config.origin,
               'Content-Type': 'application/json',
+              'Idempotency-Key': crypto.randomUUID(),
             },
             body: '{',
           }),

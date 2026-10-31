@@ -29,3 +29,7 @@ Regras puras em Bun; APIs com PostgreSQL real; fluxos centrais no navegador; mig
 ## Atualização M1
 
 Identidade OIDC configurável, sessões, papéis, organizações, responsáveis vinculados e auditoria individual implementados. A aceitação automatizada está em PROGRESS.md. Login Google real depende de configuração/credenciais de desenvolvimento; CI remoto aprovado no run 41220332080, observado pela página pública apesar da API GitHub bloqueada. Esses impedimentos não autorizam ativar um piloto ou iniciar M2.
+
+## M1.1 — Homologação e hardening
+
+Sem iniciar M2: rate limiting persistente, criação idempotente, contas PostgreSQL separadas, limpeza transiente, HTTPS local e backup/restore criptografado em banco descartável. Checklist real A/B/C em docs/HOMOLOGATION.md; configuração/aceite Google e responsabilidades do proprietário são explicitamente separados dos testes automatizados. Nenhuma main, produção ou exposição pública autorizada.

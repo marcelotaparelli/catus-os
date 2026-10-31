@@ -54,14 +54,25 @@
       .slice(0, 16);
     void execute(initialize);
   });
+  const creationAttempts = new Map<string, { payload: string; key: string }>();
   async function api<T>(
     path: string,
     method = 'GET',
     body: unknown = undefined,
   ): Promise<T> {
+    const payload = JSON.stringify(body);
+    const creation =
+      method === 'POST' &&
+      ['clients', 'projects', 'interactions', 'requests'].includes(path);
+    let attempt = creationAttempts.get(path);
+    if (creation && attempt?.payload !== payload) {
+      attempt = { payload, key: crypto.randomUUID() };
+      creationAttempts.set(path, attempt);
+    }
     const res = await fetch(`/api/${path}`, {
       method,
       headers: {
+        ...(creation ? { 'Idempotency-Key': attempt!.key } : {}),
         ...(session ? { 'X-CSRF-Token': session.csrfToken } : {}),
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
@@ -72,6 +83,7 @@
       disconnect();
     }
     if (!res.ok) throw new Error(result.error ?? 'Falha na requisição');
+    if (creation) creationAttempts.delete(path);
     return result as T;
   }
   async function refresh() {
@@ -92,6 +104,20 @@
     }
   }
   function disconnect() {
+    creationAttempts.clear();
+    clientName =
+      projectName =
+      clientId =
+      projectId =
+      summary =
+      interactionId =
+      title =
+      description =
+      owner =
+      nextAction =
+      editOwner =
+      editAction =
+        '';
     connected = false;
     session = null;
     editing = null;

@@ -1,4 +1,4 @@
-name: Validate M1
+name: Validate M1.1
 on:
   pull_request:
   push:
@@ -21,11 +21,15 @@ jobs:
         run: |
           npm run db > /tmp/catus-postgres.log 2>&1 &
           node_modules/.bin/bun scripts/wait-db.ts
+      - run: npm run db:roles
       - run: npm run migrate
       - run: npm run test:db
       - run: npm run check
-      - run: npm test
       - run: npm run build
+      - run: npm run tls:local
+      - name: Pull verified PostgreSQL client image
+        run: docker --host=unix:///var/run/docker.sock pull postgres@sha256:7e32e9833a6fb1c92c32552794cb6ed569d51b445a54907d35fc112ef39684db
+      - run: npm test
       - run: npm run format:check
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

@@ -17,7 +17,7 @@ export async function provisionMember(
     throw new InputError('Email inválido');
   const name = text(body.name, 'Nome');
   // Serialize org administration. Never expose whether a user exists in another organization.
-  await ctx.db.query('SELECT id FROM organizations WHERE id=$1 FOR UPDATE', [
+  await ctx.db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
     ctx.organizationId,
   ]);
   let user = (
@@ -47,7 +47,7 @@ export async function revokeMember(ctx: Context, id: string) {
   uuid(id);
   if (id === ctx.userId)
     throw new HttpError(403, 'Não é permitido revogar a si mesmo');
-  await ctx.db.query('SELECT id FROM organizations WHERE id=$1 FOR UPDATE', [
+  await ctx.db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
     ctx.organizationId,
   ]);
   if (

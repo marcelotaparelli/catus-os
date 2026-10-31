@@ -1,4 +1,4 @@
-# CATUS OS — M1
+# CATUS OS — M1.1
 
 Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. IA não implementada.
 
@@ -18,6 +18,7 @@ O PostgreSQL 18.3 local usa `127.0.0.1:5432`, banco `catus`, senha exclusivament
 Em outros terminais:
 
 ```sh
+npm run db:roles
 npm run migrate
 npm run dev
 ```
@@ -77,8 +78,9 @@ O PO cadastra cliente/projeto/atendimento e cria solicitação escolhendo um mem
 ```sh
 npm run test:db
 npm run check
-npm test
 npm run build
+npm run tls:local # somente se os arquivos locais ainda não existirem
+npm test
 npm run format:check
 npx playwright install chromium
 npm run test:e2e
@@ -113,6 +115,8 @@ Rotas públicas limitadas a `GET /api/auth/config` (booleano), `/api/auth/login`
 | PATCH  | `/api/requests/:id`               | `{status,owner_user_id,next_action,version}`                               |
 | GET    | `/api/extraction`                 | `available:false`; nenhuma IA                                              |
 
-201 criação; 401 sessão inválida; 403 permissão/CSRF; 404 recurso inexistente ou fora do escopo; 409 concorrência; 413 payload >32KiB; 415 tipo; 422 validação; 503 autenticação sem OIDC/serviço indisponível. Queries parametrizadas, constraints compostas e contexto de organização são usados em todas as operações. Após 409, recarregue antes de editar. POST ainda não tem idempotência. Mission Control limita atendimentos/solicitações a 500 recentes, sem excluir o restante.
+201 criação; 401 sessão inválida; 403 permissão/CSRF; 404 recurso inexistente ou fora do escopo; 409 concorrência; 413 payload >32KiB; 415 tipo; 422 validação; 503 autenticação sem OIDC/serviço indisponível. Queries parametrizadas, constraints compostas e contexto de organização são usados em todas as operações. Após 409, recarregue antes de editar. POST de criação exige Idempotency-Key UUID e oferece replay transacional por 24h; veja o protocolo de homologação. Mission Control limita atendimentos/solicitações a 500 recentes, sem excluir o restante.
+
+**Homologação M1.1:** [checklist, HTTPS/Google, privilégios, manutenção, backup e restore](docs/HOMOLOGATION.md). O runtime normal recusa conta PostgreSQL privilegiada e recebe somente sua própria URL; credenciais de migrations/manutenção ficam fora do processo web. Novas migrations usam MIGRATION_DATABASE_URL. Use `npm run start` para servir o build pela origem HTTPS de homologação.
 
 [ARCHITECTURE.md](ARCHITECTURE.md), [MASTER_PLAN.md](MASTER_PLAN.md), [PROGRESS.md](PROGRESS.md) e [NEXT.md](NEXT.md) detalham arquitetura, evidências, limites e próximas tarefas. O procedimento de criação de main está em [docs/GIT_REVIEW.md](docs/GIT_REVIEW.md); nenhuma main/default foi alterada automaticamente.

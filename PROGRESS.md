@@ -1,5 +1,38 @@
 # Progresso
 
+## M1.1 — Homologação e hardening · 31/10/2026
+
+Continuação na própria `feat/m1-identity-security`, baseline limpo `a53b231`. Documentos e código M1 revisados; migrations 001/002 preservadas e migration incremental 003 aplicada/repetida em banco local. Nenhuma main, merge, produção, credencial Google real ou exposição pública.
+
+### Implementação e revisão
+
+- Rate limit persistido e atômico por peer TCP real: 20/min auth, 300/min API, 429/Retry-After, tentativas falhas contam e quotas sobrevivem à reinicialização. Headers de encaminhamento não viram identidade de rede. Falha de proteção retorna 503.
+- Idempotência transacional nas quatro criações M0: UUID obrigatório, escopo organização/usuário/rota/chave, hash JSON canônico, TTL 24h, replay do mesmo resultado e 409 para conflito. Uma criação/auditoria sob concorrência; rollback não registra sucesso. Frontend conserva chave para retry da tentativa e limpa rascunhos ao sair/trocar sessão.
+- Papéis PostgreSQL runtime/migrator/maintenance, ownership explícito apenas nos objetos conhecidos, PUBLIC sem CREATE/connect indiscriminado. Runtime sem DDL, superuser, alteração da auditoria ou acesso às migrations; manutenção sem leitura de negócio. Startup verifica privilégios e launcher remove credenciais elevadas do processo web (`--no-env-file`). Host compartilhado ainda exige isolamento de SO/arquivos pelo operador.
+- Worker separado, 60s, batches de 500, lock transacional e timeout; purga sessões expiradas/inativas/revogadas, states, rate buckets velhos e idempotência vencida, preservando sessões ativas/negócio/auditoria. Comando once exercitado.
+- Servidor Bun com build na mesma origem HTTPS loopback, CSP e cabeçalhos; certificado/CA local gerados com chave protegida, sem ignorar erros TLS. Perfil Google offline e check de pré-requisitos. Sem configuração, login continua bloqueado.
+- Backup pg_dump custom real (clientes oficiais PostgreSQL 18.3 por digest), streaming AES-256-GCM, chave separada, fsync/rename e arquivos privados. Restore real, transacional, apenas em banco local descartável vazio, rejeita adulteração/overwrite e invalida material de sessão/cache antes dos grants.
+- `docs/HOMOLOGATION.md`: instalação, separação de contas/segredos, HTTPS/CA/túnel privado, Google Workspace, checklist A/B/C, rate/idempotência/manutenção, comandos de backup/restore e tarefas do proprietário. README/arquitetura/roadmap/NEXT atualizados; sem iniciar M2.
+
+### Evidência executada
+
+- Typecheck Svelte/TS: aprovado (0 erros/avisos); build Vite e formatação aprovados.
+- `npm test`: **26 testes aprovados**, regressão M0/M1, autorização/isolamento, OIDC negativo, privilégios SQL reais, retry concorrente/restart, quota persistente, limpeza, backup/restore e HTTPS.
+- `CHROMIUM_PATH=/tmp/chromium npm run test:e2e`: **1 aprovado**, PO → desenvolvedor, terceira organização, reload, autorização e logout; teardown corrigido para limpar também idempotência e sem falhas de limpeza na última execução.
+- Backups/restores da suíte comparam linhas de clientes/projetos/atendimentos/solicitações/usuários/membros/auditoria. Arquivo adulterado não cria objetos; alvo com dados é recusado; destino não contém sessões nem idempotência anterior. Bancos/roles da suíte são criados e removidos, sem usar dados do aplicativo.
+- Comandos manuais reais: `db:roles` (repetível, sem trocar senhas), `migrate`, `cleanup -- --once`, `backup:key`, `backup -- .local/backups/m11-local.catus`, `restore:prepare`, `restore:test`. Arquivo criptografado local de 32.450 bytes criado; restore em `catus_homolog_restore_test` completou com `sessionsInvalidated:true`. Artefatos/chaves/URLs ficam em `.local` ignorado e nunca foram impressos.
+- Entrypoint real iniciou com conta restrita e sem URLs administrativas; instância HTTPS em 127.0.0.1:3443 respondeu HTML/CSP e `configured:false` via curl com `--cacert`. Teste TLS rejeitou CA não confiável; nenhuma verificação de assinatura/TLS foi desabilitada.
+- `npm audit --omit=dev`: 0 vulnerabilidades reportadas. Os testes passaram com imagem oficial verificada por checksum/digest; nenhuma dependência de aplicação nova foi necessária.
+- `npm run homologation:check` sem perfil real retornou código 2 (`Homologation requires HTTPS` na configuração default HTTP), corretamente identificando pendência, não um aceite. Testes do perfil HTTPS/Google usaram exclusivamente valores fictícios identificados como testes.
+
+CI `Validate M1.1` foi atualizado sem remover checks existentes: papéis/migrations, build antes de testes HTTPS, geração de CA local, clientes PostgreSQL por digest, todas as suítes e Playwright. Execução remota será conferida após publicação; CI M1 anterior não é apresentado como evidência M1.1.
+
+### Pendências e limites
+
+Independentes de segredos Google concluídas; proprietário precisa configurar cliente/consentimento/redirect/secret de homologação, egress, domínio Workspace, trust dos perfis e contas A/B/C, e registrar aceite real. Não foi feita autenticação no Google real. Isolamento entre usuários de SO e supervisão contínua do worker não foram configurados no host. RLS, retenção corporativa de auditoria/backups, observabilidade e recuperação de produção não estão implementados. Restore foi ensaiado no schema atual, não em backups históricos. TTL idempotente de 24h não é deduplicação eterna nem persiste rascunho do browser após reload.
+
+---
+
 ## M1 — Identidade, segurança e preparação multiusuário · 31/10/2026
 
 Baseline verificado: checkout limpo em `824c1e7`, descendente do M0 `369161a`; branch de trabalho `feat/m1-identity-security`. Preservados arquivos locais, `.env` e banco. Sem main, troca de default, merge, deploy ou credenciais reais.

@@ -7,7 +7,7 @@ const { createApp } = await import('../../src/server/app');
 const { oidcProvider } = await import('../../src/server/auth/oidc');
 const { config, mockOidcFetch } = await import('./oidc-provider');
 await pool.query(
-  'TRUNCATE audit_events,sessions,oidc_transactions,requests,interactions,projects,clients,memberships,users,organizations CASCADE',
+  'TRUNCATE rate_limits,idempotency_keys,audit_events,sessions,oidc_transactions,requests,interactions,projects,clients,memberships,users,organizations CASCADE',
 );
 const org = crypto.randomUUID(),
   orgB = crypto.randomUUID();
@@ -32,10 +32,12 @@ for (const [email, name, role, organization] of [
     [id, organization, role],
   );
 }
+const handler = createApp(config, oidcProvider(config, await mockOidcFetch()));
 const server = Bun.serve({
   hostname: '127.0.0.1',
   port: 3000,
-  fetch: createApp(config, oidcProvider(config, await mockOidcFetch())),
+  fetch: (req, server) =>
+    handler(req, server.requestIP(req)?.address ?? 'unknown'),
   maxRequestBodySize: 32768,
 });
 console.log('Test-only OIDC harness ready');
@@ -45,6 +47,7 @@ async function stop() {
   try {
     await c.query('BEGIN');
     for (const table of [
+      'idempotency_keys',
       'audit_events',
       'sessions',
       'requests',

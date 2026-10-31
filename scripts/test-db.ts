@@ -29,7 +29,13 @@ try {
   await db.end();
 }
 const child = Bun.spawn(['node_modules/.bin/bun', 'scripts/migrate.ts'], {
-  env: { ...process.env, DATABASE_URL: target.href },
+  env: {
+    ...process.env,
+    DATABASE_URL: target.href,
+    MIGRATION_DATABASE_URL: target.href,
+    DB_RUNTIME_ROLE: undefined,
+    DB_MAINTENANCE_ROLE: undefined,
+  },
   stdout: 'inherit',
   stderr: 'inherit',
 });
