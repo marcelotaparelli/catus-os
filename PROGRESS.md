@@ -25,7 +25,7 @@ HEAD M3 local/remota `e0631d9a2c2b05fd8f99506c5dcb92fe5405748d` confirmada; bran
 - Playwright: **4 cenários aprovados**, M0/M1, M2, M3 e M4. Gestor prepara premissas explícitas, admin aprova, PO estima, desenvolvedor registra 120 minutos sem acesso a custos, gestor aprova/observa EAC/margem/risco/fontes e reload persiste. Screenshot sintético ignorado `test-results/m4-economics.png`.
 - Uma execução conjunta de browser encontrou 429 após acumular sessões/requisições dos quatro marcos no mesmo peer. Limite maior foi aplicado **somente no harness de testes**; produção e testes negativos de rate limiting permanecem intactos. Reexecução sequencial completa aprovada. Erros de revisão/calendário detectados durante desenvolvimento foram corrigidos sem remover checks.
 
-CI Validate M4 inclui as novas suítes e preserva os checks anteriores; resultado remoto será observado após publicação. Guia completo, fórmulas, exemplos e checklist em docs/ECONOMICS.md.
+CI **Validate M4 aprovado** no [run 41299049760](https://github.com/marcelotaparelli/catus-os/actions/runs/41299049760), commit `46d880c`, confirmado pela página pública como `Success` / `completed successfully`. Novas suítes incluídas e todos os checks anteriores preservados. `npm run format:check`, `git diff --check` e `npm audit --omit=dev` também aprovados (0 vulnerabilidades de runtime reportadas). Guia completo, fórmulas, exemplos e checklist em docs/ECONOMICS.md.
 
 ### Bloqueios e limites
 
