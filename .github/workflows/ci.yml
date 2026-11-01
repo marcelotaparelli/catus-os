@@ -41,6 +41,7 @@ jobs:
           docker --host=unix:///var/run/docker.sock build -f runner/Dockerfile -t catus-responses-ci .
           docker --host=unix:///var/run/docker.sock build -f runner/Gateway.Dockerfile -t catus-gateway-ci .
           docker --host=unix:///var/run/docker.sock run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint node catus-responses-ci --experimental-strip-types -e "import('/runner/src/responses.ts')"
+          docker --host=unix:///var/run/docker.sock run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint /usr/local/bin/bun catus-gateway-ci --no-env-file -e "import('/app/runner/src/gateway.ts')"
       - run: npm test
       - run: npm run format:check
       - run: npx playwright install --with-deps chromium

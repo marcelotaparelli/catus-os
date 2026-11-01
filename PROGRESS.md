@@ -19,6 +19,8 @@ sincronizados por fetch/rebase, sem force push, merge, deploy ou mudança de mai
   inclui documentação e build/smoke das imagens; seu CI deve ser conferido por SHA
   antes da entrega. Não reutilizar CI de um ancestral como evidência desse HEAD.
 
+Checkpoint `0d32e20`, [CI 41349073787](https://github.com/marcelotaparelli/catus-os/actions/runs/41349073787) **success** observado: regressão completa, testes de autorização legada, builds das duas imagens e import Responses sem rede aprovados. **Fase A PREPARED**; Fase B NOT_VERIFIED. Checkpoint documental posterior registra esta evidência e acrescenta import sem rede do gateway; conferir também o CI do HEAD na entrega.
+
 ### Contrato e implementação
 
 Reprodução real do SDK/CLI **0.166.0** contra servidor loopback de recusa 422,

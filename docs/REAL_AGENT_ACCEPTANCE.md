@@ -1,7 +1,7 @@
 # M5.1 — aceite sintético controlado (issue #4)
 
 Baseline: `aec7a5ac439132fbd8752f7c64798c6973474960`, branch
-`feat/m5-acceptance`. Preparação em andamento; inferência real
+`feat/m5-acceptance`. Fase A **PREPARED**; inferência real
 **NOT_VERIFIED**, PR do agente **NOT_CREATED**.
 
 ## Decisão de contrato
