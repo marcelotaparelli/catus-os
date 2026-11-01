@@ -64,6 +64,10 @@ export interface WorkRequest {
   status: Status;
   owner: string;
   owner_user_id: string | null;
+  scope_item_id?: string | null;
+  commercial_coverage?: 'covered' | 'pending_analysis';
+  scope_number?: number | null;
+  contract_title?: string | null;
   origin_proposal_id?: string | null;
   suggested_acceptance_criteria?: import('./extraction').Grounded[] | null;
   next_action: string;

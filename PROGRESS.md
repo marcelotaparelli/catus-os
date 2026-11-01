@@ -1,5 +1,33 @@
 # Progresso
 
+## M3 — Issue #1: escopos, contratos e change requests · 01/11/2026
+
+Baseline M2 `cf34cbcfce8c3f516cfe968b730917f23b1fd692` confirmado local/remoto. Árvore inicial limpa; branch própria `feat/m3-scope-contracts`, sem reescrita de histórico/main/default/merge/deploy. Issue pública #1 lida integralmente, assim como contexto técnico e guias M1/M2. Skill cloud-environment-runtime aplicada; ambiente sem secrets/identidades externas, política restrita preservada.
+
+### Implementado
+
+- Migrations incrementais 006/007, sem alterar 001–005: contratos com cliente/projeto, tipo explícito fixed_price/retainer, moeda, vigência UTC, estado e referência documental; nenhum valor inferido. Termos ativados imutáveis, ativação/encerramento por gestor/admin.
+- Escopos versionados por projeto, draft/submitted/approved/rejected/superseded; itens com entregáveis/exclusões/aceite/dependências e origem de atendimento/demanda, com FKs/validação de projeto/tenant. Conteúdo submetido congelado também em SQL; cópias usam IDs novos e preservam história.
+- Alçada explícita por organização configurável apenas por admin, limitada a gestor/admin; negar decisão sem política. Autor/editores/submissor, inclusive herdados de cópias, não decidem o próprio trabalho. Decisão guarda ator/papel/data/revisão/política/justificativa.
+- Change request copia versão aprovada para rascunho, motivo/impacto descritivo; decisão independente e transacional. Aprovação substitui versão anterior preservando conteúdo/decisão; rejeição conserva a base aprovada.
+- Cobertura humana explícita de demanda por item aprovado e contrato vigente, sem mudança de estado/responsável M0. Mission Control distingue coberta/pendente mesmo em ready; versão substituída/contrato encerrado ou expirado exige revisão dos vínculos, nunca remapeamento automático.
+- UI de cadastro/ativação/encerramento de contratos, política, itens/versões, submissão/revisão/decisão, change requests, cobertura e histórico. API de edição de termos draft disponível. Eventos before/after e auditoria atômicos; versões/409, locks por projeto e idempotência em criações/decisões/submissões/cobertura.
+- Privilégios SQL mínimos preservados: worker M2/maintenance sem acesso M3, runtime sem alteração de decisões/eventos; LLM não pode criar/decidir contratos/escopos. CommercialBasis fornece referência versionada para futuro M4, sem economia implementada.
+
+### Evidências e correções
+
+- PostgreSQL local preservado foi reiniciado após confirmar postmaster zombie e arquivar locks obsoletos, sem remover dados. `db:roles`, `migrate`, `test:db` aprovados; migrations 006/007 aplicadas e repetíveis.
+- `npm run check`: Svelte/TypeScript sem erros/avisos; `npm run build`: bundle gerado. Suíte completa com **49 testes aprovados, 537 assertions, 0 falhas**, incluindo regressões M0–M2 e testes M3. `npm run format:check`, `git diff --check` e `npm audit --omit=dev` aprovados (0 vulnerabilidades de runtime reportadas). CI Validate M3 preserva todos os checks e executa as novas suítes; resultado remoto será observado após publicação.
+- Playwright: **3 testes aprovados**, M3 PO/admin/gestor/organização externa, M2 reunião → duas demandas aprovadas/uma rejeitada, M0/M1 sessão/desenvolvedor/logout/tenant. M3 demonstra V1 aprovada, demanda coberta e descoberta, change request V2 sem efeito antes de decisão, V1 preservada após substituição, vínculo revisado explicitamente e reload/viewport estreito. Screenshot `test-results/m3-scope-contracts.png` é sintético, ignorado no Git.
+- Testes PostgreSQL: concorrência de dois gestores cria somente uma decisão, negativa de autoaprovação/PO/dev/alçada ausente, autoria/competência, origens e links cross-tenant/cross-project, vigência e termos imutáveis, versões desatualizadas, retries idempotentes e falha tardia de auditoria com rollback de estado/decisão/chave. Upgrade M2→M3 conserva demandas, auditoria e jobs; backup/restore real compara também entidades/histórico comerciais sintéticos.
+- Uma falha real nos testes mostrou que cópias inicialmente não herdavam preparadores; corrigido e coberto por regressão. Seletores browser e limites de login do harness adequados aos novos usuários (limites de produção e testes negativos mantidos). Uma execução API/browser simultânea interferiu no banco compartilhado; descartada e repetida sequencialmente com sucesso.
+
+### Bloqueios externos e limites
+
+Sem credenciais Google/LLM legítimas ou autorização de egress do provedor: não houve login Google real, inferência externa ou envio de clientes a terceiros. Harness OIDC/LLM simulado exclusivamente nos testes, sem bypass no app normal. Homologação corporativa continua pendente do proprietário, sem bloquear o desenvolvimento sintético autorizado. Contrato é registro documental interno, não assinatura eletrônica; política M3 por papel, sem limiar financeiro. Paginação/retenção e RLS adicionais ficam no backlog. Nenhum M4/financeiro/agente/Chat/Meet/merge/deploy/produção iniciado. Guia reproduzível: docs/SCOPE_CONTRACTS.md.
+
+---
+
 ## M2 — Atendimento inteligente com revisão humana · 31/10/2026
 
 Baseline limpo `43183a3` na própria branch `feat/m1-identity-security`, preservado. Leitura dos documentos M0–M1.1 e homologação; autorização explícita M2 aplicada sem aguardar credenciais externas. Migrations anteriores intactas, 004/005 incrementais aplicadas no banco local e nos bancos descartáveis; sem merge/deploy/main/alteração de produção.

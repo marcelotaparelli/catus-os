@@ -3,6 +3,7 @@
   import { statuses, transitions } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
   import './style.css';
+  import CommercialControl from './CommercialControl.svelte';
   import IntelligentIntake from './IntelligentIntake.svelte';
   import AccessAdmin from './AccessAdmin.svelte';
   import type { SessionView, Member } from '../shared/identity';
@@ -466,6 +467,13 @@
           role={session.role}
           onCreated={refresh}
         />{/if}
+      <CommercialControl
+        {api}
+        {data}
+        role={session.role}
+        userId={session.user.id}
+        onChanged={refresh}
+      />
       <section class="panel">
         <div class="section-heading">
           <div>
@@ -498,6 +506,15 @@
                 </div>
                 <p class="eyebrow">{r.client_name} / {r.project_name}</p>
                 <h3>{r.title}</h3>
+                <p
+                  class="commercial-coverage"
+                  data-coverage={r.commercial_coverage}
+                >
+                  {r.commercial_coverage === 'covered'
+                    ? 'Cobertura comercial aprovada'
+                    : 'Pendente de análise comercial'}{#if r.scope_item_id}
+                    · Escopo V{r.scope_number} · {r.contract_title}{/if}
+                </p>
                 <p class="description">{r.description}</p>
                 {#if r.origin_proposal_id}<p class="muted">
                     Origem IA revisada por humano · proposta {r.origin_proposal_id}

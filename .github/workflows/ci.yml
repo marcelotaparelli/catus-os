@@ -1,4 +1,4 @@
-name: Validate M2
+name: Validate M3
 on:
   pull_request:
   push:

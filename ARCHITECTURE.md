@@ -1,4 +1,4 @@
-# Arquitetura do Catus OS — M2
+# Arquitetura do Catus OS — M3
 
 ## Estrutura e decisões
 
@@ -138,3 +138,17 @@ Duplicidades são heurísticas locais e limitadas a 500 candidatos do projeto/or
 Restore invalida material de sessão e impede reexecução dos jobs queued/running restaurados, marcando falha com revisão necessária e orçamento conservador. Não há limpeza automática do histórico de IA; retenção/redação é tarefa operacional posterior.
 
 Fluxo, campos, limites, critérios de política e execução em `docs/AI_INTAKE.md`. A autorização de desenvolvimento M2 usa dados sintéticos; não conclui homologação Google/LLM real nem autoriza enviar dados reais. Contratos, horas, economia e execução agêntica continuam fora deste marco.
+
+## M3 — Contratos e escopos versionados
+
+Issue #1, baseline M2 `cf34cbc`, branch própria `feat/m3-scope-contracts`. Migrations incrementais 006/007: contracts, commercial_policies, scope_versions/items/contributors/decisions, change_requests, commercial_events e vínculo opcional requests.scope_item_id. FKs compostas asseguram organização/projeto/cliente; triggers congelam conteúdo submetido/itens e termos contratuais ativados, validam origens/cobertura por projeto. Migrations 001–005 permanecem intactas e demandas antigas continuam sem cobertura inferida.
+
+`src/server/modules/commercial.ts` concentra regras sob Context M1 e transação HTTP; `src/shared/commercial.ts` define contratos e referências para M4; `src/web/CommercialControl.svelte` fornece cadastro, política, revisão/decisão, change requests e cobertura. Não há dependência nova, worker comercial, chamada externa ou cálculo financeiro. Contratos têm tipo explícito, moeda, vigência UTC e referência textual; ativação/encerramento são registros humanos por gestor/admin, sem assinatura/valores inferidos. Termos ativados não são editados; substituição documental exige novo contrato.
+
+Escopo por projeto tem numeração monotônica e contador separado de concorrência. Uma versão pendente e uma aprovada por projeto (uniques parciais). Advisory lock por organização/projeto serializa criação/transições; decisão única, locks de linha/política/contrato e versões impedem duas aprovações. Conteúdo submetido é imutável. Nova versão de escopo aprovado exige change request com motivo/impacto, cópia de itens/contribuidores e decisão humana independente. Aprovação substitui a versão anterior atomicamente; rejeição conserva a base. Revisões de rejeição inicial também criam versão nova, sem sobrescrever conteúdo/decisão anterior.
+
+Default deny comercial: sem política explícita ninguém decide. Só admin configura alçada limitada aos papéis gestor/admin. Autor, editores e submissor são contribuidores; cópias herdam participação e todos são impedidos de decidir o próprio trabalho. Decisão registra ator, papel, hora, revisão e snapshot de política. PO prepara e submete; desenvolvedor só lê. Tenant/ator/papel nunca são aceitos do frontend. Eventos comerciais before/after e auditoria M1 pertencem à mesma transação. Criações/submissões/decisões/cobertura usam idempotência M1.1; PATCH usa revisão otimista/409. AI worker não recebe grants M3 nem UPDATE(scope_item_id) em requests; maintenance continua sem dados comerciais.
+
+Cobertura exige vínculo humano a item da versão atualmente aprovada, contrato ativo/vigente e mesmo projeto/organização. Mission Control calcula cobertura independente de status M0: ready/M2 accepted não são aprovação comercial. Substituição de versão ou encerramento/expiração de contrato preserva vínculos/histórico, porém os sinaliza pendentes para nova análise; nenhum vínculo migra automaticamente para V2. M0 não sofre bloqueio operacional retroativo. `CommercialBasis` fornece IDs/tipo/moeda/vigência/versionamento para M4, sem valores, estimativas ou margens fictícios.
+
+Guia completo e checklist em `docs/SCOPE_CONTRACTS.md`. Testes usam PostgreSQL real, contas SQL restritas e fixtures sintéticos; validam concorrência, tenant, preparadores, contratos expirados, falha tardia de auditoria/rollback, upgrade M2 e backup/restore. Playwright cobre PO/gestor/admin e organização externa, mantendo regressões M0–M2. Google/LLM reais e piloto corporativo permanecem sujeitos à homologação do proprietário.

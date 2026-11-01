@@ -311,6 +311,40 @@ test('encrypted pg_dump restores business data/audit into a fresh database, reje
     "INSERT INTO extraction_jobs(id,organization_id,interaction_id,project_id,requested_by,idempotency_key,request_hash,source_text,source_hash,data_scope,policy_reference,provider_config,budget_day,reserved_micro_usd) VALUES($1,$2,$3,$4,$5,$6,'test-hash','Synthetic restore source','test-source','synthetic','test-policy','{}',(now() AT TIME ZONE 'UTC')::date,1000)",
     [queuedId, org, context.id, context.project_id, user, crypto.randomUUID()],
   );
+  const project = (
+    await fixture.query('SELECT client_id FROM projects WHERE id=$1', [
+      context.project_id,
+    ])
+  ).rows[0];
+  const con = await (
+    await call('contracts', 'POST', {
+      project_id: context.project_id,
+      client_id: project.client_id,
+      title: 'Synthetic M3 backup contract',
+      kind: 'retainer',
+      currency: 'BRL',
+      valid_from: '2020-01-01',
+      valid_until: '2099-12-31',
+      document_reference: 'SYNTHETIC-BACKUP-M3',
+    })
+  ).json();
+  const scopeResponse = await call('scopes', 'POST', {
+    project_id: context.project_id,
+    contract_id: con.id,
+    title: 'Synthetic backup scope',
+    items: [
+      {
+        description: 'Synthetic scope item',
+        deliverables: 'Test delivery',
+        exclusions: 'External data',
+        acceptance_criteria: 'Test evidence',
+        dependencies: 'None declared',
+        origin_interaction_id: context.id,
+        origin_request_id: null,
+      },
+    ],
+  });
+  expect(scopeResponse.status).toBe(201);
   const saved = await backup(creds.MIGRATION_DATABASE_URL!, archive, keyFile);
   expect(saved.bytes).toBeGreaterThan(100);
   expect(readFileSync(archive).includes(Buffer.from('Idempotent Client'))).toBe(
@@ -355,6 +389,14 @@ test('encrypted pg_dump restores business data/audit into a fresh database, reje
     'audit_events',
     'users',
     'memberships',
+    'contracts',
+    'scope_versions',
+    'scope_items',
+    'scope_contributors',
+    'scope_decisions',
+    'commercial_policies',
+    'change_requests',
+    'commercial_events',
   ])
     expect(
       (await restoredPool.query(`SELECT * FROM ${table} ORDER BY 1`)).rows,

@@ -1,6 +1,6 @@
-# CATUS OS — M2
+# CATUS OS — M3
 
-Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. Atendimento inteligente via adaptador LLM configurável, fila persistente e revisão humana. Sem credenciais/política, inferência indisponível; nenhum mock no aplicativo.
+Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. Atendimento inteligente via adaptador LLM configurável, fila persistente e revisão humana. Sem credenciais/política, inferência indisponível; nenhum mock no aplicativo. Contratos, escopos versionados, change requests e cobertura comercial exigem revisão e autorização humanas explícitas.
 
 ## Instalação reproduzível
 
@@ -122,3 +122,9 @@ Rotas públicas limitadas a `GET /api/auth/config` (booleano), `/api/auth/login`
 **Homologação M1.1:** [checklist, HTTPS/Google, privilégios, manutenção, backup e restore](docs/HOMOLOGATION.md). O runtime normal recusa conta PostgreSQL privilegiada e recebe somente sua própria URL; credenciais de migrations/manutenção ficam fora do processo web. Novas migrations usam MIGRATION_DATABASE_URL. Use `npm run start` para servir o build pela origem HTTPS de homologação.
 
 [ARCHITECTURE.md](ARCHITECTURE.md), [MASTER_PLAN.md](MASTER_PLAN.md), [PROGRESS.md](PROGRESS.md) e [NEXT.md](NEXT.md) detalham arquitetura, evidências, limites e próximas tarefas. O procedimento de criação de main está em [docs/GIT_REVIEW.md](docs/GIT_REVIEW.md); nenhuma main/default foi alterada automaticamente.
+
+## M3 — Contratos, escopos e aprovação comercial
+
+Guia: [SCOPE_CONTRACTS.md](docs/SCOPE_CONTRACTS.md). Após `db:roles` e `migrate`, o controle comercial permite cadastrar contratos, preparar versões com itens/origem, submeter, decidir com alçada explícita e abrir change requests. Administrador configura os papéis autorizados; nenhum preparador pode decidir o próprio escopo. Cobertura no Mission Control exige vínculo humano com item aprovado e contrato vigente; “Pronta” não é aprovação comercial. Não há cálculos financeiros ou assinatura eletrônica.
+
+O fluxo M3 e regressões são reproduzidos por `npm test` e `npm run test:e2e`, executados sequencialmente em bancos locais descartáveis. Evidências em PROGRESS.md. Não é preciso credencial Google/LLM real para os testes; aplicação normal continua exigindo autenticação configurada.

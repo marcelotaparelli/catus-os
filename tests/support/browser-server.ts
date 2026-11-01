@@ -20,6 +20,8 @@ await pool.query('INSERT INTO organizations(id,name) VALUES($1,$2),($3,$4)', [
 for (const [email, name, role, organization] of [
   ['po@browser.test', 'PO Browser', 'po', org],
   ['dev@browser.test', 'Dev Browser', 'developer', org],
+  ['manager@browser.test', 'Gestor Browser', 'manager', org],
+  ['admin@browser.test', 'Admin Browser', 'administrator', org],
   ['outsider@browser.test', 'Other Browser', 'po', orgB],
 ]) {
   const id = crypto.randomUUID();
@@ -51,6 +53,9 @@ const aiTimer = setInterval(() => {
 }, 50);
 const handler = createApp(config, oidcProvider(config, await mockOidcFetch()), {
   extractionProvider: extractor,
+  // Browser suites share one loopback peer and exercise multiple users per minute.
+  // Production limits remain unchanged and have dedicated negative integration tests.
+  loginRate: { limit: 200, windowSeconds: 60 },
 });
 const server = Bun.serve({
   hostname: '127.0.0.1',

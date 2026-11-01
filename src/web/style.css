@@ -422,3 +422,41 @@ h4 {
     grid-template-columns: 1fr;
   }
 }
+
+.commercial details {
+  margin: 1rem 0;
+}
+.commercial fieldset {
+  border: 1px solid var(--line, #d4dce6);
+  padding: 1rem;
+  min-width: 0;
+}
+.commercial-form {
+  display: grid;
+  gap: 0.8rem;
+  margin: 1rem 0;
+  max-width: 760px;
+}
+.commercial pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  max-height: 300px;
+  overflow: auto;
+}
+.commercial-coverage {
+  padding: 0.5rem;
+  border-left: 3px solid #bd7220;
+  background: #fff5e6;
+  color: #74420b;
+  font-size: 0.8rem;
+}
+.commercial-coverage[data-coverage='covered'] {
+  border-color: #16825d;
+  background: #edf9f3;
+  color: #145d44;
+}
+.scope-detail {
+  border-top: 1px solid #d4dce6;
+  padding-top: 1rem;
+}

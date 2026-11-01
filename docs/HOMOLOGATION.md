@@ -177,3 +177,7 @@ Pendente do proprietário: cliente/consentimento/segredo Google de homologação
 ## Atualização M2
 
 O atendimento inteligente foi implementado após autorização explícita, sem alterar os requisitos de homologação acima. Para política de dados, credenciais LLM, nova conta AI worker, testes sintéticos e aceite externo, seguir [AI_INTAKE.md](AI_INTAKE.md). Isto não autoriza dados reais nem confirma login Google/LLM real.
+
+## M3 — Homologação de contratos/escopos
+
+Aplicar migrations 006/007 e grants com a conta migrator; manter HTTPS, OIDC, contas runtime/maintenance/AI worker e backups. Checklist PO/gestor/admin independente + organização B e detalhes de alçadas, versões/cobertura, concorrência e aceite em [SCOPE_CONTRACTS.md](SCOPE_CONTRACTS.md). Sem política explícita, decisões bloqueadas; ready/M2 accepted não autorizam contrato. Fixtures permanecem sintéticos e APIs/Playwright devem rodar sequencialmente. Nenhuma homologação externa, assinatura de cliente ou exposição pública é presumida pelos testes.

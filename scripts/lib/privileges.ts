@@ -17,6 +17,14 @@ const grants: Record<string, string> = {
   oidc_transactions: 'SELECT,INSERT,DELETE',
   rate_limits: 'SELECT,INSERT,UPDATE',
   idempotency_keys: 'SELECT,INSERT,UPDATE',
+  contracts: 'SELECT,INSERT,UPDATE',
+  commercial_policies: 'SELECT,INSERT,UPDATE',
+  scope_versions: 'SELECT,INSERT,UPDATE',
+  scope_items: 'SELECT,INSERT,DELETE',
+  scope_contributors: 'SELECT,INSERT',
+  change_requests: 'SELECT,INSERT,UPDATE',
+  scope_decisions: 'SELECT,INSERT',
+  commercial_events: 'SELECT,INSERT',
   ai_policies: 'SELECT,INSERT,UPDATE',
   ai_budget_days: 'SELECT,INSERT,UPDATE',
   extraction_jobs: 'SELECT,INSERT',
@@ -44,7 +52,7 @@ export async function applyGrants(
   for (const [name, columns] of Object.entries({
     users: 'subject',
     requests:
-      'status,owner_user_id,next_action,version,updated_at,origin_proposal_id,suggested_acceptance_criteria',
+      'status,owner_user_id,next_action,version,updated_at,origin_proposal_id,suggested_acceptance_criteria,scope_item_id',
     sessions: 'last_seen_at,revoked_at',
   })) {
     if (

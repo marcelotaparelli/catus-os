@@ -1,3 +1,4 @@
+import { commercialRoute } from './modules/commercial';
 import { pool as defaultPool } from './db';
 import type { Pool } from 'pg';
 import { consumeRate, loginPolicy, apiPolicy } from './rate-limit';
@@ -171,7 +172,12 @@ export function createApp(
         if (!['GET', 'POST', 'PATCH'].includes(method))
           throw new HttpError(404, 'Rota não encontrada');
         if (method !== 'GET') verifyCsrf(request, ctx, config);
-        if (method === 'GET') {
+        const commercialRead =
+          method === 'GET'
+            ? await commercialRoute(ctx, path, method, undefined, null)
+            : undefined;
+        if (commercialRead) result = commercialRead;
+        else if (method === 'GET') {
           switch (path) {
             case '/api/health':
               await db.query('SELECT 1');
@@ -236,7 +242,15 @@ export function createApp(
               });
             }
           }
-          if (method === 'POST') {
+          const commercialWrite = await commercialRoute(
+            ctx,
+            path,
+            method,
+            body,
+            creationKey,
+          );
+          if (commercialWrite) result = commercialWrite;
+          else if (method === 'POST') {
             switch (path) {
               case '/api/ai/policy':
                 result = response(await setAiPolicy(ctx, body));
@@ -357,6 +371,7 @@ export function createApp(
             await completeCreation(ctx, path, creationKey!, result);
         }
       }
+      result.headers.set('Content-Security-Policy', "default-src 'none'");
       result.headers.set('Cache-Control', 'no-store');
       result.headers.set('Referrer-Policy', 'no-referrer');
       result.headers.set('X-Content-Type-Options', 'nosniff');
