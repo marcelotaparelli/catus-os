@@ -1,5 +1,45 @@
 # Progresso
 
+## Piloto controlado M0–M4 — preparação · 01/11/2026
+
+Branch `feat/pilot-readiness` criada a partir de `feat/m5-acceptance @ b4fc3cf` (árvore limpa, igual a `origin/feat/m5-acceptance`; nenhum trabalho local descartado). Sem M6, sem novos agentes, sem merge/deploy. Runbook: [docs/PILOT.md](docs/PILOT.md).
+
+### Ambiente desta verificação
+
+Contêiner Debian 12 sem git/PostgreSQL/Docker pré-instalados: instalados git e Chromium do Playwright 1.58.2. PostgreSQL 18.3 embutido (`npm run db`) executado por usuário de SO não-root; `db:roles`, `migrate`, `test:db` aplicados (001–009). Docker 20.10 subiu, mas o driver `vfs` esgotou os 3,9 GB do disco raiz ao baixar a imagem Node fixada; foi removido. Portanto **não foram executados localmente**: backup/restore com `pg_dump` fixado e runner isolado M5 (7 testes Bun + `e2e/zz-delivery.spec.ts`, todos com causa `docker` ausente/`sandbox_failure`, idêntica antes e depois das mudanças). Esses dependem do CI.
+
+### Auditoria de usabilidade (navegador real, capturas inspecionadas)
+
+Defeitos encontrados nos fluxos existentes e corrigidos:
+
+- Página única de 3,4k–4,9k px sem navegação; no mobile a barra lateral sumia sem substituto. → Navegação por módulos filtrada por papel (lateral fixa e barra compacta no mobile). Exibição apenas; API continua autorizando cada chamada.
+- Solicitações (trabalho do dia) ficavam abaixo de M5/M4/M3; o desenvolvedor rolava toda a página. → Solicitações no topo; filtro **Atribuídas a mim**/por responsável/sem vínculo; indicadores Em aberto e Atribuídas a mim; papel exibido em português.
+- Painel de edição renderizado após toda a lista, fora da visão. → Edição inline no próprio cartão, com foco.
+- Após 409, o formulário mantinha a versão antiga e falhava sempre. → Recarrega e reabre a edição com o registro atual, com aviso; não reaplica o texto antigo (sem lost update).
+- Resposta não-JSON (proxy/queda) mostrava erro de parser. → Mensagem compreensível.
+- Sem consulta de clientes/projetos/reuniões registradas. → Seção somente leitura com atendimentos por projeto e solicitações abertas.
+- `GET /api/audit` sem tela. → Auditoria somente leitura para admin/gestor, com filtros por tipo e autor.
+- Aprovadores viam UUIDs (preparador, decisor, horas, eventos, origem de item de escopo). → Nomes de membros (UUID como fallback) e origem descrita.
+- Campos monetários em unidades mínimas sem retorno visual (risco de erro 100×). → Prévia formatada ao vivo (`6000` → `= USD 60,00`); contrato inteiro/BigInt inalterado.
+
+Mudança de API: `GET /api/mission-control` passa a incluir `project_id` e `updated_at` nas solicitações, na mesma consulta já restrita à organização (asserção adicionada em `tests/api.test.ts`). Nenhuma migration nova; 001–009 preservadas.
+
+### Jornada ponta a ponta comprovada
+
+`e2e/pilot-journey.spec.ts`, somente pela UI e com quatro papéis: PO registra reunião → cria solicitação com responsável e próxima ação → consulta a reunião no diretório → admin configura alçadas → PO registra contrato USD, gestor ativa → PO prepara/submete escopo V1 (sem botão de decisão para o preparador), gestor aprova → PO vincula cobertura e tria até Pronta → edição concorrente PO×gestor resulta em aviso e dados atuais → gestor prepara premissas, taxa, termos, capacidade e custo direto, admin aprova cada um → PO estima sem ver taxas, gestor aprova → desenvolvedor filtra “Atribuídas a mim”, inicia execução (responsável bloqueado) e aponta 120 min; `/api/economics` do desenvolvedor sem campos de custo → gestor aprova horas identificadas por nome e calcula: receita USD 10000,00, EAC USD 3284,00, margem projetada USD 6716,00, minutos 600/120/0/1200, capacidade 1000, alertas explícitos, sem incompletude → Mission Control idêntico para PO/gestor/desenvolvedor após reload → auditoria mostra PO e desenvolvedor com `ready->in_progress`; PO recebe 403 em `/api/audit`; desenvolvedor recebe 403 ao criar solicitação via API → 390 px sem overflow. Os valores coincidem com `e2e/economics.spec.ts` (mesmas entradas via API), validando UI contra API.
+
+### Evidências executadas
+
+- `npm run check`: 0 erros/0 avisos (422 arquivos). `npm run build`: ok. `npm run format:check`: ok.
+- `npm test`: 85 testes, **78 aprovados**, 7 falhas exclusivamente por ausência de Docker (mesmo resultado no baseline `b4fc3cf` neste ambiente).
+- `npm run test:e2e`: **5 aprovados** (commercial, economics, intelligent-intake, pilot-journey, workflow); `zz-delivery` falha por `sandbox_failure` (Docker). Ordem real, banco do harness compartilhado.
+- Runtime de produção (`npm run start`, build servido pela API, HTTPS local, conta runtime restrita, sem OIDC): `/api/auth/config` → `{"configured":false}`; `/api/mission-control` e `/api/auth/login` → 503; escrita com `Origin` forjada → 403; CA desconhecida rejeitada pelo cliente; CSP/HSTS/X-Frame-Options presentes; escuta somente `127.0.0.1:3443`. Runtime com conta administrativa recusado (“excessive privileges”). `homologation:check` sem Google → código 2.
+- Nenhum segredo, credencial Google/OpenAI ou dado real usado; diff verificado antes dos commits.
+
+### Status externo
+
+Login Google real: **NOT_VERIFIED** (sem cliente OAuth/domínio/egress). Homologação privada: procedimento reproduzível documentado e controles do runtime verificados localmente; host, contas reais e aceite A/B/C dependem do proprietário. CI da branch: ver seção abaixo quando observado.
+
 ## M5.1 — Issue #4: preparação do aceite real · 01/11/2026
 
 Baseline local/remota `aec7a5a` confirmada e issue/comentários lidos; branch
