@@ -74,6 +74,8 @@ export interface WorkRequest {
   version: number;
   client_name: string;
   project_name: string;
+  project_id?: string;
+  updated_at?: string;
 }
 export interface Snapshot {
   clients: Client[];
