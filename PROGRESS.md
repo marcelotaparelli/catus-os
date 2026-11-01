@@ -1,5 +1,71 @@
 # Progresso
 
+## M5.1 — Issue #4: preparação do aceite real · 01/11/2026
+
+Baseline local/remota `aec7a5a` confirmada e issue/comentários lidos; branch
+`feat/m5-acceptance`. Nenhum trabalho perdido foi presumido recuperado. Git e
+SDK/dependências foram instalados no ambiente, preservando proxy/TLS. Push HTTPS
+sem credencial Git falhou; checkpoints foram publicados pelo conector GitHub e
+sincronizados por fetch/rebase, sem force push, merge, deploy ou mudança de main.
+
+- Checkpoint documental remoto `6109e78`, CI
+  [41339535951](https://github.com/marcelotaparelli/catus-os/actions/runs/41339535951)
+  **success**.
+- Checkpoint de implementação `ec0bbeb`, CI
+  [41348702849](https://github.com/marcelotaparelli/catus-os/actions/runs/41348702849)
+  **success**: **83 testes / 980 assertions**, cinco Playwright, grants/migrações,
+  typecheck/build/formatação, regressões M0–M5 e backup/restore criptografado real.
+  Prova SDK loopback e testes Responses/readiness também aprovados. O HEAD final
+  inclui documentação e build/smoke das imagens; seu CI deve ser conferido por SHA
+  antes da entrega. Não reutilizar CI de um ancestral como evidência desse HEAD.
+
+### Contrato e implementação
+
+Reprodução real do SDK/CLI **0.166.0** contra servidor loopback de recusa 422,
+sem credencial real: seis requests `/v1/responses`, `stream:true`, schema JSON e
+tools request_user_input/view_image/multi_agent_v1/get_goal/create_goal/update_goal,
+mesmo com shell/apply_patch desativados, read-only e approval never. **Zero chamadas
+a provedor**. Há incompatibilidade comprovada com no-tools e chamada única; CLI
+version/SDK instalado não eram inferência. SDK e entrypoint legado desativados,
+sem bypass ou relaxamento do gateway.
+
+Adaptador separado `ResponsesAgent`, HTTP/JSON Responses direto, schema estrito,
+tools vazio/tool_choice none/store false/stream false, uma chamada e timeout/abort;
+imagem ativa sem SDK/CLI. Reutiliza sandbox, allowlists, testes fixos e patch/SHA.
+Gateway reconstrói campos aceitos, fixa modelo/schema/saída, orçamento antes da
+rede, uma autorização consumida antes do upstream, sem redirect/retry. Recusas,
+truncamento, tools, paths/campos extras/segredos, usage ausente/inválido/excessivo e
+limites de bytes falham fechados; validação repetida no cliente/executor/API.
+Política e resultado têm harness responses-api explícito; UI não chama isso de
+Codex SDK. Attestation e política SDK anteriores não habilitam Responses; nova
+revisão humana obrigatória, default OFF. Migrations 001–009 intocadas.
+
+Diagnóstico offline por dez fronteiras, sem revelar valores/credenciais, sem
+claim/inferência; ausência DENIED, presença CONFIGURED_NOT_VERIFIED, código 2.
+Fixture sintético versionado com título esperado e testes antes/depois; mock e
+geração determinística só em testes. Guia REAL_AGENT_ACCEPTANCE contém comandos,
+custo/uma tentativa, checklist de instalação privada e evidências do proprietário.
+CI acrescenta reprodução SDK, testes adversariais e build/smoke sem rede das imagens.
+
+Checks locais: contratos sintéticos/readiness, Svelte/TS sem erros/avisos, build e
+formatação aprovados. Esta VM é root, sem Docker/socket/capabilities; launcher
+PostgreSQL recusa root. Não foram alegados testes Docker/backup locais: evidência
+completa vem do CI por SHA, sem remover testes ou alterar isolamento para acomodar
+este ambiente.
+
+### Gate externo — parar após preparação A
+
+**Inferência Responses real NOT_VERIFIED; CODEX_REAL_VERIFIED não estabelecido;
+PR do agente NOT_CREATED.** Preparação não conclui M5 end-to-end. Proprietário deve
+configurar chave legítima somente no gateway privado, conta/billing/tarifas/tetos,
+modelo compatível, TLS/egress autorizado, host/runner isolado e repo/ref/SHA fixture
+autorizados. Não solicitar segredo no chat. Após configuração, uma execução real,
+patch/testes/usage/custo/limpeza e revisão humana com evidências sanitizadas.
+Sucesso Responses será RESPONSES_REAL_VERIFIED, nunca certificação do SDK.
+Publicador de PR separado depende de repo/base e credencial mínima próprios;
+nenhum token amplo foi reutilizado. M6 e homologações independentes M1/M2/M4 não
+foram iniciados/promovidos. Sem dados de clientes ou produção.
+
 ## M5 — Issue #3: fila e runner controlado Nuvemshop · 01/11/2026
 
 Baseline M4 `613d0cc46bd199be344beb661824bcdc44ccdcbc` confirmado local/remoto; branch própria `feat/m5-agentic-delivery` criada sem reescrever histórico. Issue #3, arquitetura/planos/progresso e guias M0–M4 lidos; rede cloud restrita/sem secrets de provedor configurados preservada. Migrations 001–008 intocadas. Sem main/default, merge, deploy, produção ou exposição pública.

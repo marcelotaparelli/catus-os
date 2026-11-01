@@ -1,5 +1,13 @@
 # M5 — Entrega agêntica controlada · Nuvemshop primeiro
 
+## Atualização M5.1 — contrato vigente
+
+O SDK/CLI 0.166.0 foi reproduzido contra recusa loopback sem chave real: anuncia ferramentas e usa streaming. Está **desativado**. O adaptador separado `ResponsesAgent` usa Responses HTTP/JSON direto, `text.format: json_schema` estrito, tools vazio e uma chamada, sem retry. Não é execução do Codex SDK/Cloud. `harness: responses-api` é explícito na política/resultado/UI; políticas antigas SDK falham fechadas e precisam de nova autorização humana. Migrations 001–009 preservadas.
+
+O gateway reconstrói o payload a partir de campos permitidos, fixa modelo/schema/teto, nega streaming, estado/storage/URLs/ferramentas e valida conclusão, usage, arquivos/bytes antes de devolver JSON. A resposta é validada novamente no container e executor. Recusa/truncamento/tool call/usage ausente ou inválido não produz patch aceito. Falha ambígua consome a autorização, sem retry. Tokens e preços continuam separados da margem M4.
+
+llm_verified=true identifica somente um resultado Responses recebido pelo runner confiável, não certificação global do SDK, conta ou modelo. Fixtures continuam false. Nenhuma inferência real foi realizada nesta preparação. Aceite externo **NOT_VERIFIED**, PR **NOT_CREATED**. Leia [REAL_AGENT_ACCEPTANCE.md](REAL_AGENT_ACCEPTANCE.md) para diagnóstico, comandos e checklist do proprietário. Os registros de instalação do SDK abaixo são históricos; não habilitam o SDK.
+
 [Issue #3](https://github.com/marcelotaparelli/catus-os/issues/3), baseline M4 `613d0cc46bd199be344beb661824bcdc44ccdcbc`, branch `feat/m5-agentic-delivery`. Migrations 001–008 e histórico preservados; migration 009 aditiva. Não houve merge, deploy, produção, criação de main/default, uso de clientes reais ou inferência comercial por IA.
 
 ## O que foi efetivamente validado
@@ -9,10 +17,10 @@
 | Regras, autorizações e fila PostgreSQL | Funcionando: M2 humano → cobertura M3 → bases M4 completas/aprovadas → política → um job automático, sem duplicação                                              |
 | Runner isolado sobre repo fixture      | **Execução real validada**: exportação de Git, alteração de template, testes Node reais em Docker, diff, SHA, limites e limpeza                                  |
 | Desenvolvimento por LLM/Codex real     | **NOT_VERIFIED**: sem credencial legítima de provedor/gateway. Fixture determinístico existe somente em testes; não é inferência                                 |
-| SDK oficial / imagem                   | `@openai/codex-sdk` e CLI **0.166.0** instalados, tipados e imagem construída; CLI `--version` executada sem rede/credencial. Isso não prova inferência          |
+| SDK legado (desativado)                | `@openai/codex-sdk` e CLI **0.166.0** instalados somente para prova loopback de incompatibilidade; não invocados no runtime M5.1                                 |
 | PR remoto do agente                    | **NOT_CREATED**: nenhum repo remoto fixture foi criado, nenhuma credencial GitHub de escopo mínimo foi disponibilizada/validada para ele. Patch fica no Catus OS |
 
-O SDK envolve a CLI local ao **nosso runner** e recebe seus limites/ambiente. Não há API de criação de tarefas do Codex Cloud aqui. Uma execução própria do runner, mesmo em uma VM remota, não é Codex Cloud. Credencial herdada do ambiente de desenvolvimento para Git não é licença para entregar uma credencial pessoal ampla ao agente; o launcher a remove.
+O SDK legado envolve a CLI local e foi desativado; o cliente ativo fala Responses diretamente. Não há API de criação de tarefas do Codex Cloud aqui. Uma execução própria do runner, mesmo em uma VM remota, não é Codex Cloud. Credencial herdada do ambiente de desenvolvimento para Git não é licença para entregar uma credencial pessoal ampla ao agente; o launcher a remove.
 
 **Não declarar aceite end-to-end de Codex real nesta entrega.** O fluxo completo foi exercitado com CodeAgent claramente test-only, filesystem/processos/testes reais. Aceite externo legítimo permanece procedimento do proprietário abaixo.
 
@@ -25,10 +33,10 @@ flowchart LR
  API --> DB[(PostgreSQL: política, reserva e job atômicos)]
  RUN[Runner próprio: conta/host isolado] -->|token limitado ao projeto| API
  RUN -->|exporta SHA fixado sem credenciais| MIRROR[Mirror Git sintético autorizado]
- RUN --> SDK[Container Codex SDK read-only]
- SDK -->|um token efêmero / uma chamada| GW[Gateway de Responses com tetos]
+ RUN --> CLIENT[Container Responses read-only]
+ CLIENT -->|um token efêmero / uma chamada| GW[Gateway de Responses com tetos]
  GW -->|chave de teste legítima e egress aprovado| PROVIDER[Provedor autorizado]
- SDK -->|arquivos estruturados, nenhum comando| RUN
+ CLIENT -->|arquivos estruturados, nenhum comando| RUN
  RUN --> TEST[Container Node sem rede: testes allowlisted]
  TEST --> RUN
  RUN -->|patch, testes, uso e limpeza| API
@@ -42,13 +50,13 @@ Módulos:
 - `src/server/delivery/config.ts`: default OFF, allowlist pública operacional, autorização de disponibilidade; não contém caminhos de mirror ou chaves.
 - `service.ts`: elegibilidade, reservas, fila, claim/start/heartbeat/finish, revisão, auditoria e revalidação.
 - `runner/src/core.ts`: Git/export restrito, mudanças validadas, Docker, limites, watchdog, patch e limpeza.
-- `codex-agent.ts`/`sdk-entry.ts`: container SDK oficial, sandbox read-only, approval never, sem web e sem full-access.
+- `responses-agent.ts`/`responses-entry.ts`/`responses.ts`: cliente Responses isolado e validação de contrato; `codex-agent.ts`/`sdk-entry.ts` negam execução do SDK.
 - `gateway.ts`: uma chamada Responses autorizada/job, tetos antes do envio, sem tools/storage/retries e resposta limitada; servidor Bun separado em `gateway-server.ts`.
 - `src/web/DeliveryControl.svelte`: política, observação, especificação, motivos de bloqueio, fila/diff/testes e revisão humana.
 
 ## Política e elegibilidade
 
-Default OFF / deny. Gestor/admin registra autorização auditada para um projeto da organização, escolhendo repo/ref/SHA de allowlist operacional, caminhos exatos, harness Codex SDK, tarefa `nuvemshop-theme`, limites e justificativa. Uma tentativa por versão de especificação; concorrência 1–2; até 20 jobs/dia; tempo total 5–120s; entrada 1000–32000 tokens, saída 128–4096; patch até 8192 bytes. Preços/tetos monetários são entradas explícitas do gestor, sem cotação inventada.
+Default OFF / deny. Gestor/admin registra autorização auditada para um projeto da organização, escolhendo repo/ref/SHA de allowlist operacional, caminhos exatos, harness Responses API, tarefa `nuvemshop-theme`, limites e justificativa. Uma tentativa por versão de especificação; concorrência 1–2; até 20 jobs/dia; tempo total 5–120s; entrada 1000–32000 tokens, saída 128–4096; patch até 8192 bytes. Preços/tetos monetários são entradas explícitas do gestor, sem cotação inventada.
 
 Elegibilidade é calculada a partir do banco atual, não flag fornecida pelo browser:
 
@@ -102,7 +110,7 @@ max_estimado_microUSD = ceil((input_max × preço_input_microUSD_por_milhão
                             + output_max × preço_output_microUSD_por_milhão) / 1.000.000)
 ```
 
-Gateway consome autorização de uma chamada **antes** de enviar HTTP, recusa segunda chamada/retry, input excessivo, tools e armazenamento. Encaminha modelo fixado pelo operador e `max_output_tokens` limitado, independentemente do pedido do cliente/modelo. Não permite redirects ou destinos vindos do atendimento. Resposta limitada a 64 KiB, timeout finito e nunca encaminha erro/chave/header do provedor. SSE é reconstituído de uma resposta única limitada para o SDK. Logs do gateway não contêm prompt, corpo do provedor ou tokens de acesso.
+Gateway consome autorização de uma chamada **antes** de enviar HTTP, recusa segunda chamada/retry, input excessivo, tools e armazenamento. Encaminha modelo fixado pelo operador e `max_output_tokens` limitado, independentemente do pedido do cliente/modelo. Não permite redirects ou destinos vindos do atendimento. Resposta limitada a 64 KiB, timeout finito e nunca encaminha erro/chave/header do provedor. Não aceita streaming/SSE; Responses retorna JSON completo validado. Campos fora do contrato, estado anterior e tools são recusados antes do upstream. Logs do gateway não contêm prompt, corpo do provedor ou tokens de acesso.
 
 Sem usage confiável/custo conhecido, `consumed_micro_usd` debita conservadoramente a **reserva**; não é mostrado como fatura/custo real. Com usage válido e preços explícitos, registrar estimativa. Falha/crash após claim consome reserva, sem reexecutar chamada ambígua; bloqueio antes de claim libera a reserva, preservando contagem de tentativas/dia. Reservas de dia UTC anterior não iniciam chamada nova. Mudanças de preço fora do sistema não são observáveis: configurar também limite/conta de teste no provedor; não alegar garantia sobre fatura externa ou tarifa desconhecida.
 
@@ -117,8 +125,8 @@ Uso do agente é categoria própria USD. **Não** somar USD a BRL, converter câ
 | Alterar testes/build/CI ou instalar dependências | Escrita somente templates/snipplets `.tpl`, static CSS/JS permitidos; package/lock/arquivos privados fora do escopo. Comandos são arrays `node --test <paths>` no manifest confiável, nunca texto do atendimento/modelo                                                                |
 | Repo/base substituídos                           | URL lógica, branch e SHA iguais à allowlist da API e do runner; `refs/heads/...` do mirror deve corresponder ao SHA antes de exportar                                                                                                                                                  |
 | Execução destrutiva, rede, fork/CPU/memória      | Testes com `--network none`, root/worktree readonly, cap-drop ALL, no-new-privileges, UID/GID não root do supervisor (mesmo proprietário dos bind mounts privados), pids 32, memória/swap 128 MiB, CPU 0,5, nofile 128, limite de arquivo e tmpfs 16 MiB; watchdog e remoção observada |
-| Credenciais roubadas por código/modelo           | Runner não aceita URLs PostgreSQL/chaves upstream/GitHub; launcher allowlist de env. Container teste sem credenciais; SDK recebe só token efêmero de gateway, não chave upstream/broker/GitHub                                                                                         |
-| Explorar SDK para tools/deploy/merge             | Read-only/approval never/web off; gateway recusa qualquer tools e chamadas extras; resposta só arquivos validáveis; nenhum remoto no Git de trabalho, push/merge/deploy/tag/release não existem no executor                                                                            |
+| Credenciais roubadas por código/modelo           | Runner não aceita URLs PostgreSQL/chaves upstream/GitHub; launcher allowlist de env. Container teste sem credenciais; cliente Responses recebe só token efêmero de gateway, não chave upstream/broker/GitHub                                                                           |
+| Explorar cliente para tools/deploy/merge         | Container read-only e sem executor de tools; gateway recusa qualquer tools e chamadas extras; resposta só arquivos validáveis; nenhum remoto no Git de trabalho, push/merge/deploy/tag/release não existem no executor                                                                 |
 | Forjar caminhos/saídas/consumo                   | Runner e API conferem arquivos, headers do diff, SHA, tamanho, comandos/exit 0 e tokens dentro do teto; fixture não é aceito pela configuração normal                                                                                                                                  |
 | Cross-tenant/forjar papel/custo                  | Tenant/papel humanos da sessão, token de runner limitado a org/projeto, grants mínimos, runner sem banco e sem rotas financeiras/contratuais/membros                                                                                                                                   |
 | Restore/crash reativar trabalho pago             | Marcar interrompidos failed/review, liquidar reserva conservadora, limpar leases, revogar tokens e desativar políticas após restore; nenhuma nova tentativa implícita                                                                                                                  |
@@ -147,41 +155,40 @@ npm run test:e2e
 
 Neste ambiente, Chromium usa `CHROMIUM_PATH=/tmp/chromium npm run test:e2e`. APIs e Playwright sequenciais, pois regressão/harness compartilham `_test`. Testes M5 usam repo Git temporário sintético, fixture CodeAgent e containers Docker **reais**; pacote de testes do tema é dado `.fixture`, copiado para `tests/theme.test.mjs` somente no repo temporário e executado somente no container. O teste pré-correção deve falhar; pós-correção passa, com provas de RO/root/rede/cgroup/ausência de segredos.
 
-SDK versionado isoladamente em `runner/package.json`/lock, Node >=22.12 para strip-types; Bun/TypeScript strict continuam na API. SDK oficial 0.166.0 foi inspecionado no README/types do pacote, não em API inventada de Codex Cloud. CLI instalada e imagem são suporte de execução, não evidência de credencial válida.
+SDK versionado isoladamente em `runner/package.json`/lock, Node >=22.12 para strip-types; Bun/TypeScript strict continuam na API. SDK oficial 0.166.0 fica somente para reprodução de incompatibilidade, desativado no runner. A imagem ativa não instala SDK/CLI. CLI instalada e imagem são suporte de execução, não evidência de credencial válida.
 
 ### Allowlist e mirror do runner remoto próprio
 
 1. Proprietário prepara host/conta dedicada, Docker saudável e repo **sintético autorizado**, sem serviços/credenciais de produção. Não usar repo cliente. Preparar mirror Git local sem hooks/credenciais persistidas no repo. Não criar/alterar main ou branch padrão.
 2. Fixar branch explícita e SHA de commit já revisado. Templates do primeiro caso precisam existir no baseline; novos arquivos não são suportados nesta fatia sem provisionar nova base. O executor não instala dependências nem escolhe comandos livremente.
 3. Copiar/editar `runner/examples/api-repositories.json` para arquivo privado de configuração da API (sem mirror path) e `runner/examples/runner-repositories.json` para conta do runner. Substituir org/repo/branch e SHA zero por valores reais de **teste autorizado**; os exemplos não apontam a entrega remota existente. Nos testes, a URL `catus-synthetic/nuvemshop-theme` é somente identificador lógico; nenhum repo GitHub com esse nome é criado ou clonado.
-4. Configuração normal da API inicia com `DELIVERY_ENABLED=false`. `DELIVERY_REPOSITORIES_FILE` aponta à allowlist pública; ativação de capacidade exige `DELIVERY_ENABLED=true` e `DELIVERY_RUNNER_ATTESTATION=isolated-sdk-capped-gateway-v1`. A attestation é decisão operacional explícita, **não prova automática** de suporte/credenciais. Só definir após validar sandbox/gateway/conta de teste real. Sem isso, mostrar unavailable e não invocar agente.
+4. Configuração normal da API inicia com `DELIVERY_ENABLED=false`. `DELIVERY_REPOSITORIES_FILE` aponta à allowlist pública; ativação de capacidade exige `DELIVERY_ENABLED=true` e `DELIVERY_RUNNER_ATTESTATION=isolated-responses-capped-gateway-v1`. A attestation é decisão operacional explícita, **não prova automática** de suporte/credenciais. Só definir após validar sandbox/gateway/conta de teste real. Sem isso, mostrar unavailable e não invocar agente.
 
 ### Imagens, proxy e rede privada
 
-`runner/Dockerfile` e `runner/Gateway.Dockerfile` não publicam serviço. Base Node fixada por digest. SDK usa npm com CA fornecida pelo operador, mantendo proxy/TLS; gateway usa o binário Bun já instalado pelo npm no Linux x64. `.dockerignore` exclui .env/.local/.git e permite somente o binário Bun necessário dos node_modules de tooling, não segredos.
+`runner/Dockerfile` e `runner/Gateway.Dockerfile` não publicam serviço. Base Node fixada por digest. Cliente Responses não instala dependências nem precisa de segredo de build; gateway usa o binário Bun já instalado pelo npm no Linux x64. `.dockerignore` exclui .env/.local/.git e permite somente o binário Bun necessário dos node_modules de tooling, não segredos.
 
 ```sh
 # Exemplos de build local, não implantação; seguir runtime skill para proxy/CA.
 docker --host=unix:///var/run/docker.sock build \
-  --secret id=proxy_ca,src="$CODEX_PROXY_CERT" \
   -f runner/Dockerfile -t catus-codex-reviewed .
 docker --host=unix:///var/run/docker.sock build \
   -f runner/Gateway.Dockerfile -t catus-codex-gateway-reviewed .
 # Registrar o image ID sha256:... revisado em DELIVERY_CODEX_IMAGE.
 ```
 
-Não desativar TLS, não usar danger/full-access, host networking ou rota alternativa para contornar egress. `CODEX_PROXY_CERT` é o caminho da CA pública do ambiente; não é chave. Fora do ambiente gerenciado, fornecer a CA aprovada equivalente. SDK container só pode entrar em rede Docker **internal**, nome `catus-codex-...`, conferida via inspect pelo executor. Gateway deve ter alias `delivery-gateway` nessa rede e egress separado/limitado ao provedor autorizado via proxy/CA. **Não publicar portas Docker**. API acessível ao supervisor só por HTTPS privado/túnel autorizado; não acessível ao container SDK/teste. Testes sempre `--network none`.
+Não desativar TLS, não usar danger/full-access, host networking ou rota alternativa para contornar egress. `CODEX_PROXY_CERT` é o caminho da CA pública do ambiente; não é chave. Fora do ambiente gerenciado, fornecer a CA aprovada equivalente. Responses container só pode entrar em rede Docker **internal**, nome `catus-codex-...`, conferida via inspect pelo executor. Gateway deve ter alias `delivery-gateway` nessa rede e egress separado/limitado ao provedor autorizado via proxy/CA. **Não publicar portas Docker**. API acessível ao supervisor só por HTTPS privado/túnel autorizado; não acessível ao container Responses/teste. Testes sempre `--network none`.
 
 O gateway pode rodar com Bun na conta privada (`127.0.0.1` por padrão) ou na imagem revisada. Bind `0.0.0.0` só é aceito com `CODEX_GATEWAY_CONTAINER_ONLY=true` para container privado sem publish, nunca como serviço público. Credenciais próprias em env-file 0600, nunca argumentos com valores/tokens, repo ou chat. Configurar proxy/CA no gateway conforme ambiente; builds foram testados, rede upstream/conta real não foram. Operador deve conferir isolamento de rede/alias/egress antes da attestation.
 
 ### Credenciais separadas e inicialização
 
-| Serviço           | Variáveis privadas/operacionais                                                                                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| API               | Só allowlist/attestation M5; nenhuma credencial Codex/GitHub/gateway/runner                                                                                                                            |
-| Supervisor runner | `DELIVERY_API_URL`, `DELIVERY_RUNNER_TOKEN`, `DELIVERY_RUNNER_REPOS_FILE`, `DELIVERY_CODEX_NETWORK`, `DELIVERY_CODEX_IMAGE`, `CODEX_GATEWAY_CONTROL_URL`, `CODEX_GATEWAY_CONTROL_TOKEN`, `CODEX_MODEL` |
-| Gateway           | `CODEX_GATEWAY_CONTROL_TOKEN`, `CODEX_UPSTREAM_KEY` legítima de teste, `CODEX_UPSTREAM_RESPONSES_URL` HTTPS explícita, `CODEX_MODEL`; proxy/CA e bind privado                                          |
-| SDK container     | Somente token efêmero, URL interna do gateway e modelo; não chave upstream, token Catus ou GitHub                                                                                                      |
+| Serviço             | Variáveis privadas/operacionais                                                                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| API                 | Só allowlist/attestation M5; nenhuma credencial Codex/GitHub/gateway/runner                                                                                                                            |
+| Supervisor runner   | `DELIVERY_API_URL`, `DELIVERY_RUNNER_TOKEN`, `DELIVERY_RUNNER_REPOS_FILE`, `DELIVERY_CODEX_NETWORK`, `DELIVERY_CODEX_IMAGE`, `CODEX_GATEWAY_CONTROL_URL`, `CODEX_GATEWAY_CONTROL_TOKEN`, `CODEX_MODEL` |
+| Gateway             | `CODEX_GATEWAY_CONTROL_TOKEN`, `CODEX_UPSTREAM_KEY` legítima de teste, `CODEX_UPSTREAM_RESPONSES_URL` HTTPS explícita, `CODEX_MODEL`; proxy/CA e bind privado                                          |
+| Responses container | Somente token efêmero, URL interna do gateway e modelo; não chave upstream, token Catus ou GitHub                                                                                                      |
 
 O operador local provisiona uma credencial de runner com escopo org/projeto e TTL 8h usando o migrator, em operação offline auditada, não pela conta do agente:
 
@@ -204,12 +211,12 @@ node --env-file=/caminho/privado/gateway.env scripts/delivery-runner.mjs --gatew
 
 O launcher usa allowlist de env e remove DB/finance/GitHub/provider keys do runner; main também recusa credenciais indevidas. Não lê o auth/cache da sessão Codex pessoal, não reaproveita `GH_TOKEN` herdado para o agente e não faz login interativo. Sem configuração, `npm run delivery:runner -- --once` termina código **2** unavailable / Codex real NOT_VERIFIED, sem claim/inferência. A chave upstream só existe no gateway; cada job recebe autorização de uma chamada. Serviço gateway sem suas credenciais falha fechado.
 
-### Aceite externo com Codex legítimo — pendente
+### Aceite externo Responses legítimo — pendente; SDK desativado
 
 1. Disponibilizar conta/chave de teste e orçamento/tarifas legítimos, egress específico e repo sintético permitido. Não extrair chave de outro produto/sessão. Confirmar gateway com Responses compatível, TLS e tetos reais da conta.
-2. Buildar/revisar imagens e rede internal; confirmar CLI/SDK/modelo com no-tools, read-only e approval never. O gateway **recusa tools**, estado retomado, storage e chamadas extras. Se CLI/modelo anunciar tools obrigatórias ou depender de várias chamadas, esse modo falha fechado; não remover limites para declarar sucesso. Compatibilidade de inferência/SSE/modelo permanece NOT_VERIFIED até esse teste legítimo.
+2. Buildar/revisar imagens e rede internal; confirmar cliente Responses/modelo com no-tools e container read-only. O gateway **recusa tools**, estado retomado, storage e chamadas extras. Se modelo exigir tools obrigatórias ou depender de várias chamadas, esse modo falha fechado; não remover limites para declarar sucesso. Compatibilidade de inferência/schema/modelo permanece NOT_VERIFIED até esse teste legítimo.
 3. Autorizar política/revisar observação M4 na UI e repetir a tarefa sintética. Registrar base SHA/job/versão, testes/códigos, patch, usage quando recebido, limite/estimativa USD e limpeza. Conferir ausência de credenciais e de alterações fora da allowlist.
-4. Somente resultado vindo do `CodexAgent` real pode apresentar `llm_verified=true`. Fixture nunca serve como aceite de IA. No sucesso, ainda aguardar revisão humana; aceite não integra código.
+4. Somente resultado vindo do `ResponsesAgent` real pode apresentar `llm_verified=true`. Fixture nunca serve como aceite de IA. No sucesso, ainda aguardar revisão humana; aceite não integra código.
 5. PR remoto exige repositório/base autorizados existentes e credencial separada de escopo mínimo. Publicação automática/PR não foi habilitada nesta fatia: patch é a entrega revisável suportada. Não reutilizar credencial Git ampla; implementar/publicar um adapter de PR separado somente com essa configuração/autorização. Nenhum merge/deploy/tag/release.
 
 ## API, restore e observabilidade

@@ -36,6 +36,11 @@ jobs:
         run: docker --host=unix:///var/run/docker.sock pull postgres@sha256:7e32e9833a6fb1c92c32552794cb6ed569d51b445a54907d35fc112ef39684db
       - name: Pull pinned isolated Node test image
         run: docker --host=unix:///var/run/docker.sock pull node@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da
+      - name: Build and smoke-test isolated Responses and gateway images
+        run: |
+          docker --host=unix:///var/run/docker.sock build -f runner/Dockerfile -t catus-responses-ci .
+          docker --host=unix:///var/run/docker.sock build -f runner/Gateway.Dockerfile -t catus-gateway-ci .
+          docker --host=unix:///var/run/docker.sock run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint node catus-responses-ci --experimental-strip-types -e "import('/runner/src/responses.ts')"
       - run: npm test
       - run: npm run format:check
       - run: npx playwright install --with-deps chromium

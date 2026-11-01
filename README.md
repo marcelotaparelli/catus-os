@@ -137,7 +137,7 @@ Aplicar `db:roles`, `migrate` e `test:db`; executar `npm test` antes de `npm run
 
 ## M5 — Delegação controlada e runner próprio
 
-Guia: [AGENTIC_DELIVERY.md](docs/AGENTIC_DELIVERY.md). Política default OFF, elegibilidade M3/M4 determinística, fila durável/idempotente, runner isolado, testes/diff e revisão humana. SDK oficial Codex 0.166.0 instalado em `runner/` (`npm --prefix runner ci --ignore-scripts`); não é API do Codex Cloud.
+Guia: [AGENTIC_DELIVERY.md](docs/AGENTIC_DELIVERY.md). Política default OFF, elegibilidade M3/M4 determinística, fila durável/idempotente, runner isolado, testes/diff e revisão humana. M5.1 usa adaptador Responses separado com schema/no-tools; SDK 0.166.0 desativado por incompatibilidade reproduzida. [Aceite e diagnóstico](docs/REAL_AGENT_ACCEPTANCE.md); não é API do Codex Cloud.
 
 **Validado:** fila/regras e execução real de runner Docker sobre tema Nuvemshop sintético, com geração determinística exclusivamente de teste. **Codex real NOT_VERIFIED; PR remoto NOT_CREATED.** Sem credenciais/gateway/infra autorizados, runner informa unavailable e não simula IA. Código/patch não são integrados automaticamente. M0–M4 preservados.
 

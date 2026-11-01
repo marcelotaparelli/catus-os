@@ -838,3 +838,16 @@ test('offline scoped credential CLI writes only a private new file, stores diges
     await activate(false, await policyVersion());
   }
 });
+
+test('legacy SDK policy cannot authorize Responses or silently change harness', async () => {
+  const version = await policyVersion();
+  const r = await call('manager', 'delivery/policies', 'POST', {
+    project_id: governed.projectId,
+    version,
+    enabled: true,
+    settings: { ...fixture.settings, harness: 'codex-sdk' },
+    reason: 'Rejeitar SDK incompatível, sem migração implícita de autorização',
+  });
+  expect(r.status).toBe(422);
+  expect(await policyVersion()).toBe(version);
+});
