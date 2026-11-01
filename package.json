@@ -30,7 +30,9 @@
     "ai:check": "bun scripts/check-ai.ts",
     "delivery:runner": "node scripts/delivery-runner.mjs",
     "delivery:gateway": "node scripts/delivery-runner.mjs --gateway",
-    "delivery:token": "bun --env-file=.local/database.env scripts/delivery-runner-token.ts"
+    "delivery:token": "bun --env-file=.local/database.env scripts/delivery-runner-token.ts",
+    "delivery:diagnose": "node --experimental-strip-types runner/src/readiness.ts",
+    "test:sdk-contract": "node scripts/check-sdk-contract.mjs"
   },
   "dependencies": {
     "openid-client": "6.8.8",

@@ -89,7 +89,7 @@ export async function fixtureRepository() {
     base_sha: repo.base_sha,
     allowed_paths: repo.allowed_paths,
     task_types: ['nuvemshop-theme'],
-    harness: 'codex-sdk',
+    harness: 'responses-api',
     timeout_seconds: 20,
     max_input_tokens: 16000,
     max_output_tokens: 1024,

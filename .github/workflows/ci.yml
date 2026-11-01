@@ -1,4 +1,4 @@
-name: Validate M5
+name: Validate M5.1
 on:
   pull_request:
   push:
@@ -17,6 +17,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm --prefix runner ci --ignore-scripts
+      - name: Reproduce pinned SDK no-tools incompatibility without provider
+        run: npm run test:sdk-contract
+      - name: Responses protocol and readiness adversarial tests
+        run: node_modules/.bin/bun test tests/responses-contract.test.ts tests/delivery-readiness.test.ts
       - run: npm run env:init
       - name: Start local test PostgreSQL
         run: |

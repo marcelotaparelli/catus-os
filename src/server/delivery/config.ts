@@ -58,13 +58,14 @@ export function deliveryConfig(
   // No claiming capability based only on a key: hardened runner, SDK and capped egress must be attested by operator.
   const ready =
     env.DELIVERY_ENABLED === 'true' &&
-    env.DELIVERY_RUNNER_ATTESTATION === 'isolated-sdk-capped-gateway-v1' &&
+    env.DELIVERY_RUNNER_ATTESTATION ===
+      'isolated-responses-capped-gateway-v1' &&
     repos.length > 0;
   return {
     available: ready,
     reason: ready
-      ? 'Runner próprio autorizado; execução Codex depende da credencial/gateway no runner'
-      : 'Execução indisponível: requer runner isolado, SDK, credencial legítima e gateway com teto independente',
+      ? 'Runner próprio autorizado; execução Responses depende da credencial/gateway no runner'
+      : 'Execução indisponível: requer runner isolado, Responses API, credencial legítima e gateway com teto independente',
     repos,
   };
 }

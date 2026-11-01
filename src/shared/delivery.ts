@@ -5,7 +5,7 @@ export interface DeliverySettings {
   base_sha: string;
   allowed_paths: string[];
   task_types: 'nuvemshop-theme'[];
-  harness: 'codex-sdk';
+  harness: 'codex-sdk' | 'responses-api';
   timeout_seconds: number;
   max_input_tokens: number;
   max_output_tokens: number;
@@ -37,7 +37,7 @@ export interface DeliveryTask {
   basis_hash: string;
 }
 export interface DeliveryResult {
-  harness: 'codex-sdk' | 'test-fixture';
+  harness: 'codex-sdk' | 'responses-api' | 'test-fixture';
   llm_verified: boolean;
   base_sha: string;
   patch: string;

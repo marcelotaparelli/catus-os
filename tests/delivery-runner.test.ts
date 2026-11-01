@@ -8,6 +8,7 @@ import {
 import { fixtureRepository, fixtureAgent } from './support/delivery-fixture';
 import type { DeliveryTask } from '../src/shared/delivery';
 import { CappedGateway } from '../runner/src/gateway';
+import { responsesRequest } from '../runner/src/responses';
 function task(settings: DeliveryTask['settings']): DeliveryTask {
   return {
     job_id: crypto.randomUUID(),
@@ -149,7 +150,27 @@ test('gateway hard limits a single real request, disables tools/storage/retries 
         payload = JSON.parse(String(init?.body));
         return Response.json({
           id: 'test-response',
-          output: [],
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              status: 'completed',
+              content: [
+                {
+                  type: 'output_text',
+                  text: JSON.stringify({
+                    files: [
+                      {
+                        path: 'templates/home.tpl',
+                        content: '<h1>Synthetic</h1>',
+                      },
+                    ],
+                  }),
+                },
+              ],
+            },
+          ],
           usage: { input_tokens: 20, output_tokens: 10 },
         });
       },
@@ -178,6 +199,7 @@ test('gateway hard limits a single real request, disables tools/storage/retries 
     expect(
       (
         await request('/v1/responses', lease.token, {
+          ...responsesRequest(task(f.settings), {}, 'test-model'),
           input: 'Synthetic only',
           max_output_tokens: 999999,
           model: 'forged-model',

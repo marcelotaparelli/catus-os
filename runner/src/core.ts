@@ -35,7 +35,7 @@ export interface Changes {
   output_tokens: number | null;
 }
 export interface CodeAgent {
-  kind: 'codex-sdk' | 'test-fixture';
+  kind: 'codex-sdk' | 'responses-api' | 'test-fixture';
   generate(
     task: DeliveryTask,
     sources: Record<string, string>,
@@ -302,6 +302,11 @@ export async function executeTask(
   agent: CodeAgent,
   signal: AbortSignal,
 ): Promise<DeliveryResult> {
+  if (
+    agent.kind === 'codex-sdk' ||
+    (agent.kind !== 'test-fixture' && agent.kind !== task.settings.harness)
+  )
+    throw new RunnerError('unavailable');
   const started = Date.now();
   if (
     repo.key !== task.repo_key ||
@@ -436,7 +441,7 @@ export async function executeTask(
       throw new RunnerError('invalid_changes');
     result = {
       harness: agent.kind,
-      llm_verified: agent.kind === 'codex-sdk',
+      llm_verified: agent.kind === 'responses-api',
       base_sha: repo.base_sha,
       patch: diff.out,
       files,

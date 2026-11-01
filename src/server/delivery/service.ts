@@ -136,9 +136,11 @@ export function parseSettings(
     b.task_types.length !== 1 ||
     b.task_types[0] !== 'nuvemshop-theme' ||
     b.attempt_limit !== 1 ||
-    b.harness !== 'codex-sdk'
+    b.harness !== 'responses-api'
   )
-    throw new InputError('M5 permite Nuvemshop, Codex SDK e uma tentativa');
+    throw new InputError(
+      'M5.1 permite Nuvemshop, Responses API e uma tentativa',
+    );
   const s: DeliverySettings = {
     repo_key: repo.key,
     repository: repo.repository,
@@ -146,7 +148,7 @@ export function parseSettings(
     base_sha: repo.base_sha,
     allowed_paths: b.allowed_paths as string[],
     task_types: ['nuvemshop-theme'],
-    harness: 'codex-sdk',
+    harness: 'responses-api',
     timeout_seconds: integer(b.timeout_seconds, 'Timeout', 120, 5),
     max_input_tokens: integer(b.max_input_tokens, 'Input tokens', 32000, 1000),
     max_output_tokens: integer(b.max_output_tokens, 'Output tokens', 4096, 128),
@@ -1109,10 +1111,11 @@ export function validateResult(
     r.cleanup_confirmed !== true
   )
     throw new InputError('Evidência/caminhos/limpeza inválidos');
-  const harness = one(r.harness, ['codex-sdk', 'test-fixture']);
+  const harness = one(r.harness, ['responses-api', 'test-fixture']);
   if (
     (harness === 'test-fixture' && !fixtureAllowed) ||
-    r.llm_verified !== (harness === 'codex-sdk')
+    r.llm_verified !== (harness === 'responses-api') ||
+    (harness !== 'test-fixture' && harness !== s.harness)
   )
     throw new InputError('Harness não autorizado');
   const patch = text(r.patch, 'Patch', s.max_diff_bytes);

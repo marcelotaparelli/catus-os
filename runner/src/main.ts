@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { runnerCycle, RunnerError } from './core.ts';
 import type { RunnerRepo, Broker } from './core.ts';
-import { CodexAgent } from './codex-agent.ts';
-import type { GatewayLease } from './codex-agent.ts';
+import { ResponsesAgent } from './responses-agent.ts';
+import type { GatewayLease } from './responses-agent.ts';
 for (const name of Object.keys(process.env))
   if (
     (name.includes('DATABASE') && name.endsWith('_URL')) ||
@@ -31,7 +31,7 @@ const required = [
 ] as const;
 if (required.some((n) => !process.env[n])) {
   console.log(
-    'unavailable: isolated runner/SDK/capped gateway/legitimate credentials not configured; Codex real NOT_VERIFIED',
+    'unavailable: isolated runner/Responses/capped gateway/legitimate credentials not configured; Codex real NOT_VERIFIED',
   );
   process.exit(2);
 }
@@ -74,7 +74,7 @@ const broker: Broker = {
   claim: () => call('claim', {}),
   post: (job, action, body) => call('jobs/' + job + '/' + action, body),
 };
-const agent = new CodexAgent(
+const agent = new ResponsesAgent(
   {
     allocate: async (task) => {
       const r = await fetch(new URL('/allocate', gatewayUrl), {

@@ -146,7 +146,7 @@
       base_sha: selectedRepo.base_sha,
       allowed_paths: paths,
       task_types: ['nuvemshop-theme'],
-      harness: 'codex-sdk',
+      harness: 'responses-api',
       timeout_seconds: timeout,
       max_input_tokens: inputTokens,
       max_output_tokens: outputTokens,
@@ -463,7 +463,7 @@
         </p>{/if}
       {#if job.result}<p>
           {job.result.llm_verified
-            ? 'Codex SDK: execução verificada neste resultado'
+            ? 'Responses API: execução verificada neste resultado; Codex SDK não verificado'
             : 'TEST FIXTURE · Codex real NOT_VERIFIED; alterações determinísticas de teste'}
         </p>
         <p>
