@@ -38,7 +38,7 @@ Mudança de API: `GET /api/mission-control` passa a incluir `project_id` e `upda
 
 ### Status externo
 
-Login Google real: **NOT_VERIFIED** (sem cliente OAuth/domínio/egress). Homologação privada: procedimento reproduzível documentado e controles do runtime verificados localmente; host, contas reais e aceite A/B/C dependem do proprietário. CI da branch: ver seção abaixo quando observado.
+Login Google real: **NOT_VERIFIED** (sem cliente OAuth/domínio/egress). Homologação privada: procedimento reproduzível documentado e controles do runtime verificados localmente; host, contas reais e aceite A/B/C dependem do proprietário. Branch **não publicada** a partir deste ambiente (sem credencial GitHub: `could not read Username`); CI da branch **não observado**. O proprietário publica com `git push -u origin feat/pilot-readiness` e confere o workflow `Validate M5.1`, que roda também os testes dependentes de Docker.
 
 ## M5.1 — Issue #4: preparação do aceite real · 01/11/2026
 
