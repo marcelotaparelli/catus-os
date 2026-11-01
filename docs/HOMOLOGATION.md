@@ -185,3 +185,7 @@ Aplicar migrations 006/007 e grants com a conta migrator; manter HTTPS, OIDC, co
 ## M4 — Homologação econômica sintética
 
 Aplicar migration 008 e grants, preservando contas/HTTPS/sessões/workers. Checklist e exemplos independentes em [ECONOMICS.md](ECONOMICS.md). Exigir premissas/unidades/fontes explícitas e decisões independentes, conferir incompletude e confidencialidade de PO/desenvolvedor, testar dois regimes e restaurar/recalcular snapshots. Não preencher números reais ou enviar dados financeiros ao LLM; sem implantação/exposição ou integração contábil.
+
+## M5 — Runner próprio e evidência de entrega
+
+Aplicar migration 009/grants. Seguir [AGENTIC_DELIVERY.md](AGENTIC_DELIVERY.md) para ameaça, política OFF, credencial limitada ao projeto, revalidação M3/M4, orçamento USD, rede privada/no-tools, watchdog/container e revisão humana. A fatia testada executa fixture real em sandbox e produz diff/testes reais; inferência Codex permanece NOT_VERIFIED e nenhum PR remoto é presumido. Restore desativa políticas/revoga credenciais/encerra interrompidos; não reenviar chamadas ambíguas. Sem exposição pública ou uso de produção.

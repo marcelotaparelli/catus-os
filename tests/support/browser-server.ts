@@ -36,7 +36,24 @@ for (const [email, name, role, organization] of [
 }
 const { fixtureProvider } = await import('./extraction-fixture');
 const { processOne } = await import('../../src/server/ai/worker');
-const extractor = fixtureProvider();
+const {
+  fixtureRepository,
+  fixtureAgent,
+  themeIntakeSource,
+  themeIntakeFixture,
+} = await import('./delivery-fixture');
+const { runnerCycle } = await import('../../runner/src/core');
+const { createHash, randomBytes } = await import('node:crypto');
+const deliveryFixture = await fixtureRepository();
+const baseExtractor = fixtureProvider(),
+  themeExtractor = fixtureProvider(() => themeIntakeFixture());
+const extractor = {
+  config: baseExtractor.config,
+  extract: (source: string) =>
+    source === themeIntakeSource
+      ? themeExtractor.extract(source)
+      : baseExtractor.extract(source),
+};
 const initiator = (
   await pool.query("SELECT id FROM users WHERE email='po@browser.test'")
 ).rows[0].id;
@@ -53,6 +70,7 @@ const aiTimer = setInterval(() => {
 }, 50);
 const handler = createApp(config, oidcProvider(config, await mockOidcFetch()), {
   extractionProvider: extractor,
+  delivery: deliveryFixture.config,
   // Browser suites share one loopback peer and exercise multiple users per minute.
   // Production limits remain unchanged and have dedicated negative integration tests.
   loginRate: { limit: 200, windowSeconds: 60 },
@@ -65,9 +83,65 @@ const server = Bun.serve({
     handler(req, server.requestIP(req)?.address ?? 'unknown'),
   maxRequestBodySize: 32768,
 });
+let delivering: Promise<void> | undefined;
+const deliveryTokens = new Map<string, string>();
+const deliveryTimer = setInterval(() => {
+  if (delivering) return;
+  delivering = (async () => {
+    const policies = (
+      await pool.query(
+        'SELECT organization_id,project_id FROM delivery_policies WHERE enabled',
+      )
+    ).rows;
+    for (const p of policies) {
+      let token = deliveryTokens.get(p.project_id);
+      if (!token) {
+        token = randomBytes(32).toString('base64url');
+        deliveryTokens.set(p.project_id, token);
+        await pool.query(
+          "INSERT INTO delivery_runners(id,organization_id,project_id,token_hash,expires_at) VALUES($1,$2,$3,$4,now()+interval '1 hour')",
+          [
+            crypto.randomUUID(),
+            p.organization_id,
+            p.project_id,
+            createHash('sha256').update(token).digest('hex'),
+          ],
+        );
+      }
+      const call = async (path: string, body: unknown) => {
+        const r = await handler(
+          new Request(config.origin + '/api/delivery-runner/' + path, {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          }),
+          'delivery-test-fixture',
+        );
+        if (!r.ok) throw new Error('Test delivery broker rejected operation');
+        return r.json();
+      };
+      await runnerCycle(
+        {
+          claim: () => call('claim', {}),
+          post: (id, action, b) => call('jobs/' + id + '/' + action, b),
+        },
+        [deliveryFixture.repo],
+        fixtureAgent,
+      );
+    }
+  })()
+    .catch(() => console.error('Test delivery fixture cycle failed'))
+    .finally(() => (delivering = undefined));
+}, 100);
 console.log('Test-only OIDC harness ready');
 async function stop() {
   clearInterval(aiTimer);
+  clearInterval(deliveryTimer);
+  await delivering;
+  await deliveryFixture.cleanup();
   await processing;
   await server.stop();
   await pool.query(

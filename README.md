@@ -1,4 +1,4 @@
-# CATUS OS — M4
+# CATUS OS — M5
 
 Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. Atendimento inteligente via adaptador LLM configurável, fila persistente e revisão humana. Sem credenciais/política, inferência indisponível; nenhum mock no aplicativo. Contratos, escopos versionados, change requests e cobertura comercial exigem revisão e autorização humanas explícitas.
 
@@ -134,3 +134,11 @@ O fluxo M3 e regressões são reproduzidos por `npm test` e `npm run test:e2e`, 
 Guia completo: [ECONOMICS.md](docs/ECONOMICS.md). Premissas e termos versionados com aprovação independente, capacidade declarada, estimativas, horas/reversões, custos/ETC/EAC/margens e consolidação por cliente/moeda/competência. Dinheiro inteiro/BigInt, dados ausentes explicitamente incompletos, snapshots históricos imutáveis. Gestor/admin vê custos; PO estima sem ver taxas e desenvolvedor aponta horas próprias. Não há valores automáticos, contabilidade, recebimentos, câmbio ou execução de agentes.
 
 Aplicar `db:roles`, `migrate` e `test:db`; executar `npm test` antes de `npm run test:e2e`, nunca simultaneamente. Sem Google/LLM real, testes usam apenas harness sintético; aplicação normal continua bloqueando autenticação não configurada.
+
+## M5 — Delegação controlada e runner próprio
+
+Guia: [AGENTIC_DELIVERY.md](docs/AGENTIC_DELIVERY.md). Política default OFF, elegibilidade M3/M4 determinística, fila durável/idempotente, runner isolado, testes/diff e revisão humana. SDK oficial Codex 0.166.0 instalado em `runner/` (`npm --prefix runner ci --ignore-scripts`); não é API do Codex Cloud.
+
+**Validado:** fila/regras e execução real de runner Docker sobre tema Nuvemshop sintético, com geração determinística exclusivamente de teste. **Codex real NOT_VERIFIED; PR remoto NOT_CREATED.** Sem credenciais/gateway/infra autorizados, runner informa unavailable e não simula IA. Código/patch não são integrados automaticamente. M0–M4 preservados.
+
+Testes M5 precisam da imagem Node fixada no CI/guia. Executar `npm test` antes de Playwright. Para API aplicar grants/migration 009; credenciais e mirror de runner ficam em conta separada, sem URLs PostgreSQL/segredos de clientes.

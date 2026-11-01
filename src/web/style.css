@@ -474,3 +474,19 @@ h4 {
 .economics .economic-report {
   margin: 1rem 0;
 }
+
+.delivery details {
+  margin: 1rem 0;
+}
+.delivery pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  max-height: 400px;
+  overflow: auto;
+}
+.delivery fieldset {
+  min-width: 0;
+  border: 1px solid #d4dce6;
+  padding: 1rem;
+}

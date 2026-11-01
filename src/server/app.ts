@@ -1,3 +1,10 @@
+import { deliveryConfig } from './delivery/config';
+import type { DeliveryConfig } from './delivery/config';
+import {
+  humanDelivery,
+  reconcileDelivery,
+  runnerRoute,
+} from './delivery/service';
 import { economicRoute } from './economics/service';
 import { commercialRoute } from './modules/commercial';
 import { pool as defaultPool } from './db';
@@ -100,12 +107,14 @@ export function createApp(
   provider: OidcProvider | undefined = oidcProvider(config),
   options: {
     pool?: Pool;
+    delivery?: DeliveryConfig;
     extractionProvider?: ExtractionProvider | null;
     loginRate?: RatePolicy;
     apiRate?: RatePolicy;
   } = {},
 ) {
   const pool = options.pool ?? defaultPool;
+  const delivery = options.delivery ?? deliveryConfig();
   const extractor =
     options.extractionProvider === null
       ? undefined
@@ -141,6 +150,9 @@ export function createApp(
       return response({ error: 'Proteção temporariamente indisponível' }, 503);
     }
     let db;
+    let deliveryIdentity:
+      | { org: string; user: string | null; actor: string; entity: string }
+      | undefined;
     try {
       db = await pool.connect();
     } catch {
@@ -155,7 +167,22 @@ export function createApp(
       if (origin && origin !== config.origin)
         throw new HttpError(403, 'Origem não permitida');
       let result: Response;
-      if (method === 'GET' && path === '/api/auth/config')
+      if (method === 'POST' && path.startsWith('/api/delivery-runner/'))
+        result = await runnerRoute(
+          db,
+          request,
+          await readBody(request),
+          delivery,
+          (r) => {
+            deliveryIdentity = {
+              org: r.organization_id,
+              user: null,
+              actor: 'delivery-runner',
+              entity: r.project_id,
+            };
+          },
+        );
+      else if (method === 'GET' && path === '/api/auth/config')
         result = response({ configured: !!provider });
       else if (
         method === 'GET' &&
@@ -170,9 +197,20 @@ export function createApp(
           );
         const ctx = await authenticate(db, request, config);
         authorize(ctx, 'read');
+        if (path.startsWith('/api/delivery'))
+          deliveryIdentity = {
+            org: ctx.organizationId,
+            user: ctx.userId,
+            actor: ctx.name,
+            entity: ctx.organizationId,
+          };
         if (!['GET', 'POST', 'PATCH'].includes(method))
           throw new HttpError(404, 'Rota não encontrada');
         if (method !== 'GET') verifyCsrf(request, ctx, config);
+        const deliveryRead =
+          method === 'GET'
+            ? await humanDelivery(ctx, path, method, undefined, null, delivery)
+            : undefined;
         const economicRead =
           method === 'GET'
             ? await economicRoute(ctx, path, method, undefined, null)
@@ -181,7 +219,8 @@ export function createApp(
           method === 'GET'
             ? await commercialRoute(ctx, path, method, undefined, null)
             : undefined;
-        if (economicRead) result = economicRead;
+        if (deliveryRead) result = deliveryRead;
+        else if (economicRead) result = economicRead;
         else if (commercialRead) result = commercialRead;
         else if (method === 'GET') {
           switch (path) {
@@ -248,6 +287,14 @@ export function createApp(
               });
             }
           }
+          const deliveryWrite = await humanDelivery(
+            ctx,
+            path,
+            method,
+            body,
+            creationKey,
+            delivery,
+          );
           const economicWrite = await economicRoute(
             ctx,
             path,
@@ -262,7 +309,8 @@ export function createApp(
             body,
             creationKey,
           );
-          if (economicWrite) result = economicWrite;
+          if (deliveryWrite) result = deliveryWrite;
+          else if (economicWrite) result = economicWrite;
           else if (commercialWrite) result = commercialWrite;
           else if (method === 'POST') {
             switch (path) {
@@ -383,6 +431,11 @@ export function createApp(
           }
           if (isCreation)
             await completeCreation(ctx, path, creationKey!, result);
+          if (
+            !path.startsWith('/api/session/') &&
+            !path.startsWith('/api/memberships')
+          )
+            await reconcileDelivery(ctx, delivery);
         }
       }
       result.headers.set('Content-Security-Policy', "default-src 'none'");
@@ -394,6 +447,39 @@ export function createApp(
       return result;
     } catch (e) {
       await db.query('ROLLBACK');
+      if (deliveryIdentity) {
+        try {
+          await db.query(
+            "INSERT INTO delivery_events(id,organization_id,entity_id,actor_user_id,actor,action,data) VALUES($1,$2,$3,$4,$5,'denied',$6)",
+            [
+              crypto.randomUUID(),
+              deliveryIdentity.org,
+              deliveryIdentity.entity,
+              deliveryIdentity.user,
+              deliveryIdentity.actor,
+              JSON.stringify({
+                route:
+                  (new URL(request.url).pathname.startsWith(
+                    '/api/delivery-runner/',
+                  )
+                    ? '/api/delivery-runner/'
+                    : '/api/delivery/') +
+                  (new URL(request.url).pathname.match(
+                    /\/(claim|start|heartbeat|finish|policies|specs|approve|review|cancel)$/,
+                  )?.[1] ?? 'unknown'),
+                code:
+                  e instanceof HttpError
+                    ? e.code
+                    : e instanceof InputError
+                      ? 422
+                      : 500,
+              }),
+            ],
+          );
+        } catch {
+          console.error('Delivery denial audit unavailable');
+        }
+      }
       if (e instanceof HttpError) return response({ error: e.message }, e.code);
       if (e instanceof InputError) return response({ error: e.message }, 422);
       const code = (e as { code?: string }).code;

@@ -252,6 +252,27 @@ export async function restore(
         "UPDATE extraction_jobs SET state='failed',failure_code='restored_requires_review',consumed_micro_usd=reserved_micro_usd,completed_at=now(),lease_until=NULL WHERE state IN ('queued','running')",
       );
     }
+    if (
+      (await c.query("SELECT to_regclass('public.delivery_jobs') present"))
+        .rows[0].present
+    ) {
+      await c.query(
+        "WITH amounts AS (SELECT policy_id,sum(reserved_micro_usd) amount FROM delivery_jobs WHERE state IN ('queued','claimed','running') AND consumed_micro_usd IS NULL GROUP BY policy_id) UPDATE delivery_totals d SET reserved_micro_usd=d.reserved_micro_usd-a.amount,spent_micro_usd=d.spent_micro_usd+a.amount FROM amounts a WHERE d.policy_id=a.policy_id",
+      );
+      await c.query(
+        "WITH amounts AS (SELECT policy_id,budget_day,sum(reserved_micro_usd) amount FROM delivery_jobs WHERE state IN ('queued','claimed','running') AND consumed_micro_usd IS NULL GROUP BY policy_id,budget_day) UPDATE delivery_days d SET reserved_micro_usd=d.reserved_micro_usd-a.amount,spent_micro_usd=d.spent_micro_usd+a.amount FROM amounts a WHERE d.policy_id=a.policy_id AND d.day=a.budget_day",
+      );
+      await c.query(
+        "UPDATE delivery_jobs SET state='failed',failure_code='restored_requires_review',consumed_micro_usd=COALESCE(consumed_micro_usd,reserved_micro_usd),lease_hash=NULL,lease_until=NULL WHERE state IN ('queued','claimed','running')",
+      );
+      await c.query('UPDATE delivery_runners SET revoked_at=now()');
+      await c.query(
+        "INSERT INTO delivery_events(id,organization_id,entity_id,actor,action,data) SELECT gen_random_uuid(),organization_id,id,'backup-restore','policy_disabled_after_restore','{\"reason\":\"fresh_human_authorization_required\"}'::jsonb FROM delivery_policies WHERE enabled",
+      );
+      await c.query(
+        'UPDATE delivery_policies SET enabled=false,version=version+1 WHERE enabled',
+      );
+    }
     await applyGrants(c, runtime, maintenance);
     await c.query('COMMIT');
     return { restored: true, sessionsInvalidated: true };

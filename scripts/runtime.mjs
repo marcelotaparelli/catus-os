@@ -28,6 +28,16 @@ export function runtimeEnvironment(base, local, roles) {
       ['PGPASSWORD', 'PGPASSFILE'].includes(name)
     )
       delete env[name];
+  for (const key of [
+    'GH_TOKEN',
+    'GITHUB_TOKEN',
+    'CODEX_API_KEY',
+    'OPENAI_API_KEY',
+    'CODEX_GATEWAY_CONTROL_TOKEN',
+    'CODEX_UPSTREAM_KEY',
+    'DELIVERY_RUNNER_TOKEN',
+  ])
+    delete env[key];
   return Object.fromEntries(
     Object.entries(env).filter(([, v]) => v !== undefined),
   );
@@ -48,6 +58,16 @@ export function workerEnvironment(base, local, roles) {
       ['PGPASSWORD', 'PGPASSFILE', 'BACKUP_KEY_FILE'].includes(name)
     )
       delete env[name];
+  for (const key of [
+    'GH_TOKEN',
+    'GITHUB_TOKEN',
+    'CODEX_API_KEY',
+    'OPENAI_API_KEY',
+    'CODEX_GATEWAY_CONTROL_TOKEN',
+    'CODEX_UPSTREAM_KEY',
+    'DELIVERY_RUNNER_TOKEN',
+  ])
+    delete env[key];
   return Object.fromEntries(
     Object.entries(env).filter(([, v]) => v !== undefined),
   );

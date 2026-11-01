@@ -1,0 +1,12 @@
+[
+  {
+    "key": "synthetic-nuvemshop",
+    "repository": "https://github.com/YOUR_ORG/YOUR_SYNTHETIC_REPO",
+    "base_branch": "synthetic-base",
+    "base_sha": "0000000000000000000000000000000000000000",
+    "allowed_paths": ["templates/home.tpl"],
+    "mirror_path": "/srv/catus-runner/synthetic-theme.git",
+    "read_paths": ["templates/home.tpl", "tests/theme.test.mjs"],
+    "test_argv": [["node", "--test", "tests/theme.test.mjs"]]
+  }
+]

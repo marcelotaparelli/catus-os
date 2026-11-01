@@ -1,0 +1,9 @@
+[
+  {
+    "key": "synthetic-nuvemshop",
+    "repository": "https://github.com/YOUR_ORG/YOUR_SYNTHETIC_REPO",
+    "base_branch": "synthetic-base",
+    "base_sha": "0000000000000000000000000000000000000000",
+    "allowed_paths": ["templates/home.tpl"]
+  }
+]

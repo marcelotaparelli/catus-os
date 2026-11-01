@@ -3,6 +3,7 @@
   import { statuses, transitions } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
   import './style.css';
+  import DeliveryControl from './DeliveryControl.svelte';
   import EconomicsControl from './EconomicsControl.svelte';
   import CommercialControl from './CommercialControl.svelte';
   import IntelligentIntake from './IntelligentIntake.svelte';
@@ -468,6 +469,7 @@
           role={session.role}
           onCreated={refresh}
         />{/if}
+      <DeliveryControl {api} {data} role={session.role} />
       <EconomicsControl
         {api}
         {data}

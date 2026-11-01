@@ -1,4 +1,4 @@
-# Arquitetura do Catus OS — M4
+# Arquitetura do Catus OS — M5
 
 ## Estrutura e decisões
 
@@ -164,3 +164,17 @@ Termos econômicos versionam totais de contrato/competência e exigem escopo M3 
 Endpoint privado `/api/economics` atende painel Mission Control: gestor/admin lê custos/taxas/relatórios, PO recebe só planejamento sem snapshots financeiros e desenvolvedor só horas próprias. Escritas de premissas financeiras são exclusivas gestor/admin; PO prepara estimativas, usuários apontam horas da sessão. AI worker/maintenance não têm grants M4. Context/sessão/CSRF/tenant M1 e limites HTTP mantidos. Advisory lock por organização serializa revisões/aprovações/duplicidades, com eventos e chave idempotente na mesma transação.
 
 Cada observação guarda inputs completos e CommercialBasis, fontes/decisões/taxas, competência/corte, motor, resultado e SHA-256 canônico. Restore preserva e recalcula exatamente esses inputs. Consolidação de cliente não soma moedas/períodos distintos e sinaliza projetos sem observação comparável. Histórico de observações mostra evolução, sem alegar caixa, reconhecimento automático ou precisão contábil. Fórmulas, exemplos, limites e homologação em docs/ECONOMICS.md. M5 recebe apenas base auditável para futura política; nenhuma execução/elegibilidade automática foi implementada.
+
+## M5 — Fila e runner controlado de engenharia
+
+Baseline M4 `613d0cc`, branch própria feat/m5-agentic-delivery. Migration 009 aditiva: delivery_policies/specs/report_approvals/runners/totals/days/jobs/events/reviews; 001–008 preservadas. Especificações, aprovações de observação, eventos e reviews append-only; token de serviço limitado a org/projeto, digest SHA-256, TTL/revogação, provisionamento offline separado. Runtime tem grants somente necessários, AI worker/maintenance sem acesso M5. Runner não tem conexão PostgreSQL.
+
+`src/server/delivery/service.ts` calcula elegibilidade a partir de identidade/atribuição, estado/spec, M3 atual, M4 completo/fresco/sem mudança posterior, aprovação humana independente de observação, capacidade/margem e allowlist/repo/ref/orçamento. Política OFF por padrão, ativada explicitamente por gestor/admin. Job e reserva são inseridos atomicamente junto à mutação de negócio que tornou o caso elegível: outbox PostgreSQL, sem mensagem externa. Unique de spec e ativo/request, lock por organização, lease e uma tentativa. Claim, start e heartbeat/finish revalidam bases; revogação/cancelamento encerra trabalho, crash/ambiguidade não gera retry automático. Estado de job não altera demanda/comercial.
+
+`runner/` é componente de infraestrutura sob nossa administração, não Codex Cloud. CodeAgent retorna arquivos estruturados; supervisor exporta blobs Git 100644 de SHA fixado, aplica somente caminhos de tema allowlisted e executa testes Node em Docker real sem rede/segredos/socket. Root/worktree readonly, UID não root, caps/pids/CPU/memória/arquivos/tmpfs finitos, watchdog interno e limpeza observada. Nenhum shell vindo de atendimento/modelo é executado no host; Git temporário sem remoto produz patch e SHA, não push/merge/deploy.
+
+SDK oficial @openai/codex-sdk 0.166.0 isolado no package/lock do runner, com runtime Node e imagem fixada. CodexAgent usa container read-only/approval never/web off em rede internal, somente token efêmero de gateway. Gateway mantém chave upstream fora do agente e impõe uma chamada, input/output/tempo/modelo/preço/teto, recusa tools/storage/retry/redirect e limita saída. Compatibilidade do modo no-tools/modelo e inferência real não foram verificadas sem credenciais legítimas; configuração normal indisponível, nenhum fallback simulado. SDK/CLI/imagens construídos não significam Codex real aceito.
+
+Custos em microUSD e BigInt, independentes de valores M4 em outras moedas; não há soma/câmbio implícito nem mutação de snapshots. Sem uso confiável, reserva consumida conservadoramente não é fatura. Resultados contêm patch/arquivos/testes/códigos/uso quando disponível e limpeza; UI do Mission Control mostra elegibilidade/bloqueios/fila/evidências/revisão, marcando fixture explicitamente. Recusas autenticadas são auditadas após rollback sem guardar corpo/segredos.
+
+Restore invalida leases/credenciais, encerra jobs interrompidos com consumo conservador e desativa políticas, exigindo nova autorização. Testes comprovam fila M2→M3→M4 e execução de fixture em container com alterações/testes reais, concorrência/cancelamento/crash/orçamento/path/tenant/restore. Não houve chamada real Codex nem PR remoto do agente; patch é a entrega revisável. Threat model, instalação, limites e aceite pendente em docs/AGENTIC_DELIVERY.md.

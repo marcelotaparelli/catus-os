@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+!.env.example
+.local
+**/node_modules
+!node_modules
+node_modules/*
+!node_modules/bun
+node_modules/bun/*
+!node_modules/bun/bin
+node_modules/bun/bin/*
+!node_modules/bun/bin/bun.exe
+runner/node_modules
+dist
+test-results

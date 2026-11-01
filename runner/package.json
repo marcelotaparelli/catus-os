@@ -1,0 +1,14 @@
+{
+  "name": "catus-delivery-runner",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "0.166.0"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types src/main.ts"
+  }
+}

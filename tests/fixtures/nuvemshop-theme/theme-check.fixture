@@ -1,0 +1,31 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile, writeFile } from 'node:fs/promises';
+import { networkInterfaces } from 'node:os';
+test('Nuvemshop synthetic hero has the reviewed accessible heading', async () => {
+  const content = await readFile('templates/home.tpl', 'utf8');
+  assert.match(content, /<h1>Bem-vindo à loja sintética<\/h1>/);
+  assert.match(content, /<section class="hero">/);
+});
+test('real sandbox denies host secrets, Docker socket and out-of-workspace writes', async () => {
+  await assert.rejects(writeFile('/outside-repo.txt', 'denied'));
+  await assert.rejects(writeFile('templates/home.tpl', 'tamper'));
+  await assert.rejects(readFile('/workspace/catus-os/.env'));
+  await assert.rejects(readFile('/var/run/docker.sock'));
+  assert.equal(process.env.DATABASE_URL, undefined);
+  assert.equal(process.env.RUNTIME_DATABASE_URL, undefined);
+  assert.equal(process.env.CODEX_API_KEY, undefined);
+  assert.equal(process.env.DELIVERY_RUNNER_TOKEN, undefined);
+  const external = Object.values(networkInterfaces())
+    .flat()
+    .filter((i) => i && !i.internal);
+  assert.equal(external.length, 0);
+  assert.equal(
+    (await readFile('/sys/fs/cgroup/pids.max', 'utf8')).trim(),
+    '32',
+  );
+  assert.equal(
+    (await readFile('/sys/fs/cgroup/memory.max', 'utf8')).trim(),
+    '134217728',
+  );
+});

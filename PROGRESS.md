@@ -1,5 +1,48 @@
 # Progresso
 
+## M5 — Issue #3: fila e runner controlado Nuvemshop · 01/11/2026
+
+Baseline M4 `613d0cc46bd199be344beb661824bcdc44ccdcbc` confirmado local/remoto; branch própria `feat/m5-agentic-delivery` criada sem reescrever histórico. Issue #3, arquitetura/planos/progresso e guias M0–M4 lidos; rede cloud restrita/sem secrets de provedor configurados preservada. Migrations 001–008 intocadas. Sem main/default, merge, deploy, produção ou exposição pública.
+
+### Situação de aceite por fronteira
+
+| Fronteira                  | Evidência real                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Fila/regras/autorizações   | Validada em PostgreSQL real, M2 humano → M3 → M4 → política → job automático único                                        |
+| Runner isolado com fixture | Validado: repo Git sintético, arquivo alterado, testes Docker reais, patch/SHA/limites/limpeza e revisão humana           |
+| Codex real                 | **NOT_VERIFIED**: sem chave legítima/gateway/egress homologados. Fixture determinístico só nos testes, llm_verified=false |
+| PR remoto do agente        | **NOT_CREATED**: patch preservado; nenhuma credencial mínima/repo/base de publicação do agente disponibilizados/validados |
+
+### Implementado
+
+- Migration 009 aditiva: política/specs/aprovação de observação/credenciais de runner, reservas diárias/totais, jobs/leases/eventos/reviews. Runtime mínimo, AI worker/maintenance sem grants M5; runner separado não recebe PostgreSQL.
+- Política default OFF e ativação humana auditada por gestor/admin, repo/ref/SHA e arquivos de tema allowlisted, Nuvemshop/Codex SDK, tentativas/concorrência/tempo/tokens/preços/tetos/frescor/margem. Elegibilidade usa identidade/atribuição/status/spec, cobertura M3 atual e contrato vigente, observação M4 completa/fresca/sem mudanças posteriores, aprovação independente e capacidade/orçamento. Nada é autorizado por flag frontend ou texto do modelo.
+- Job/reserva/eventos transacionais junto à mutação elegível: fila/outbox PostgreSQL sem serviço genérico extra. Um job por spec/ativo por demanda; revalida claim/start/heartbeat/finish. Revogação bloqueia e cancela; crash/ambiguidade exige revisão, sem retry pago. Estado do job separado da demanda.
+- Runner exporta somente blobs 100644 explícitos de mirror/branch/SHA autorizados, aplica arquivos existentes de tema por código e roda comandos fixos Node em container sem rede, root/worktree RO, usuário não root, caps/pids/memória/CPU/arquivos/tmpfs finitos. Watchdog dentro do container e limpeza observada, sem socket Docker/DB/GitHub/segredos no agente/testes. Git temporário não tem remoto.
+- Adaptador CodeAgent/Codex SDK oficial 0.166.0 em package/lock isolados, Node admitido no runner; container read-only/approval never/web off, sem full-access. Gateway detém chave upstream e impõe uma chamada/tokens/bytes/tempo/modelo/preços/teto, sem tools/storage/retries/redirect. Dinheiro operacional microUSD/BigInt, sem somar USD a BRL/M4 ou fingir fatura quando só reserva é conhecida.
+- Credencial de broker limitada a org/projeto, digest/8h/revogação, CLI local offline e arquivo 0600 novo. Launchers isolam env e removem DB/finance/GitHub/provider keys conforme papel do serviço. Recusas autenticadas auditadas após rollback sem guardar corpo/segredos; hashes de lease não expostos.
+- Mission Control com bloqueios/elegibilidade, política/revisão M4/spec, fila, reserva/consumo controlado, patch/testes/limpeza e aceitar/rejeitar/pedir correção/cancelar. Fixture identificado explicitamente, sem alterar status/comercial ou integrar código.
+- Restore encerra interrompidos, liquida reserva conservadora, limpa leases/revoga credenciais e desativa políticas com evento de sistema; histórico/evidência/review preservados, nenhuma reativação automática.
+
+### Evidências executadas
+
+- `db:roles`, `migrate`, `test:db` aprovados em PostgreSQL local preservado; migration 009 aplicada/repetível. Postmaster antigo estava zombie e somente locks obsoletos foram arquivados antes de retomar o mesmo banco.
+- Typecheck Svelte/TS sem erros/avisos; build Vite aprovado. **78 testes aprovados, 923 assertions, 0 falhas**, incluindo regressões completas M0–M4. Políticas OFF, escopo/contrato, margem/orçamento/frescor, concorrência/replay, crash/cancelamento/lease, caminhos/comandos/artefatos adversariais, tenant/autorização, token privado/revogação, timeout e limpeza exercitados.
+- **5 cenários Playwright aprovados**. O M5 cria demanda via revisão M2, aprova M3/M4, ativa política, aprova observação independentemente, observa um job automático, runner Docker real altera templates/home.tpl, testes/códigos e diff são conferidos, humano aceita revisão, reload preserva e demanda segue ready. Geração do código é fixture test-only, não inferência real. Screenshot sintético ignorado test-results/m5-agentic-delivery.png.
+- Testes do tema falham antes da correção e passam após; comprovam ausência de interfaces externas, DB/provider/broker creds/socket/host .env, root/worktree readonly e limites cgroup pids32/memória128MiB. Watchdog/abort encerram teste real pendurado. Após suíte, Docker não tinha containers órfãos em execução.
+- Backup AES-GCM/pg_dump/pg_restore reais em banco descartável preservam patch/reviews, invalidam running/credenciais/políticas e zeram reservas pendentes sem replay. M4 continua com hashes/recálculo exatos após restore.
+- `npm --prefix runner ci --ignore-scripts` instala SDK/CLI 0.166.0; README/types oficiais inspecionados. Imagens SDK/gateway foram construídas com proxy/CA corretos e sem segredos. CLI `--version` executada na imagem com rede none/RO, sem inferência. SDK não é Codex Cloud.
+- `npm run delivery:runner -- --once` sem configuração retorna código 2, unavailable / Codex real NOT_VERIFIED, sem claim/chamada externa. Checagens foram de presença, nunca leitura de valor: CODEX_API_KEY/OPENAI_API_KEY/control-token ausentes. GH_TOKEN herdado existe, mas seu escopo não foi validado e ele não foi reutilizado no agente/gateway/PR; launchers o removem. Git da branch Catus usa somente transporte autorizado para publicar esta implementação.
+- Formatação/diff e auditorias npm do runtime e runner aprovadas, 0 vulnerabilidades reportadas. Uma falha de descoberta de fixture fora do sandbox foi corrigida movendo seu programa para dado .fixture, sem desabilitar testes; pacote é executado somente no container. Erros de tipagem/strip-types e contrato de resposta M2 encontrados no desenvolvimento foram corrigidos antes das execuções finais.
+
+CI Validate M5 mantém checks anteriores e adiciona instalação do SDK e imagem Node fixada; execução remota será observada após publicação. Instalação, threat model, diagramas, limites, custos e aceite externo em docs/AGENTIC_DELIVERY.md.
+
+### Limitações / bloqueios externos
+
+Não declarar M5 end-to-end com Codex aceito: não houve credencial/gateway/egress de provedor legítimos disponíveis, nem inferência externa ou PR remoto de agente. SDK/modelo no-tools, SSE real e infraestrutura de rede/conta dedicada ainda requerem teste do proprietário sem relaxar limites. Fixture não substitui essa prova. Patch é a entrega revisável suportada. Apenas correções de arquivos de tema existentes e testes Node sem dependências; renderer/loja Nuvemshop real, publicador de PR mínimo, retenção/paginação/volumes e homologação corporativa continuam pendentes. Sem usuários/clientes/dados reais enviados a terceiros, Cloud task API, merge/deploy/produção ou M6.
+
+---
+
 ## M4 — Issue #2: horas, custos, capacidade e rentabilidade · 01/11/2026
 
 HEAD M3 local/remota `e0631d9a2c2b05fd8f99506c5dcb92fe5405748d` confirmada; branch própria `feat/m4-economics` criada sem reescrever histórico. Issue #2 e contexto M0–M3/AI/homologação lidos. Ambiente cloud conectado, rede restrita preservada e sem secrets externos configurados. Sem main/default, merge, deploy, produção ou exposição pública.
