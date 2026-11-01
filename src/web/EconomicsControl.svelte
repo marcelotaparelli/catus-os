@@ -106,6 +106,23 @@
     capacity: 'Capacidade alocada',
     direct_cost: 'Despesa externa/direta',
   };
+  const roleNames: Record<string, string> = {
+    developer: 'Desenvolvedor',
+    po: 'PO',
+    manager: 'Gestor',
+    administrator: 'Administrador',
+  };
+  // Members are display-only context; authorization stays on the server.
+  function who(id: string | null | undefined) {
+    if (!id) return 'Sistema';
+    return members.find((m) => m.id === id)?.name ?? id;
+  }
+  // Shows what an integer minor-unit entry means before it is submitted.
+  function preview(value: string) {
+    return /^(0|[1-9][0-9]{0,17})$/.test(value.trim())
+      ? `= ${moneyLabel(value.trim(), cur)}`
+      : '';
+  }
   const attempts = new Map<string, { json: string; key: string }>();
   async function post<T>(path: string, body: unknown) {
     const json = JSON.stringify(body);
@@ -448,6 +465,8 @@
                 pattern="0|[1-9][0-9]*"
                 required
               /></label
+            ><small class="money-preview" aria-live="polite"
+              >{preview(ohRate)}</small
             >{/if}
           <label
             >Dias de trabalho ISO separados por vírgula<input
@@ -487,7 +506,7 @@
               >Função para custo/hora<select bind:value={functionRole}
                 ><option value="">Usar profissional em vez de função</option
                 >{#each ['developer', 'po', 'manager', 'administrator'] as r}<option
-                    value={r}>{r}</option
+                    value={r}>{roleNames[r] ?? r}</option
                   >{/each}</select
               ></label
             ><label
@@ -496,6 +515,8 @@
                 pattern="0|[1-9][0-9]*"
                 required
               /></label
+            ><small class="money-preview" aria-live="polite"
+              >{preview(rate)}</small
             >
           {:else if kind === 'capacity'}<label
               >Capacidade disponível alocada em minutos<input
@@ -567,6 +588,8 @@
               pattern="0|[1-9][0-9]*"
               required
             /></label
+          ><small class="money-preview" aria-live="polite"
+            >{preview(amount)}</small
           ><label
             >Regra de reconhecimento<select bind:value={recognition} required
               ><option value="">Selecione explicitamente</option><option
@@ -583,6 +606,8 @@
                 pattern="0|[1-9][0-9]*"
                 required
               /></label
+            ><small class="money-preview" aria-live="polite"
+              >{preview(recognized)}</small
             >{/if}
           <label
             ><input type="checkbox" bind:checked={directComplete} /> Custos externos
@@ -610,6 +635,8 @@
                 bind:value={overageRate}
                 required
               /></label
+            ><small class="money-preview" aria-live="polite"
+              >{preview(overageRate)}</small
             >{/if}
           <label
             >Regra de rollover<select bind:value={rollover} required
@@ -673,16 +700,22 @@
               bind:value={budget}
               required
             /></label
+          ><small class="money-preview" aria-live="polite"
+            >{preview(budget)}</small
           ><label
             >Parcela incorrida em unidades mínimas<input
               bind:value={incurred}
               required
             /></label
+          ><small class="money-preview" aria-live="polite"
+            >{preview(incurred)}</small
           ><label
             >Parcela para concluir em unidades mínimas<input
               bind:value={future}
               required
             /></label
+          ><small class="money-preview" aria-live="polite"
+            >{preview(future)}</small
           >
           <p class="muted">
             Uma despesa por referência; trabalho e overhead não entram aqui. Não
@@ -697,7 +730,7 @@
         ><option value=""
           >Usar somente taxa individual; sem inferência por papel</option
         >{#each ['developer', 'po', 'manager', 'administrator'] as r}<option
-            value={r}>{r}</option
+            value={r}>{roleNames[r] ?? r}</option
           >{/each}</select
       ></label
     ><label
@@ -713,6 +746,10 @@
           class="request"
         >
           <h3>{names[r.kind]} · revisão {r.revision}</h3>
+          {#if r.project_id}<p class="eyebrow">
+              {data.projects.find((p) => p.id === r.project_id)?.name ??
+                r.project_id}
+            </p>{/if}
           <p>
             {r.valid_from} a {r.valid_until} · {r.decision === 'approved'
               ? 'Aprovado'
@@ -720,7 +757,7 @@
                 ? 'Rejeitado'
                 : 'Pendente'} · fonte: {r.source}
           </p>
-          <p class="muted">Autor: {r.created_by} · {r.created_at}</p>
+          <p class="muted">Autor: {who(r.created_by)} · {r.created_at}</p>
           <details>
             <summary>Valores e rastreabilidade</summary>
             <pre>{JSON.stringify(r, null, 2)}</pre>
@@ -822,7 +859,7 @@
               ? 'Pendentes'
               : t.state === 'reversed'
                 ? 'Revertidas'
-                : 'Rejeitadas'} · usuário {t.user_id}
+                : 'Rejeitadas'} · {who(t.user_id)}
         </p>
         {#if confidential && t.user_id !== userId && t.state === 'pending'}<button
             disabled={busy || !reason.trim()}
@@ -1009,7 +1046,7 @@
     <details>
       <summary>Auditoria econômica</summary>{#each view.events as e}<p>
           {e.created_at} · {e.entity_type}
-          {e.entity_id} · {e.action} · {e.actor_user_id} ({e.actor_role})
+          {e.entity_id} · {e.action} · {who(e.actor_user_id)} ({e.actor_role})
         </p>{/each}
     </details>
   {/if}
