@@ -1,4 +1,4 @@
-# CATUS OS — M3
+# CATUS OS — M4
 
 Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. Atendimento inteligente via adaptador LLM configurável, fila persistente e revisão humana. Sem credenciais/política, inferência indisponível; nenhum mock no aplicativo. Contratos, escopos versionados, change requests e cobertura comercial exigem revisão e autorização humanas explícitas.
 
@@ -128,3 +128,9 @@ Rotas públicas limitadas a `GET /api/auth/config` (booleano), `/api/auth/login`
 Guia: [SCOPE_CONTRACTS.md](docs/SCOPE_CONTRACTS.md). Após `db:roles` e `migrate`, o controle comercial permite cadastrar contratos, preparar versões com itens/origem, submeter, decidir com alçada explícita e abrir change requests. Administrador configura os papéis autorizados; nenhum preparador pode decidir o próprio escopo. Cobertura no Mission Control exige vínculo humano com item aprovado e contrato vigente; “Pronta” não é aprovação comercial. Não há cálculos financeiros ou assinatura eletrônica.
 
 O fluxo M3 e regressões são reproduzidos por `npm test` e `npm run test:e2e`, executados sequencialmente em bancos locais descartáveis. Evidências em PROGRESS.md. Não é preciso credencial Google/LLM real para os testes; aplicação normal continua exigindo autenticação configurada.
+
+## M4 — Horas e inteligência econômica
+
+Guia completo: [ECONOMICS.md](docs/ECONOMICS.md). Premissas e termos versionados com aprovação independente, capacidade declarada, estimativas, horas/reversões, custos/ETC/EAC/margens e consolidação por cliente/moeda/competência. Dinheiro inteiro/BigInt, dados ausentes explicitamente incompletos, snapshots históricos imutáveis. Gestor/admin vê custos; PO estima sem ver taxas e desenvolvedor aponta horas próprias. Não há valores automáticos, contabilidade, recebimentos, câmbio ou execução de agentes.
+
+Aplicar `db:roles`, `migrate` e `test:db`; executar `npm test` antes de `npm run test:e2e`, nunca simultaneamente. Sem Google/LLM real, testes usam apenas harness sintético; aplicação normal continua bloqueando autenticação não configurada.

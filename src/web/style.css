@@ -460,3 +460,17 @@ h4 {
   border-top: 1px solid #d4dce6;
   padding-top: 1rem;
 }
+
+.economics details {
+  margin: 1rem 0;
+}
+.economics pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  max-height: 360px;
+  overflow: auto;
+}
+.economics .economic-report {
+  margin: 1rem 0;
+}

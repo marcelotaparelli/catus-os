@@ -1,3 +1,4 @@
+import { economicRoute } from './economics/service';
 import { commercialRoute } from './modules/commercial';
 import { pool as defaultPool } from './db';
 import type { Pool } from 'pg';
@@ -172,11 +173,16 @@ export function createApp(
         if (!['GET', 'POST', 'PATCH'].includes(method))
           throw new HttpError(404, 'Rota não encontrada');
         if (method !== 'GET') verifyCsrf(request, ctx, config);
+        const economicRead =
+          method === 'GET'
+            ? await economicRoute(ctx, path, method, undefined, null)
+            : undefined;
         const commercialRead =
           method === 'GET'
             ? await commercialRoute(ctx, path, method, undefined, null)
             : undefined;
-        if (commercialRead) result = commercialRead;
+        if (economicRead) result = economicRead;
+        else if (commercialRead) result = commercialRead;
         else if (method === 'GET') {
           switch (path) {
             case '/api/health':
@@ -242,6 +248,13 @@ export function createApp(
               });
             }
           }
+          const economicWrite = await economicRoute(
+            ctx,
+            path,
+            method,
+            body,
+            creationKey,
+          );
           const commercialWrite = await commercialRoute(
             ctx,
             path,
@@ -249,7 +262,8 @@ export function createApp(
             body,
             creationKey,
           );
-          if (commercialWrite) result = commercialWrite;
+          if (economicWrite) result = economicWrite;
+          else if (commercialWrite) result = commercialWrite;
           else if (method === 'POST') {
             switch (path) {
               case '/api/ai/policy':

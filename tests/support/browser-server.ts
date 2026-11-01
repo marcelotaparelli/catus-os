@@ -56,6 +56,7 @@ const handler = createApp(config, oidcProvider(config, await mockOidcFetch()), {
   // Browser suites share one loopback peer and exercise multiple users per minute.
   // Production limits remain unchanged and have dedicated negative integration tests.
   loginRate: { limit: 200, windowSeconds: 60 },
+  apiRate: { limit: 2000, windowSeconds: 60 },
 });
 const server = Bun.serve({
   hostname: '127.0.0.1',

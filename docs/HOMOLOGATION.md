@@ -181,3 +181,7 @@ O atendimento inteligente foi implementado após autorização explícita, sem a
 ## M3 — Homologação de contratos/escopos
 
 Aplicar migrations 006/007 e grants com a conta migrator; manter HTTPS, OIDC, contas runtime/maintenance/AI worker e backups. Checklist PO/gestor/admin independente + organização B e detalhes de alçadas, versões/cobertura, concorrência e aceite em [SCOPE_CONTRACTS.md](SCOPE_CONTRACTS.md). Sem política explícita, decisões bloqueadas; ready/M2 accepted não autorizam contrato. Fixtures permanecem sintéticos e APIs/Playwright devem rodar sequencialmente. Nenhuma homologação externa, assinatura de cliente ou exposição pública é presumida pelos testes.
+
+## M4 — Homologação econômica sintética
+
+Aplicar migration 008 e grants, preservando contas/HTTPS/sessões/workers. Checklist e exemplos independentes em [ECONOMICS.md](ECONOMICS.md). Exigir premissas/unidades/fontes explícitas e decisões independentes, conferir incompletude e confidencialidade de PO/desenvolvedor, testar dois regimes e restaurar/recalcular snapshots. Não preencher números reais ou enviar dados financeiros ao LLM; sem implantação/exposição ou integração contábil.

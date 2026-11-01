@@ -1,5 +1,38 @@
 # Progresso
 
+## M4 — Issue #2: horas, custos, capacidade e rentabilidade · 01/11/2026
+
+HEAD M3 local/remota `e0631d9a2c2b05fd8f99506c5dcb92fe5405748d` confirmada; branch própria `feat/m4-economics` criada sem reescrever histórico. Issue #2 e contexto M0–M3/AI/homologação lidos. Ambiente cloud conectado, rede restrita preservada e sem secrets externos configurados. Sem main/default, merge, deploy, produção ou exposição pública.
+
+### Implementado
+
+- Migration aditiva 008; 001–007 intactas. Registros econômicos por organização/moeda/vigência/fonte/autor, versões e decisões independentes append-only; termos ligados ao contrato/escopo M3, com aditivos de escopo somente após aprovação M3.
+- Configuração explícita de tributos/comissões, calendário e overhead proporcional ou ausência declarada. Taxas por profissional/função de custo com vigência e snapshots; função de custo exige declaração do aprovador, sem inferência pelo papel de acesso. Capacidade alocada explicitamente, limitada pelo calendário e sem duplicar disponibilidade entre projetos.
+- Estimativas aprovadas por demanda coberta, baseline/restante, pessoa/data; restante atualizável com autoria e histórico. Horas de usuário real em minutos inteiros, pendentes/aprovadas/rejeitadas/revertidas, limites de data/dia, replay/deduplicação e correções por substituição auditada.
+- Custos de trabalho congelados na aprovação, despesas externas com orçamento/incorrido/restante explícitos numa única versão e overhead separado. Dinheiro em strings inteiras/BigInt, arredondamento half away por linha/dedução, nenhuma aritmética financeira com float.
+- Motor puro m4.1 com custo incorrido, orçamento, ETC/EAC, desvios e margens por bases comparáveis; reconhecimento explícito separado de contratado, nenhum recebimento presumido. Retainer por competência, minutos incluídos/saldo/excedente/rollover com teto/origem; preço fechado não usa saldo de horas. Incompletude por indicador lista dados faltantes e impede margem fictícia.
+- Mission Control integra painel por papel: gestor/admin configura/decide/observa fontes/relatórios; PO estima sem taxas e desenvolvedor aponta horas próprias sem custos. Observações congelam inputs completos, CommercialBasis, resultado, engine/hash canônico e data/corte. Evolução por observações; consolidação por cliente não mistura moeda/competência/revisões e alerta projetos sem observação comparável.
+- Runtime com SELECT/INSERT M4, sem reescrita; worker LLM/maintenance sem grants M4. Transações, CSRF/tenant, alçada M3, autor independente, concorrência/versionamento e idempotência mantidos. Sem nova dependência de aplicação, LLM para números, ERP/banco/Chat/Meet ou execução M5.
+
+### Evidências reais
+
+- `db:roles`, `migrate`, `test:db` aprovados em PostgreSQL local preservado; migration 008 aplicada sem reescrever tabelas antigas. Typecheck Svelte/TS sem erros/avisos; build Vite aprovado.
+- `npm test`: **65 testes aprovados, 798 assertions, 0 falhas**, regressões M0–M3 e M4. Testes econômicos independentes conferem centavos/percentuais, grandes produtos BigInt, arredondamento/zero/negativos inválidos, dados incompletos e moedas incompatíveis.
+- Preço fechado sintético: incorrido 19.400, ETC 72.600, EAC 242.000 e margem projetada 758.000 centavos BRL; realizado relevante 79.400/margem 320.600 sobre reconhecido 400.000. Restante maior muda EAC para 328.400 e margem para 671.600, sem alterar realizado ou snapshot anterior.
+- Retainer sintético: outubro com 600 minutos + 120 de rollover validado, 780 aprovados → saldo −60, excedente 60, receita projetada 106.000, EAC 109.500 e margem −3500 centavos. Competência seguinte não herda horas/receita implicitamente; excesso de rollover recusado.
+- PostgreSQL real: concorrência/replay de horas e decisões, mudança de taxa por vigência/revisão sem reprecificar linhas antigas, confidencialidade de PO/dev e organização externa, ausência de taxa/configuração/estimativa, contrato encerrado/escopo pendente sem autoridade automática, falha tardia de auditoria com rollback integral e limites de capacidade/data/duração.
+- Backup AES-GCM com pg_dump/pg_restore oficial real em banco descartável preservou economic_records/decisions, time_entries/events e economic_reports/events não vazios. Todos os inputs restaurados foram recalculados exatamente e os hashes canônicos conferidos. Upgrade M3→M4 preserva escopo/decisão comercial e não cria valores financeiros automáticos.
+- Playwright: **4 cenários aprovados**, M0/M1, M2, M3 e M4. Gestor prepara premissas explícitas, admin aprova, PO estima, desenvolvedor registra 120 minutos sem acesso a custos, gestor aprova/observa EAC/margem/risco/fontes e reload persiste. Screenshot sintético ignorado `test-results/m4-economics.png`.
+- Uma execução conjunta de browser encontrou 429 após acumular sessões/requisições dos quatro marcos no mesmo peer. Limite maior foi aplicado **somente no harness de testes**; produção e testes negativos de rate limiting permanecem intactos. Reexecução sequencial completa aprovada. Erros de revisão/calendário detectados durante desenvolvimento foram corrigidos sem remover checks.
+
+CI Validate M4 inclui as novas suítes e preserva os checks anteriores; resultado remoto será observado após publicação. Guia completo, fórmulas, exemplos e checklist em docs/ECONOMICS.md.
+
+### Bloqueios e limites
+
+Não houve uso de credenciais/valores reais, login Google real, inferência externa ou envio econômico a terceiros. Homologação Google/LLM e operação corporativa seguem pendentes do proprietário; não bloqueiam os testes sintéticos autorizados. Cálculo é gerencial proporcional, não contabilidade/fiscal/câmbio/caixa. Certificações de completude e reconciliação de rollover após correções exigem gestor; observações preservadas não se atualizam silenciosamente. Termos concorrentes no mesmo projeto/período, alocações temporais parciais e regras fiscais específicas exigem modelo aprovado futuro. M4 prepara referências para política M5, sem declarar elegibilidade automática ou iniciar agentes. Sem merge/deploy.
+
+---
+
 ## M3 — Issue #1: escopos, contratos e change requests · 01/11/2026
 
 Baseline M2 `cf34cbcfce8c3f516cfe968b730917f23b1fd692` confirmado local/remoto. Árvore inicial limpa; branch própria `feat/m3-scope-contracts`, sem reescrita de histórico/main/default/merge/deploy. Issue pública #1 lida integralmente, assim como contexto técnico e guias M1/M2. Skill cloud-environment-runtime aplicada; ambiente sem secrets/identidades externas, política restrita preservada.

@@ -1,4 +1,4 @@
-# Arquitetura do Catus OS — M3
+# Arquitetura do Catus OS — M4
 
 ## Estrutura e decisões
 
@@ -152,3 +152,15 @@ Default deny comercial: sem política explícita ninguém decide. Só admin conf
 Cobertura exige vínculo humano a item da versão atualmente aprovada, contrato ativo/vigente e mesmo projeto/organização. Mission Control calcula cobertura independente de status M0: ready/M2 accepted não são aprovação comercial. Substituição de versão ou encerramento/expiração de contrato preserva vínculos/histórico, porém os sinaliza pendentes para nova análise; nenhum vínculo migra automaticamente para V2. M0 não sofre bloqueio operacional retroativo. `CommercialBasis` fornece IDs/tipo/moeda/vigência/versionamento para M4, sem valores, estimativas ou margens fictícios.
 
 Guia completo e checklist em `docs/SCOPE_CONTRACTS.md`. Testes usam PostgreSQL real, contas SQL restritas e fixtures sintéticos; validam concorrência, tenant, preparadores, contratos expirados, falha tardia de auditoria/rollback, upgrade M2 e backup/restore. Playwright cobre PO/gestor/admin e organização externa, mantendo regressões M0–M2. Google/LLM reais e piloto corporativo permanecem sujeitos à homologação do proprietário.
+
+## M4 — Economia determinística e horas
+
+Migration 008 aditiva, com economic_records/decisions, time_entries/events, economic_reports/events; 001–007 intactas. Os registros econômicos usam JSONB validado por tipo e metadados relacionais de tenant/projeto/série/revisão/vigência/moeda/fonte/autor. Todas as tabelas M4 são append-only por grants e triggers; revisões/decisões/reversões não sobrescrevem história. Não há dependência nova.
+
+`src/server/economics/engine.ts` é motor puro m4.1: dinheiro em strings inteiras/BigInt, minutos inteiros, arredondamento half away por linha/dedução, margem sobre receita, custos incorridos/ETC/EAC e regimes fixo/retainer separados. `validation.ts` valida unidades/limites/campos; `service.ts` aplica autorização, associações M3, snapshots, vigências, transações/idempotência e auditoria; `hash.ts` calcula hash canônico; `rollup.ts` agrupa só cliente/moeda/competência comparáveis sem duplicar observações. Ausência de premissas relevantes gera listas de incompletude e valores dependentes null. Não há câmbio ou aritmética por LLM.
+
+Termos econômicos versionam totais de contrato/competência e exigem escopo M3 aprovado/contrato ativo; mudança de escopo depende de change request M3 aprovado. Preparador não aprova o próprio impacto, mesmo gestor/admin; alçada explícita reaproveita política M3. Taxas individuais/funções de custo têm vigência; função de custo é declaração do gestor, não inferência de papel de acesso. Aprovação de horas/estimativa congela taxa e custo; configuração/revisão futura não altera linhas nem relatórios antigos. Horas pendentes e aprovadas são distintas; reversões/substituições preservam autoria. Capacidade declarada é limitada pelo calendário configurado e separada de horas contratadas/gastas. Retainer tem competência, minutos incluídos, excedente e rollover limitado/originado em base aprovada; saldo não é receita ou margem.
+
+Endpoint privado `/api/economics` atende painel Mission Control: gestor/admin lê custos/taxas/relatórios, PO recebe só planejamento sem snapshots financeiros e desenvolvedor só horas próprias. Escritas de premissas financeiras são exclusivas gestor/admin; PO prepara estimativas, usuários apontam horas da sessão. AI worker/maintenance não têm grants M4. Context/sessão/CSRF/tenant M1 e limites HTTP mantidos. Advisory lock por organização serializa revisões/aprovações/duplicidades, com eventos e chave idempotente na mesma transação.
+
+Cada observação guarda inputs completos e CommercialBasis, fontes/decisões/taxas, competência/corte, motor, resultado e SHA-256 canônico. Restore preserva e recalcula exatamente esses inputs. Consolidação de cliente não soma moedas/períodos distintos e sinaliza projetos sem observação comparável. Histórico de observações mostra evolução, sem alegar caixa, reconhecimento automático ou precisão contábil. Fórmulas, exemplos, limites e homologação em docs/ECONOMICS.md. M5 recebe apenas base auditável para futura política; nenhuma execução/elegibilidade automática foi implementada.
