@@ -166,6 +166,13 @@ export const docker = (
     signal,
     maxBytes: 32768,
   });
+export function isolatedUser() {
+  const uid = process.getuid?.(),
+    gid = process.getgid?.();
+  if (uid === undefined || gid === undefined || uid === 0)
+    throw new RunnerError('sandbox_failure');
+  return `${uid}:${gid}`;
+}
 export function nodeSupervisor(milliseconds: number) {
   if (
     !Number.isSafeInteger(milliseconds) ||
@@ -205,7 +212,7 @@ export async function isolatedTest(
         'none',
         '--read-only',
         '--user',
-        '1000:1000',
+        isolatedUser(),
         '--cap-drop',
         'ALL',
         '--security-opt',

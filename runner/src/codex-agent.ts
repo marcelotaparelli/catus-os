@@ -6,6 +6,7 @@ import {
   RunnerError,
   validateChanges,
   nodeSupervisor,
+  isolatedUser,
 } from './core.ts';
 import type { CodeAgent, Changes } from './core.ts';
 import type { DeliveryTask } from '../../src/shared/delivery.ts';
@@ -86,7 +87,7 @@ export class CodexAgent implements CodeAgent {
           this.network,
           '--read-only',
           '--user',
-          '1000:1000',
+          isolatedUser(),
           '--cap-drop',
           'ALL',
           '--security-opt',
