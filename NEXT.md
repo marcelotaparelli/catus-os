@@ -1,12 +1,29 @@
-# Próximas etapas após a preparação M5.1
+# Próximas etapas — piloto controlado M0–M4
 
-Preparação A validada no CI `41349073787` do checkpoint `0d32e20`; guia de operação/aceite em `docs/REAL_AGENT_ACCEPTANCE.md`. Não iniciar M6.
+Branch `feat/pilot-readiness` (base `feat/m5-acceptance @ b4fc3cf`). Runbook: [docs/PILOT.md](docs/PILOT.md). Não iniciar M6. M2 (LLM) e M5 (agentes) permanecem desligados no piloto.
 
-1. **P0 — Aceite Responses real (NOT_VERIFIED), SDK desativado:** proprietário disponibiliza conta/chave de teste, modelo Responses compatível com schema/no-tools no adaptador separado, tarifas/tetos reais, egress específico e infraestrutura privada do runner/gateway. Seguir docs/AGENTIC_DELIVERY.md; somente sintéticos. SDK desativado por incompatibilidade comprovada em loopback. Validar container read-only, uma chamada e limites sem relaxar gateway para fingir sucesso. Instalar SDK/imagem não comprova inferência nem Codex Cloud.
-2. **P0 — Homologação do runner próprio:** conta/host dedicados sem segredos financeiros/clientes, Docker saudável, rede internal Responses→gateway e testes sem rede, mirrors/refs/SHA revisados, credenciais org/projeto de 8h e supervisão. Manifests são carregados no startup; alteração exige restart/revalidação. Ativar attestation/política só após comprovar esses controles. Não publicar API/portas na internet.
-3. **P0 — Revisar issue #3/branch:** revisar feat/m5-agentic-delivery, migration 009, reservas/claims/cancelamento/crash/restore e evidências em PROGRESS.md. Codex real pendente e PR remoto NOT_CREATED. Patch armazenado é suportado; publicador de PR exige repo/base existentes e credencial separada de mínimo escopo, nunca GH_TOKEN amplo herdado. Nenhum merge/default/main/deploy.
-4. **P0 — Homologações corporativas anteriores:** Google Workspace/HTTPS/CA/contas reais seguem pendentes; HOMOLOGATION.md. Aceite LLM M2 e premissas gerenciais M4 continuam independentes, conforme AI_INTAKE.md/ECONOMICS.md. Sem números reais ou envio de clientes ao provedor neste marco.
-5. **P1 — Evolução controlada:** retenção/paginação de artefatos/eventos, filas acima de 100 candidatos, alertas de supervisão, protocolo de publicação de PR, suporte seguro a novos arquivos/testes e homologação de renderer Nuvemshop. Política de custo pós-agente/câmbio só com dados e autorização explícitos; USD não entra automaticamente na margem M4. Não alargar paths/comandos/rede para acomodar saída de modelo.
-6. **Marcos posteriores somente por instrução:** M6/gestão e integrações permanecem no roadmap. Não executar agentes em produção, integrar código automaticamente ou iniciar Chat/Meet/ERP/VTEX/Wake.
+## P0 — Bloqueios do proprietário (sem eles não há piloto com pessoas)
 
-Preservar .env/dados/migrations 001–009/histórico. Ler ARCHITECTURE, MASTER_PLAN, PROGRESS e guias antes de continuar. Rodar APIs e Playwright sequencialmente em bancos descartáveis locais. Fixture só nos testes; nunca apresentá-lo como execução real de IA. Restore exige nova ativação humana e credencial, não replay.
+1. **Host privado de homologação (G2):** executar [docs/G2_HOST.md](docs/G2_HOST.md) num host Linux persistente com systemd (não na VM efêmera de desenvolvimento) até `scripts/g2-preflight.sh` terminar com `0 FAIL`; registrar itens HUMAN e testes negativos. Ensaio na VM descartável aprovado exceto os itens do próprio host.
+2. **Google Workspace real (G3):** cliente OAuth Web de homologação, `OIDC_HOSTED_DOMAIN`, redirect exato `https://localhost:3443/api/auth/callback`, egress para `accounts.google.com`, `oauth2.googleapis.com` e `www.googleapis.com`, CA local confiada em perfis dedicados. Login Google real continua **NOT_VERIFIED**.
+3. **Aceite A/B/C (G4):** checklist de HOMOLOGATION.md §4 com contas reais (admin, desenvolvedor, usuário do domínio não convidado), registrando evidências sem cookies/segredos.
+4. **Backup/restore no host (G5):** `backup:key`, backup e restore descartável; chave em cofre separado.
+
+## P0 — Engenharia antes do primeiro dia de uso
+
+5. CI verde observado no `783f19f` (85/85 Bun, 6/6 Playwright, incluindo Docker). Conferir o CI de cada novo HEAD antes do primeiro dia de uso.
+6. Revisar o PR `feat/pilot-readiness` → `feat/m5-acceptance` (ou base definida pelo proprietário). Nenhum merge automático.
+
+## P1 — Durante as primeiras semanas do piloto
+
+7. Cota de API é por peer TCP: atrás de um único túnel SSH, toda a equipe divide 300 req/min. Medir 429 nos primeiros dias; se ocorrer, decidir entre túneis por pessoa ou cota por sessão autenticada (mudança de segurança que exige revisão).
+8. Correção de cadastro: não há renomeação/arquivamento de clientes, projetos e atendimentos. Se o piloto mostrar necessidade, implementar edição versionada e auditada (sem exclusão física).
+9. Paginação/busca acima de 500 atendimentos, solicitações e eventos de auditoria.
+10. Atualização automática (polling leve) do Mission Control ou aviso de dados desatualizados; hoje o usuário usa **Atualizar dados**.
+
+## P2 — Após o piloto, somente com autorização
+
+11. Aceite LLM M2 real e runner/Codex M5 real seguem os guias AI_INTAKE.md, AGENTIC_DELIVERY.md e REAL_AGENT_ACCEPTANCE.md; continuam NOT_VERIFIED.
+12. M6 (gestão e melhoria contínua) só com dados reais coletados no piloto e instrução explícita.
+
+Preservar `.env`, dados, migrations 001–009 e histórico. Rodar `npm test` antes de `npm run test:e2e`, sequencialmente, em bancos descartáveis locais.

@@ -46,10 +46,111 @@ aside .eyebrow {
   margin-top: 48px;
   font-size: 9px;
 }
+html {
+  scroll-behavior: smooth;
+}
+aside nav {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .nav {
-  padding: 12px;
+  display: block;
+  padding: 10px 12px;
   border-radius: 7px;
   font-size: 13px;
+  color: #c8d5df;
+  text-decoration: none;
+}
+a.nav:hover,
+a.nav:focus-visible {
+  background: #203b42;
+  color: #9de9c7;
+}
+.mobile-nav {
+  display: none;
+}
+#solicitacoes,
+#registro,
+#clientes,
+.anchor {
+  scroll-margin-top: 16px;
+}
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+.mine-tag {
+  color: #187554;
+  font-weight: 700;
+  margin-left: 4px;
+}
+.request.editing {
+  border-color: #187554;
+  box-shadow: 0 0 0 2px #18755433;
+}
+.request .edit {
+  border-top: 1px solid #dfe6ec;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.request .edit label {
+  display: block;
+}
+.directory,
+.directory ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.directory > li {
+  border-top: 1px solid #e7edf2;
+  padding: 12px 0;
+}
+.directory ul {
+  margin-top: 6px;
+  padding-left: 16px;
+}
+.directory summary {
+  cursor: pointer;
+  padding: 4px 0;
+}
+.timeline {
+  margin: 6px 0 10px;
+  padding-left: 18px;
+}
+.timeline p {
+  margin: 2px 0 8px;
+  white-space: pre-wrap;
+  font-size: 13px;
+}
+.table-wrap {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+th,
+td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e7edf2;
+  vertical-align: top;
+}
+caption {
+  text-align: left;
+  padding-bottom: 6px;
+}
+td code {
+  font-size: 11px;
+  word-break: break-all;
 }
 .active {
   background: #203b42;
@@ -121,7 +222,7 @@ h3 {
 }
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -312,6 +413,23 @@ dd {
   aside {
     display: none;
   }
+  .mobile-nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    padding-bottom: 4px;
+  }
+  .mobile-nav a {
+    flex: none;
+    font-size: 12px;
+    padding: 8px 10px;
+    border: 1px solid #d6dfe7;
+    border-radius: 16px;
+    background: white;
+    color: #202b3a;
+    text-decoration: none;
+  }
   main {
     padding: 20px;
   }
@@ -321,7 +439,17 @@ dd {
     flex-direction: column;
   }
   .stats {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .stats > div {
+    padding: 10px;
+  }
+  .stats strong {
+    font-size: 20px;
+  }
+  .stats span {
+    font-size: 10px;
   }
   .forms,
   .cards {
@@ -489,4 +617,11 @@ h4 {
   min-width: 0;
   border: 1px solid #d4dce6;
   padding: 1rem;
+}
+.money-preview {
+  display: block;
+  min-height: 1em;
+  margin: -4px 0 6px;
+  color: #187554;
+  font-size: 12px;
 }

@@ -15,6 +15,7 @@
     role,
     userId,
     onChanged,
+    members = [],
   }: {
     api: <T>(
       path: string,
@@ -26,7 +27,30 @@
     role: string;
     userId: string;
     onChanged: () => Promise<void>;
+    members?: { id: string; name: string }[];
   } = $props();
+  // Display-only names; identity and authority remain server-side.
+  function who(id: string | null | undefined) {
+    if (!id) return 'Sistema';
+    return members.find((m) => m.id === id)?.name ?? id;
+  }
+  function origin(item: {
+    origin_request_id: string | null;
+    origin_interaction_id: string | null;
+  }) {
+    if (item.origin_request_id)
+      return (
+        'Solicitação: ' +
+        (data.requests.find((r) => r.id === item.origin_request_id)?.title ??
+          item.origin_request_id)
+      );
+    const i = data.interactions.find(
+      (x) => x.id === item.origin_interaction_id,
+    );
+    return i
+      ? 'Atendimento: ' + i.summary.slice(0, 120)
+      : (item.origin_interaction_id ?? 'Não informada');
+  }
   let view = $state<CommercialSnapshot>({
     contracts: [],
     scopes: [],
@@ -496,7 +520,7 @@
         Estado comercial: <strong>{labels[selected.state]}</strong> · revisão {selected.version}
       </p>
       <p class="muted">
-        Preparador: {selected.created_by} · origem da versão: {selected.previous_id ??
+        Preparador: {who(selected.created_by)} · origem da versão: {selected.previous_id ??
           'inicial'}
       </p>
       {#each selected.items as item, i}<article class="request">
@@ -511,15 +535,15 @@
             <dt>Dependências</dt>
             <dd>{item.dependencies}</dd>
             <dt>Origem</dt>
-            <dd>{item.origin_request_id ?? item.origin_interaction_id}</dd>
+            <dd>{origin(item)}</dd>
           </dl>
         </article>{/each}
       {#if selected.decision}<p>
-          Decisão: {labels[selected.decision.decision]} por {selected.decision
-            .actor_user_id} ({selected.decision.actor_role}), política v{selected
-            .decision.policy_version}, revisão {selected.decision
-            .scope_version}, em {selected.decision.decided_at}. {selected
-            .decision.reason}
+          Decisão: {labels[selected.decision.decision]} por {who(
+            selected.decision.actor_user_id,
+          )} ({selected.decision.actor_role}), política v{selected.decision
+            .policy_version}, revisão {selected.decision.scope_version}, em {selected
+            .decision.decided_at}. {selected.decision.reason}
         </p>{/if}
       {#if canPrepare && selected.state === 'draft'}<button
           class="secondary"
@@ -641,7 +665,8 @@
     </p>
     {#each view.events as e}<details>
         <summary
-          >{e.entity_type} · {e.action} · {e.actor_user_id} ({e.actor_role}) · {e.created_at}</summary
+          >{e.entity_type} · {e.action} · {who(e.actor_user_id)} ({e.actor_role})
+          · {e.created_at}</summary
         >
         <pre>{JSON.stringify(
             { antes: e.before_data, depois: e.after_data },

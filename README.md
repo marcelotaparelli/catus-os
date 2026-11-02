@@ -1,4 +1,6 @@
-# CATUS OS — M5
+# CATUS OS — M5 · preparação de piloto
+
+**Piloto operacional controlado (M0–M4):** siga [docs/PILOT.md](docs/PILOT.md) — portões, subida privada, acesso da equipe, rotina por papel e evidência automatizada da jornada.
 
 Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. Atendimento inteligente via adaptador LLM configurável, fila persistente e revisão humana. Sem credenciais/política, inferência indisponível; nenhum mock no aplicativo. Contratos, escopos versionados, change requests e cobertura comercial exigem revisão e autorização humanas explícitas.
 

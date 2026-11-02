@@ -391,6 +391,7 @@ describe('M0 regression with two roles and tenant authorization', () => {
     ).toMatchObject({
       client_name: c.name,
       project_name: p.name,
+      project_id: p.id,
       owner: 'dev',
       owner_user_id: ids.dev,
       next_action: 'Confirmar escopo',
