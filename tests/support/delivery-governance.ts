@@ -1,4 +1,18 @@
 import { themeIntakeSource } from './delivery-fixture';
+// M4 eligibility requires the economic cut-off (as_of) to be the current UTC day
+// and the competency to contain it, so the synthetic period follows the clock
+// instead of a fixed date that silently expires.
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+const now = new Date();
+const year = now.getUTCFullYear(),
+  month = now.getUTCMonth();
+const period = {
+  asOf: isoDay(now),
+  monthStart: isoDay(new Date(Date.UTC(year, month, 1))),
+  monthEnd: isoDay(new Date(Date.UTC(year, month + 1, 0))),
+  yearStart: `${year}-01-01`,
+  yearEnd: `${year}-12-31`,
+};
 export type TestApi = <T = Record<string, unknown>>(
   who: string,
   path: string,
@@ -155,8 +169,8 @@ export async function governedTask(
         kind,
         project_id: ['config', 'rate'].includes(kind) ? null : project.id,
         currency: 'BRL',
-        valid_from: '2026-11-01',
-        valid_until: '2026-11-30',
+        valid_from: period.monthStart,
+        valid_until: period.monthEnd,
         source: 'SYNTHETIC-M5-' + kind,
         payload,
         previous_id: null,
@@ -186,7 +200,7 @@ export async function governedTask(
         minutes_per_day: 480,
         holidays: [],
       },
-      { valid_from: '2026-01-01', valid_until: '2026-12-31' },
+      { valid_from: period.yearStart, valid_until: period.yearEnd },
     );
   if (
     !existing.records.some(
@@ -224,12 +238,12 @@ export async function governedTask(
     user_id: developer,
     planned_minutes: 60,
     remaining_minutes: 60,
-    expected_on: '2026-11-20',
+    expected_on: period.monthEnd,
   });
   await prep('capacity', { user_id: developer, available_minutes: 60 });
   const report = await api<{ id: string }>('manager', 'economics/reports', {
     terms_id: terms.id,
-    as_of: '2026-11-01',
+    as_of: period.asOf,
   });
   return {
     projectId: project.id,
