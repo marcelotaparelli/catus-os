@@ -39,10 +39,11 @@ aside {
   font-size: 10px;
   font-weight: 750;
   letter-spacing: 1.4px;
-  color: #728392;
+  color: #5d6c7b;
   margin: 0 0 8px;
 }
 aside .eyebrow {
+  color: #93a4b2;
   margin-top: 48px;
   font-size: 9px;
 }
@@ -192,12 +193,12 @@ h3 {
   margin: 0 0 16px;
 }
 .muted {
-  color: #6b7a89;
+  color: #5d6c7b;
   font-size: 12px;
 }
 .badge {
   background: #e5eaf0;
-  color: #5a6e80;
+  color: #4a5d6e;
   border: 1px solid #d6dfe7;
   border-radius: 20px;
   padding: 8px 12px;
@@ -234,7 +235,7 @@ h3 {
 }
 .stats span {
   display: block;
-  color: #6b7a89;
+  color: #5d6c7b;
   font-size: 12px;
 }
 .stats strong {
@@ -282,6 +283,7 @@ textarea {
   resize: vertical;
 }
 input:focus,
+input:focus-within,
 select:focus,
 textarea:focus {
   outline: 2px solid #269b75;
@@ -310,7 +312,7 @@ button:disabled {
 .empty {
   text-align: center;
   padding: 42px;
-  color: #758392;
+  color: #5d6c7b;
   background: #f8fafc;
   border: 1px dashed #dce4eb;
   border-radius: 6px;
@@ -358,7 +360,7 @@ button:disabled {
 }
 dt {
   font-size: 10px;
-  color: #718191;
+  color: #5d6c7b;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   margin-top: 14px;
@@ -551,19 +553,181 @@ h4 {
   }
 }
 
+/* Checkboxes and radios keep their natural size next to the label text
+   (the generic full-width input rule above is meant for text fields). */
+input[type='checkbox'],
+input[type='radio'] {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+  flex: none;
+  accent-color: #187554;
+}
+.check input[type='checkbox'] {
+  margin-top: 3px;
+}
+label.check-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.check-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  border: 0;
+  padding: 0;
+  margin: 0 0 14px;
+}
+.check-group legend {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 8px;
+}
+:focus-visible {
+  outline: 2px solid #187554;
+  outline-offset: 2px;
+}
+
+.commercial .lead {
+  max-width: 78ch;
+  margin-top: 0;
+}
+.next-step {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid #187554;
+  border-radius: 4px;
+  background: #f1f7f4;
+  font-size: 13px;
+  max-width: 78ch;
+}
+.commercial summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  padding: 6px 0;
+}
+.m3-block {
+  border-top: 1px solid #e3e9ef;
+  margin-top: 22px;
+  padding-top: 18px;
+}
+.m3-block > h3,
+.block-head h3,
+.coverage-form > h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+.block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.block-head h3 {
+  margin: 0;
+}
+.count {
+  font-size: 11px;
+  font-weight: 650;
+  background: #e7edf6;
+  color: #3d5a84;
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.m3-cards {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  margin-top: 12px;
+}
+.m3-cards h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.m3-cards .card-top {
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.m3-cards p {
+  font-size: 13px;
+  margin: 4px 0;
+}
+.status[data-status='active'],
+.status[data-status='approved'] {
+  background: #dcf6e9;
+  color: #176444;
+}
+.status[data-status='submitted'] {
+  background: #fdf1dc;
+  color: #7a4a0c;
+}
+.status[data-status='closed'],
+.status[data-status='superseded'] {
+  background: #eceff3;
+  color: #4a5867;
+}
+.status[data-status='rejected'] {
+  background: #fce8e6;
+  color: #a44338;
+}
+.empty-line {
+  color: #5d6c7b;
+  font-size: 13px;
+}
+.field-narrow {
+  max-width: 560px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 .commercial details {
-  margin: 1rem 0;
+  margin: 0.75rem 0;
 }
 .commercial fieldset {
   border: 1px solid var(--line, #d4dce6);
+  border-radius: 6px;
   padding: 1rem;
   min-width: 0;
 }
+.commercial .check-group {
+  border: 0;
+  padding: 0;
+}
 .commercial-form {
   display: grid;
-  gap: 0.8rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
   margin: 1rem 0;
   max-width: 760px;
+}
+.commercial-form > h3,
+.commercial-form > fieldset,
+.commercial-form > .span,
+.commercial-form > .actions {
+  grid-column: 1 / -1;
+}
+.commercial-form > .actions {
+  margin-top: 4px;
+}
+.commercial-form > fieldset {
+  margin-bottom: 14px;
+}
+@media (max-width: 760px) {
+  .commercial-form {
+    grid-template-columns: 1fr;
+  }
 }
 .commercial pre {
   white-space: pre-wrap;
@@ -587,6 +751,19 @@ h4 {
 .scope-detail {
   border-top: 1px solid #d4dce6;
   padding-top: 1rem;
+  margin-top: 4px;
+}
+.scope-detail > h3 {
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.scope-detail > p {
+  font-size: 13px;
+  margin: 6px 0;
+}
+.scope-detail > form,
+.scope-detail > label {
+  max-width: 760px;
 }
 
 .economics details {

@@ -760,7 +760,8 @@
           <p class="muted">Autor: {who(r.created_by)} · {r.created_at}</p>
           <details>
             <summary>Valores e rastreabilidade</summary>
-            <pre>{JSON.stringify(r, null, 2)}</pre>
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable region must be keyboard reachable, WCAG 2.1.1) -->
+            <pre tabindex="0">{JSON.stringify(r, null, 2)}</pre>
           </details>
           {#if r.decision && ((r.kind === 'estimate' && role !== 'developer') || confidential)}<button
               class="secondary"
@@ -1008,7 +1009,8 @@
             relevante) / receita relevante. Não é markup ou caixa.
           </p>
           <p>Motor {report.result.engine_version} · hash {report.input_hash}</p>
-          <pre>{JSON.stringify(report.inputs, null, 2)}</pre>
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable region must be keyboard reachable, WCAG 2.1.1) -->
+          <pre tabindex="0">{JSON.stringify(report.inputs, null, 2)}</pre>
         </details>
       </article>{:else}<p>
         Nenhuma observação calculada; não há indicadores financeiros sem dados

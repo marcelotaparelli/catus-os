@@ -480,7 +480,8 @@
             · proposta {r.proposal_id}
             <details>
               <summary>Antes / depois</summary>
-              <pre>{JSON.stringify(
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable region must be keyboard reachable, WCAG 2.1.1) -->
+              <pre tabindex="0">{JSON.stringify(
                   { antes: r.before_snapshot, depois: r.after_snapshot },
                   null,
                   2,
