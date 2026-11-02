@@ -3,6 +3,12 @@ on:
   pull_request:
   push:
     branches: ['feat/**', main]
+  workflow_dispatch:
+    inputs:
+      propose_baselines:
+        description: 'Render visual baselines into an artifact for human review (never committed automatically)'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -31,6 +37,8 @@ jobs:
       - run: npm run test:db
       - run: npm run check
       - run: npm run build
+      - name: Bundle size budget (perf-budget.json)
+        run: npm run perf:budget
       - run: npm run tls:local
       - name: Pull verified PostgreSQL client image
         run: docker --host=unix:///var/run/docker.sock pull postgres@sha256:7e32e9833a6fb1c92c32552794cb6ed569d51b445a54907d35fc112ef39684db
@@ -46,3 +54,65 @@ jobs:
       - run: npm run format:check
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Upload journey evidence (report, traces, screenshots)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journeys-evidence
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  # Visual regression, WCAG 2.2 A/AA (axe), responsiveness, keyboard, states and
+  # runtime performance. The browser runs in the pinned Playwright image so
+  # screenshots are byte-comparable with the approved baselines.
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      CATUS_PW_WS: ws://127.0.0.1:3001/
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run env:init
+      - name: Start local test PostgreSQL
+        run: |
+          npm run db > /tmp/catus-postgres.log 2>&1 &
+          node_modules/.bin/bun scripts/wait-db.ts
+      - run: npm run db:roles
+      - run: npm run migrate
+      - run: npm run test:db
+      - run: npm run build
+      - name: Start pinned Playwright browser server (loopback only)
+        run: |
+          docker run -d --name pw --network host --init --user pwuser --workdir /home/pwuser "$PLAYWRIGHT_IMAGE" \
+            npx -y playwright@1.58.2 run-server --port 3001 --host 127.0.0.1
+          for i in $(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:3001/ && exit 0; sleep 2; done
+          docker logs pw; exit 1
+      - name: Quality suite
+        if: ${{ !inputs.propose_baselines }}
+        run: npm run test:quality
+      - name: Render proposed visual baselines (manual dispatch only)
+        if: ${{ inputs.propose_baselines }}
+        run: npm run test:quality -- e2e/quality/visual.spec.ts --update-snapshots
+      - name: Upload proposed baselines for review
+        if: ${{ inputs.propose_baselines }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: proposed-baselines
+          path: e2e/quality/__screenshots__/
+      - name: Upload quality evidence (HTML report, diffs, traces, axe and perf results)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-evidence
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

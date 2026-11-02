@@ -1,0 +1,4 @@
+{
+  "note": "Legacy serious/critical axe violations per screen: rule -> max node count. Only shrink this file; see docs/QUALITY.md.",
+  "screens": {}
+}
