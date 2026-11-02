@@ -11,7 +11,7 @@ Branch `feat/pilot-readiness` (base `feat/m5-acceptance @ b4fc3cf`). Runbook: [d
 
 ## P0 — Engenharia antes do primeiro dia de uso
 
-5. Confirmar CI verde da branch, incluindo `e2e/pilot-journey.spec.ts` e os testes que exigem Docker (backup/restore, runner M5), que não puderam rodar no ambiente local desta preparação.
+5. CI verde observado no `783f19f` (85/85 Bun, 6/6 Playwright, incluindo Docker). Conferir o CI de cada novo HEAD antes do primeiro dia de uso.
 6. Revisar o PR `feat/pilot-readiness` → `feat/m5-acceptance` (ou base definida pelo proprietário). Nenhum merge automático.
 
 ## P1 — Durante as primeiras semanas do piloto
