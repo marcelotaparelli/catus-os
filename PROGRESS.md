@@ -1,5 +1,13 @@
 # Progresso
 
+## G2 — host privado de homologação · 02/11/2026
+
+Status: **G2 NÃO APROVADO** — o ambiente disponível é uma microVM efêmera (raiz em overlay, PID 1 `init.krun`, sem systemd, 3,9 GiB de disco), inadequada como host persistente; nenhum serviço permanente foi instalado nela. Preparados, a partir de `3d28213`: [docs/G2_HOST.md](docs/G2_HOST.md) (procedimento, modelos systemd, critério de aprovação) e `scripts/g2-preflight.sh` (verificador somente leitura, sem impressão de segredos).
+
+Ensaio completo na VM descartável com PostgreSQL 18.3 em `127.0.0.1:5433`, SCRAM, administrador com senha aleatória de 40 caracteres e usuários `catus-op`/`catus-run`/`catus-pg`: `npm ci`, build (hash de `dist/` idêntico entre dois checkouts do mesmo SHA), `db:roles`, `migrate` 001–009, `tls:local`, runtime como `catus-run` com ambiente limpo, `cleanup --once`. Verificador: **50 PASS, 3 FAIL (overlay, sem systemd, disco < 10 GiB — todos do host), 3 HUMAN**. Negativos: runtime com URL administrativa recusado (`excessive privileges`), senha de desenvolvimento detectada, CA desconhecida rejeitada (curl 60), Origin forjada 403, API sem sessão 503. Achados incorporados ao procedimento: `umask 022` no `npm ci` (com 077 o `bun` fica 0700 e o runtime falha com EACCES) e runtime com ambiente limpo (via `su`, o processo herdou um token do shell de origem). Modelos systemd não executados (sem systemd).
+
+Bloqueios para aprovar G2 (proprietário): host Linux persistente com systemd e ≥ 10 GiB, firewall sem entrada pública, PostgreSQL 18 instalado, senha administrativa gerada no host e guardada em cofre, execução de `G2_HOST.md` §2–6 com o verificador em `0 FAIL` e os itens HUMAN registrados.
+
 ## Piloto controlado M0–M4 — preparação · 01/11/2026
 
 Branch `feat/pilot-readiness` criada a partir de `feat/m5-acceptance @ b4fc3cf` (árvore limpa, igual a `origin/feat/m5-acceptance`; nenhum trabalho local descartado). Sem M6, sem novos agentes, sem merge/deploy. Runbook: [docs/PILOT.md](docs/PILOT.md).
