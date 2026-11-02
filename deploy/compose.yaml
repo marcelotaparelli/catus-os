@@ -112,9 +112,20 @@ services:
       TLS_CERT_FILE: /run/secrets/tls_server_crt
       TLS_KEY_FILE: /run/secrets/tls_server_key
       RUNTIME_DATABASE_URL_FILE: /run/secrets/runtime_database_url
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
       LLM_ENABLED: 'false'
       DELIVERY_ENABLED: 'false'
-    secrets: [runtime_database_url, tls_server_crt, tls_server_key, tls_ca_crt]
+    # Google OIDC (G3): issuer/client ID/optional Workspace domain, not secret.
+    # Empty until `deploy/catus.sh google-setup`; then login is enabled.
+    env_file: ['${CATUS_SECRETS_DIR:?}/oidc.env']
+    secrets:
+      [
+        runtime_database_url,
+        tls_server_crt,
+        tls_server_key,
+        tls_ca_crt,
+        oidc_client_secret,
+      ]
     depends_on:
       db: { condition: service_healthy }
       edge: { condition: service_healthy, restart: true }
@@ -198,6 +209,23 @@ services:
     # to it (removed in a finally block) before invoking pg_restore.
     volumes: ['${CATUS_BACKUP_DIR:?}:/backups']
 
+  google-setup:
+    <<: *task
+    command: [google-setup]
+    network_mode: none
+    depends_on: []
+    environment:
+      APP_ORIGIN: https://localhost:${CATUS_HOST_PORT:-3443}
+    volumes: ['${CATUS_SECRETS_DIR:?}:/app/.local']
+
+  bootstrap-admin:
+    <<: *task
+    networks: [backend]
+    environment:
+      APP_ORIGIN: https://localhost:${CATUS_HOST_PORT:-3443}
+    env_file: ['${CATUS_SECRETS_DIR:?}/oidc.env']
+    secrets: [migrator_database_url, oidc_client_secret]
+
 networks:
   backend:
     internal: true
@@ -221,3 +249,4 @@ secrets:
   tls_server_key: { file: '${CATUS_SECRETS_DIR:?}/tls/server.key' }
   tls_ca_crt: { file: '${CATUS_SECRETS_DIR:?}/tls/ca.crt' }
   backup_key: { file: '${CATUS_SECRETS_DIR:?}/backup.key' }
+  oidc_client_secret: { file: '${CATUS_SECRETS_DIR:?}/oidc_client_secret' }

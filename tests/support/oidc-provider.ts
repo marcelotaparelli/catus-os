@@ -26,7 +26,9 @@ export interface TestCode {
     | 'expired'
     | 'email'
     | 'domain'
-    | 'subject';
+    | 'subject'
+    // Consumer Google account (gmail.com): valid token without the `hd` claim.
+    | 'consumer';
 }
 export function codeFor(
   authorization: URL,
@@ -79,7 +81,9 @@ export async function mockOidcFetch(): Promise<CustomFetch> {
       email: data.email,
       email_verified: data.failure !== 'email',
       nonce: data.failure === 'nonce' ? 'wrong' : data.nonce,
-      hd: data.failure === 'domain' ? 'other.test' : 'catus.test',
+      ...(data.failure === 'consumer'
+        ? {}
+        : { hd: data.failure === 'domain' ? 'other.test' : 'catus.test' }),
     })
       .setProtectedHeader({ alg: 'RS256', kid: 'test' })
       .setIssuer(

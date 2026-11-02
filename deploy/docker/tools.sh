@@ -5,6 +5,8 @@
 #   migrate       apply db/migrations (migrator role only)
 #   backup        encrypted pg_dump to /backups
 #   restore-test  <file>  restore into a NEW disposable *_restore_test database
+#   google-setup  write Google OIDC settings (JSON at /run/oidc/client.json or stdin)
+#   bootstrap-admin --email <e> --name <n>   first administrator (offline, audited)
 # The project scripts only accept loopback database URLs, so tasks that need
 # them run a private forwarder 127.0.0.1:5432 -> db:5432 inside this container.
 set -eu
@@ -81,5 +83,16 @@ case "$cmd" in
     (cd "$work" && BACKUP_KEY_FILE=/run/secrets/backup_key bun --env-file=.local/restore.env /app/scripts/backup.ts restore "$file")
     echo "restored into disposable database $name (never dropped automatically)"
     ;;
-  *) fail "unknown command '$cmd' (init|setup|migrate|backup|restore-test)" ;;
+  google-setup)
+    [ -w "$S" ] || fail "secret directory not writable"
+    OIDC_OUTPUT_DIR="$S" bun scripts/google-client-setup.ts
+    ;;
+  bootstrap-admin)
+    [ -n "${OIDC_CLIENT_ID:-}" ] && [ -s /run/secrets/oidc_client_secret ] ||
+      fail "Google OIDC not configured; run: deploy/catus.sh google-setup"
+    OIDC_CLIENT_SECRET=$(cat /run/secrets/oidc_client_secret) \
+      MIGRATION_DATABASE_URL=$(cat /run/secrets/migrator_database_url) \
+      bun scripts/bootstrap-admin.ts "$@"
+    ;;
+  *) fail "unknown command '$cmd' (init|setup|migrate|backup|restore-test|google-setup|bootstrap-admin)" ;;
 esac

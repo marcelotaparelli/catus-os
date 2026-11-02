@@ -10,6 +10,9 @@
 #   deploy/catus.sh restore-test <file.catus>   restore into a new disposable DB
 #   deploy/catus.sh rotate-tls     archive TLS material, issue new 7-day CA/cert
 #   deploy/catus.sh verify [--recreate]         G2 checks (read-only unless --recreate)
+#   deploy/catus.sh google-setup [client.json]  G3: store Google OAuth client, enable login
+#   deploy/catus.sh google-check                G3: offline+Google endpoint checks (no login)
+#   deploy/catus.sh admin-bootstrap <email> <name>   G3: first administrator (once)
 #
 # Never runs `down -v`, `volume rm` or `prune`. Data: volume catus_pgdata.
 set -euo pipefail
@@ -24,6 +27,14 @@ load_env() {
   [ -f "$ENV_FILE" ] || die "missing deploy/.env; run: deploy/catus.sh install"
   # shellcheck disable=SC1090
   set -a && . "$ENV_FILE" && set +a
+  [ ! -d "${CATUS_SECRETS_DIR:-}" ] || ensure_oidc_files
+}
+# Compose needs both files to exist; empty means "OIDC not configured" (login blocked).
+ensure_oidc_files() {
+  local f
+  for f in oidc.env oidc_client_secret; do
+    [ -e "$CATUS_SECRETS_DIR/$f" ] || (umask 077 && : >"$CATUS_SECRETS_DIR/$f")
+  done
 }
 preflight() {
   [ "$(id -u)" -ne 0 ] || die "run as your normal (non-root) user in the docker group"
@@ -68,6 +79,7 @@ cmd_install() {
   write_env
   load_env
   install -d -m 700 "$CATUS_SECRETS_DIR" "$CATUS_BACKUP_DIR"
+  ensure_oidc_files
   dc --profile admin build
   dc run --rm init
   dc up -d db
@@ -118,7 +130,6 @@ cmd_rotate_tls() {
   echo "Import the NEW ca.crt in the dedicated browser profile and remove the old one."
 }
 
-# ---------------------------------------------------------------- verify (G2)
 P=0 F=0
 ok() {
   echo "PASS  $*"
@@ -128,6 +139,76 @@ ko() {
   echo "FAIL  $*"
   F=$((F + 1))
 }
+
+# ---------------------------------------------------------------- Google (G3)
+cmd_google_setup() {
+  preflight
+  load_env
+  local json="${1:-}" id secret hd
+  if [ -n "$json" ]; then
+    [ -f "$json" ] && [ -r "$json" ] || die "cannot read $json"
+    read -rp "Domínio Google Workspace para restringir (Enter = contas Google comuns): " hd
+    dc run --rm -e "OIDC_HOSTED_DOMAIN=$hd" -v "$(realpath "$json"):/run/oidc/client.json:ro" google-setup
+  else
+    read -rp "Client ID (….apps.googleusercontent.com): " id
+    read -rsp "Client secret (não aparece na tela): " secret
+    echo
+    read -rp "Domínio Google Workspace para restringir (Enter = contas Google comuns): " hd
+    # printf is a shell builtin: the secret never appears in process arguments.
+    printf '%s\n%s\n%s\n' "$id" "$secret" "$hd" | dc run --rm -T google-setup
+    unset secret
+  fi
+  dc up -d --force-recreate app
+  wait_healthy app
+  cmd_google_check
+  [ -z "$json" ] || echo "Apague o JSON baixado após confirmar o login: shred -u '$json'"
+}
+# Proves configuration, discovery and Google's acceptance of client ID + redirect URI.
+# Does not prove the client secret: only a real login exchanges the code.
+google_checks() {
+  local base="https://localhost:$CATUS_HOST_PORT" CA="$CATUS_SECRETS_DIR/tls/ca.crt" c loc id redirect
+  id=$(sed -n 's/^OIDC_CLIENT_ID=//p' "$CATUS_SECRETS_DIR/oidc.env")
+  redirect="https%3A%2F%2Flocalhost%3A$CATUS_HOST_PORT%2Fapi%2Fauth%2Fcallback"
+  c=$(curl -sS --max-time 10 --cacert "$CA" "$base/api/auth/config" 2>&1 || true)
+  [ "$c" = '{"configured":true}' ] && ok "OIDC configured ($c)" || ko "auth config: $c"
+  [ "$(stat -c '%a %u' "$CATUS_SECRETS_DIR/oidc_client_secret")" = "600 $(id -u)" ] && [ -s "$CATUS_SECRETS_DIR/oidc_client_secret" ] &&
+    ok "client secret file present, 0600" || ko "client secret file missing or mode $(stat -c %a "$CATUS_SECRETS_DIR/oidc_client_secret")"
+  loc=$(curl -sS --max-time 15 --cacert "$CA" -o /dev/null -w '%{http_code} %{redirect_url}' "$base/api/auth/login" 2>&1 || true)
+  c="$loc&"
+  if [[ $c == "303 https://accounts.google.com/"* && $c == *"client_id=$id&"* && $c == *"redirect_uri=$redirect&"* && $c == *"code_challenge_method=S256&"* && $c == *"scope=openid+email+profile&"* ]]; then
+    ok "login redirects to Google with PKCE, exact client ID and redirect URI (server reached Google discovery)"
+  else
+    ko "login redirect: ${loc%%\?*}"
+    return
+  fi
+  # Google validates client_id and redirect_uri before showing its sign-in page.
+  c=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code} %{redirect_url}' "${loc#303 }" 2>&1 || true)
+  if [[ $c == "302 https://accounts.google.com/"* && $c != *error* ]]; then
+    ok "Google accepted client ID and redirect URI (sign-in page)"
+  else
+    # authError is base64 protobuf carrying a readable code (invalid_client, redirect_uri_mismatch…).
+    loc=$(sed -n 's/.*authError=\([^&]*\).*/\1/p' <<<"$c" | tr '_-' '/+' | base64 -d 2>/dev/null | tr -c '[:print:]' ' ' | grep -oE '[a-z_]{6,}' | head -1 || true)
+    ko "Google rejected the authorization request: ${loc:-${c%%\?*}} (check client ID, Web client type, redirect URI and test users)"
+  fi
+}
+cmd_google_check() {
+  [ -n "${CATUS_SECRETS_DIR:-}" ] || {
+    preflight
+    load_env
+  }
+  [ -s "$CATUS_SECRETS_DIR/oidc.env" ] || die "Google OIDC not configured; run: deploy/catus.sh google-setup"
+  google_checks
+  echo "Summary: $P PASS, $F FAIL (the client secret is only proven by a real login)"
+  [ "$F" -eq 0 ]
+}
+cmd_admin_bootstrap() {
+  preflight
+  load_env
+  [ $# -eq 2 ] || die "usage: admin-bootstrap <email> '<Nome Completo>'"
+  dc run --rm bootstrap-admin bootstrap-admin --email "$1" --name "$2"
+}
+
+# ---------------------------------------------------------------- verify (G2)
 check() { if eval "$2" >/dev/null 2>&1; then ok "$1"; else ko "$1"; fi; }
 db_sql() { dc exec -T db sh -c 'PGPASSWORD=$(cat /run/secrets/pg_admin_password) psql -XAtq -h 127.0.0.1 -U catus_admin -d catus -c "$0"' "$1"; }
 state_fingerprint() { db_sql "SELECT (SELECT system_identifier FROM pg_control_system())||'|'||(SELECT string_agg(name||'@'||applied_at,',' ORDER BY name) FROM schema_migrations)"; }
@@ -194,7 +275,7 @@ cmd_verify() {
   echo "== files and secrets"
   [ "$(stat -c %a "$S")" = 700 ] && ok "secret directory 0700" || ko "secret directory mode $(stat -c %a "$S")"
   local f bad=0
-  for f in pg_admin_password runtime_database_url maintenance_database_url migrator_database_url database.env backup.key tls/server.key tls/ca.key; do
+  for f in pg_admin_password runtime_database_url maintenance_database_url migrator_database_url database.env backup.key tls/server.key tls/ca.key oidc.env oidc_client_secret; do
     [ "$(stat -c '%a %u' "$S/$f")" = "600 $(id -u)" ] || {
       ko "$f mode/owner $(stat -c '%a %u' "$S/$f")"
       bad=1
@@ -202,7 +283,7 @@ cmd_verify() {
   done
   [ $bad = 0 ] && ok "secret files 0600, owned by operator"
   c=$(dc exec -T app sh -c 'ls /run/secrets | tr "\n" " "; touch /app/x 2>/dev/null && echo WRITABLE; true')
-  [ "$c" = "runtime_database_url tls_ca_crt tls_server_crt tls_server_key " ] && ok "app sees only its secrets; /app read-only" || ko "app secrets/fs: $c"
+  [ "$c" = "oidc_client_secret runtime_database_url tls_ca_crt tls_server_crt tls_server_key " ] && ok "app sees only its secrets; /app read-only" || ko "app secrets/fs: $c"
   c=$(dc exec -T app sh -c 'cat /proc/1/environ | tr "\0" "\n" | cut -d= -f1 | sort | tr "\n" " "')
   grep -qE ' (DATABASE_URL|MIGRATION_DATABASE_URL|MAINTENANCE_DATABASE_URL|PGPASSWORD|BACKUP_KEY_FILE) ' <<<" $c" && ko "app process env has privileged variables: $c" || ok "app process env without admin/migrator/maintenance credentials"
   c=$(dc exec -T app sh -c 'tr "\0" "\n" </proc/1/environ | grep -E "^(LLM_ENABLED|DELIVERY_ENABLED)=" || true' | sort | tr '\n' ' ')
@@ -216,7 +297,15 @@ cmd_verify() {
     v=$(sed -E 's#.*://[^:]+:([^@]+)@.*#\1#' "$S/$f")
     grep -qF "$v" <<<"$logs$inspect" && leak=1
   done
+  if [ -s "$S/oidc_client_secret" ]; then grep -qF "$(cat "$S/oidc_client_secret")" <<<"$logs$inspect" && leak=1; fi
   [ $leak = 0 ] && ok "no secret value in logs, container or image metadata" || ko "secret value found in logs/metadata"
+  echo "== Google OIDC (G3)"
+  if [ -s "$S/oidc.env" ]; then
+    google_checks
+  else
+    c=$(curl -sS --max-time 5 --cacert "$CA" "$base/api/auth/config" 2>&1 || true)
+    [ "$c" = '{"configured":false}' ] && ok "OIDC not configured: login blocked ($c)" || ko "auth config without OIDC: $c"
+  fi
   git -C "$ROOT" ls-files --error-unmatch deploy/.env .local >/dev/null 2>&1 && ko "deploy/.env or .local tracked by Git" || ok "deploy/.env and .local not tracked by Git"
   if [ "${1:-}" = --recreate ]; then
     echo "== persistence after recreating containers"
@@ -253,5 +342,8 @@ case "${1:-}" in
     ;;
   rotate-tls) cmd_rotate_tls ;;
   verify) cmd_verify "${2:-}" ;;
-  *) sed -n '2,15p' "$0" ;;
+  google-setup) cmd_google_setup "${2:-}" ;;
+  google-check) cmd_google_check ;;
+  admin-bootstrap) cmd_admin_bootstrap "${@:2}" ;;
+  *) sed -n '2,18p' "$0" ;;
 esac
