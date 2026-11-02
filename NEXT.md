@@ -5,7 +5,7 @@ Branch `feat/pilot-readiness` (base `feat/m5-acceptance @ b4fc3cf`). Runbook: [d
 ## P0 — Bloqueios do proprietário (sem eles não há piloto com pessoas)
 
 1. **Host privado de homologação (G2):** opção preferida do proprietário: Docker Compose no Arch — `deploy/catus.sh install` e `verify --recreate` com `0 FAIL`, CA em perfil Firefox dedicado ([docs/DOCKER.md](docs/DOCKER.md) §7). Alternativa nativa: executar [docs/G2_HOST.md](docs/G2_HOST.md) num host Linux persistente com systemd (não na VM efêmera de desenvolvimento) até `scripts/g2-preflight.sh` terminar com `0 FAIL`; registrar itens HUMAN e testes negativos. Ensaio na VM descartável aprovado exceto os itens do próprio host.
-2. **Google Workspace real (G3):** cliente OAuth Web de homologação, `OIDC_HOSTED_DOMAIN`, redirect exato `https://localhost:3443/api/auth/callback`, egress para `accounts.google.com`, `oauth2.googleapis.com` e `www.googleapis.com`, CA local confiada em perfis dedicados. Login Google real continua **NOT_VERIFIED**.
+2. **Google real (G3):** seguir [DOCKER.md](docs/DOCKER.md) §8 (`google-setup`, `admin-bootstrap`, login). Domínio Workspace opcional. Cliente OAuth Web de homologação, redirect exato `https://localhost:3443/api/auth/callback`, egress para `accounts.google.com`, `oauth2.googleapis.com` e `www.googleapis.com`, CA local confiada em perfis dedicados. Login Google real continua **NOT_VERIFIED**.
 3. **Aceite A/B/C (G4):** checklist de HOMOLOGATION.md §4 com contas reais (admin, desenvolvedor, usuário do domínio não convidado), registrando evidências sem cookies/segredos.
 4. **Backup/restore no host (G5):** `backup:key`, backup e restore descartável; chave em cofre separado.
 

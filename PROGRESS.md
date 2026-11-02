@@ -1,5 +1,9 @@
 # Progresso
 
+## G3 Google OIDC no Docker — branch `feat/pilot-oidc` · 02/11/2026
+
+Status: **G3 NÃO VERIFICADO** — G2 aprovado pelo proprietário no Arch real (49 PASS, 0 FAIL). Entregues `deploy/catus.sh google-setup | google-check | admin-bootstrap`, segredo do cliente como Compose secret (0600, fora do Git), `scripts/google-client-setup.ts` + `scripts/lib/google-client.ts`, regressões em `tests/google-pilot.test.ts` (importação, bootstrap, contas sem Workspace). `src/` e migrations inalterados. Ensaio sintético em [docs/DOCKER.md](docs/DOCKER.md) §8–9. Pendente: cliente Google real e primeiro login do proprietário.
+
 ## G2 via Docker Compose — branch `feat/pilot-docker` · 02/11/2026
 
 Status: **G2 NÃO APROVADO** — preparado e ensaiado na VM descartável; aprovação exige execução no Arch real do proprietário (Docker 29). Branch isolada a partir de `13c2bfd` (PR #5 preservado). Entregues `deploy/compose.yaml`, `deploy/app.Dockerfile` (alvos `app` e `tools`), `deploy/postgres.Dockerfile`, `deploy/docker/*` (encaminhador TCP, carregador de segredos, tarefas administrativas, shim do cliente PostgreSQL) e `deploy/catus.sh` (install/start/stop/status/logs/update/backup/restore-test/rotate-tls/verify), guia [docs/DOCKER.md](docs/DOCKER.md). Nenhuma alteração em `src/`, `scripts/`, testes ou migrations 001–009.

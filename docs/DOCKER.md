@@ -83,7 +83,27 @@ deploy/catus.sh update              # backup → build → migrate → reinício
 
 No Arch real, com o SHA de CI verde: `deploy/catus.sh verify --recreate` termina com `0 FAIL`; a página abre no perfil dedicado com a CA importada (sem exceção de certificado) mostrando “OIDC não configurado”; `sudo ss -ltnp` mostra `3443` só em `127.0.0.1`; backup e `restore-test` concluídos; senha administrativa e chave de backup em cofre. Registrar data, SHA e a saída do `verify`.
 
-## 8. Ensaio nesta preparação (VM descartável, 02/11/2026)
+## 8. Login Google (G3)
+
+**Google Cloud** (projeto de homologação) — console.cloud.google.com → _Google Auth Platform_ (APIs e serviços → Tela de consentimento OAuth):
+
+1. _Branding_/_Começar_: nome `Catus OS (homologação)`, e-mail de suporte. _Público_: **Interno** se houver Google Workspace; senão **Externo** e, em _Público → Usuários de teste_, adicionar **cada** e-mail que vai entrar (status “Em teste”).
+2. _Acesso a dados_: só `openid`, `email`, `profile` (não sensíveis; nada a adicionar).
+3. _Clientes → Criar cliente_ → tipo **Aplicativo da Web** → _URIs de redirecionamento autorizados_: exatamente `https://localhost:3443/api/auth/callback` (origens JavaScript: nenhuma) → Criar → **Baixar JSON** (o segredo só aparece nessa hora).
+
+**No Arch** (relógio sincronizado: `timedatectl` deve mostrar `System clock synchronized: yes`; o ID token é validado sem tolerância):
+
+```sh
+deploy/catus.sh google-setup ~/Downloads/client_secret_*.json   # Enter = contas Google comuns
+deploy/catus.sh admin-bootstrap seu.email@gmail.com 'Seu Nome'   # uma única vez
+shred -u ~/Downloads/client_secret_*.json
+```
+
+Sem o JSON, `deploy/catus.sh google-setup` pede client ID e segredo (digitação oculta). O segredo fica só em `.local/compose/oidc_client_secret` (0600, Compose secret do `app`); `oidc.env` guarda issuer, client ID e domínio opcional. `google-check` (também dentro de `verify`) prova: OIDC ativo, redirecionamento PKCE com client ID/redirect exatos e aceitação do client ID/redirect pelo próprio Google; **não** prova o segredo — só o login real.
+
+Acesso: o Google autentica; o Catus só cria sessão para e-mail **previamente provisionado** e ativo (senão 403). O primeiro login fixa o `sub` Google da conta. Contas comuns (gmail.com) funcionam sem domínio; com domínio Workspace configurado, contas fora dele recebem 401. Demais pessoas: convite pela tela de acesso do administrador (e, no modo Externo/Teste, também na lista de usuários de teste do Google).
+
+## 9. Ensaio nesta preparação (VM descartável, 02/11/2026)
 
 Docker Engine 20.10 (overlay2 em disco de loop) + Compose v5.6.1 + buildx v0.38.1, usuário não root no grupo `docker` com UID 1004 (≠ 1000, para exercitar o mapeamento de UID):
 
@@ -92,4 +112,5 @@ Docker Engine 20.10 (overlay2 em disco de loop) + Compose v5.6.1 + buildx v0.38.
 - Backup criptografado e `restore-test` em banco descartável novo: contagens iguais (9 migrations, 1 organização), sessões invalidadas, nenhum arquivo temporário remanescente.
 - `rotate-tls`: novo certificado aceito, CA antiga recusada (curl 60).
 - Chromium (Playwright) com a CA importada num banco NSS dedicado abriu `https://localhost:3443` (HTTP 200, tela de login com “OIDC não configurado”); sem a CA: `ERR_CERT_AUTHORITY_INVALID`.
-- Não testado aqui: Docker 29 do Arch, Firefox, `update` contra um SHA novo, reinício do host. **G2 não está aprovado** até a execução no Arch real.
+- G3 (commit `feat/pilot-oidc`), com cliente **sintético**: `update` a partir do G2 (backup → build → migrate); `verify` sem OIDC 47 PASS/0 FAIL; JSON com redirect errado e cliente “Desktop” recusados sem tocar no `app`; importação por JSON e por digitação oculta; login redireciona ao Google com PKCE/client/redirect exatos (servidor alcançou o discovery); o Google respondeu `invalid_client` (esperado com ID falso); `verify --recreate` 52 PASS + essa única FAIL; segredo ausente de logs, `docker inspect` e histórico das imagens; configuração parcial (segredo vazio) impede o `app` de subir; `admin-bootstrap` cria o administrador auditado e recusa o segundo.
+- Não testado aqui: login Google real (exige o cliente do proprietário), Docker 29 do Arch, Firefox, `update` contra um SHA novo, reinício do host. **G2 não está aprovado** até a execução no Arch real.
