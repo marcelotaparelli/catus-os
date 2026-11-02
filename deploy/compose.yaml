@@ -1,0 +1,223 @@
+# Catus OS — private homologation on one Linux host (G2), Docker Compose.
+# Use through deploy/catus.sh. Never `down -v`, never prune: data lives in the
+# named volume `catus_pgdata` and secrets in ${CATUS_SECRETS_DIR} (outside Git).
+name: catus
+
+x-service: &service
+  user: '${CATUS_UID:?run deploy/catus.sh init}:${CATUS_GID:?run deploy/catus.sh init}'
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  tmpfs: ['/tmp:rw,noexec,nosuid,nodev,size=16m']
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: '10m', max-file: '5' }
+
+x-task: &task
+  <<: *service
+  image: catus-tools:local
+  restart: 'no'
+  profiles: [admin]
+  depends_on:
+    db: { condition: service_healthy }
+  mem_limit: 768m
+  cpus: 1.0
+  pids_limit: 128
+
+services:
+  db:
+    <<: *service
+    build:
+      context: ..
+      dockerfile: deploy/postgres.Dockerfile
+      args: { CATUS_UID: '${CATUS_UID}', CATUS_GID: '${CATUS_GID}' }
+    image: catus-postgres:local
+    environment:
+      POSTGRES_USER: catus_admin
+      POSTGRES_DB: catus
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin_password
+      POSTGRES_INITDB_ARGS: '--auth-local=scram-sha-256 --auth-host=scram-sha-256'
+      PGDATA: /var/lib/postgresql/18/docker
+    secrets: [pg_admin_password]
+    volumes:
+      # PostgreSQL 18 images keep data under /var/lib/postgresql/18/docker:
+      # mount the parent, not the pre-18 /var/lib/postgresql/data path.
+      - pgdata:/var/lib/postgresql
+    tmpfs:
+      - '/tmp:rw,noexec,nosuid,nodev,size=16m'
+      - '/var/run/postgresql:rw,noexec,nosuid,nodev,size=1m,uid=${CATUS_UID},gid=${CATUS_GID},mode=0700'
+    shm_size: 256m
+    stop_grace_period: 60s
+    networks: [backend] # internal network: no published port, no egress
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'pg_isready',
+          '-q',
+          '-h',
+          '127.0.0.1',
+          '-U',
+          'catus_admin',
+          '-d',
+          'catus',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+
+  edge:
+    <<: *service
+    build:
+      context: ..
+      dockerfile: deploy/app.Dockerfile
+      target: app
+    image: catus-app:local
+    command: ['node', 'deploy/docker/tcp-forward.mjs']
+    environment:
+      FORWARD_LISTEN: '${CATUS_EDGE_IP:-10.89.243.2}:3443'
+      FORWARD_TARGET: '127.0.0.1:3443'
+    ports:
+      - '127.0.0.1:${CATUS_HOST_PORT:-3443}:3443' # loopback of the host only
+    networks:
+      frontend: { ipv4_address: '${CATUS_EDGE_IP:-10.89.243.2}' }
+      backend: {}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('net').connect(3443,process.env.FORWARD_LISTEN.split(':')[0]).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+
+  app:
+    <<: *service
+    image: catus-app:local
+    # Shares only the edge network namespace: the server keeps listening on
+    # 127.0.0.1:3443 and is reachable solely through the edge forwarder.
+    network_mode: 'service:edge'
+    environment:
+      APP_ORIGIN: https://localhost:${CATUS_HOST_PORT:-3443}
+      PORT: '3443'
+      TLS_CERT_FILE: /run/secrets/tls_server_crt
+      TLS_KEY_FILE: /run/secrets/tls_server_key
+      RUNTIME_DATABASE_URL_FILE: /run/secrets/runtime_database_url
+      LLM_ENABLED: 'false'
+      DELIVERY_ENABLED: 'false'
+    secrets: [runtime_database_url, tls_server_crt, tls_server_key, tls_ca_crt]
+    depends_on:
+      db: { condition: service_healthy }
+      edge: { condition: service_healthy, restart: true }
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('https').get({host:'127.0.0.1',port:3443,path:'/api/auth/config',servername:'localhost',ca:require('fs').readFileSync('/run/secrets/tls_ca_crt')},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 1g
+    cpus: 2.0
+    pids_limit: 256
+
+  cleanup:
+    <<: *service
+    image: catus-app:local
+    command: ['node_modules/.bin/bun', 'scripts/cleanup.ts']
+    environment:
+      MAINTENANCE_DATABASE_URL_FILE: /run/secrets/maintenance_database_url
+    secrets: [maintenance_database_url]
+    networks: [backend]
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test:
+        - CMD
+        - /app/deploy/docker/run-with-secrets.sh
+        - node
+        - -e
+        - "const c=new (require('pg').Client)({connectionString:process.env.MAINTENANCE_DATABASE_URL});c.connect().then(()=>c.query('SELECT 1')).then(()=>process.exit(0),()=>process.exit(1))"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+
+  # ---- administrative one-shot tasks: docker compose run --rm <task> ----
+  init:
+    <<: *task
+    command: [init]
+    network_mode: none
+    depends_on: []
+    volumes: ['${CATUS_SECRETS_DIR:?}:/app/.local']
+
+  setup:
+    <<: *task
+    networks: [backend]
+    # Builds catus-tools:local (pinned PostgreSQL client image + app files).
+    build:
+      context: ..
+      dockerfile: deploy/app.Dockerfile
+      target: tools
+    command: [setup]
+    secrets: [pg_admin_password]
+    volumes: ['${CATUS_SECRETS_DIR:?}:/app/.local']
+
+  migrate:
+    <<: *task
+    networks: [backend]
+    command: [migrate]
+    secrets: [migrator_database_url]
+
+  backup:
+    <<: *task
+    networks: [backend]
+    command: [backup]
+    secrets: [migrator_database_url, backup_key]
+    volumes: ['${CATUS_BACKUP_DIR:?}:/backups']
+
+  restore-test:
+    <<: *task
+    networks: [backend]
+    secrets: [pg_admin_password, backup_key]
+    # Writable: restore authenticates the whole archive into a temporary file next
+    # to it (removed in a finally block) before invoking pg_restore.
+    volumes: ['${CATUS_BACKUP_DIR:?}:/backups']
+
+networks:
+  backend:
+    internal: true
+  frontend:
+    ipam:
+      config:
+        - subnet: '${CATUS_FRONTEND_SUBNET:-10.89.243.0/29}'
+
+volumes:
+  pgdata:
+    name: catus_pgdata
+
+secrets:
+  pg_admin_password: { file: '${CATUS_SECRETS_DIR:?}/pg_admin_password' }
+  runtime_database_url: { file: '${CATUS_SECRETS_DIR:?}/runtime_database_url' }
+  maintenance_database_url:
+    { file: '${CATUS_SECRETS_DIR:?}/maintenance_database_url' }
+  migrator_database_url:
+    { file: '${CATUS_SECRETS_DIR:?}/migrator_database_url' }
+  tls_server_crt: { file: '${CATUS_SECRETS_DIR:?}/tls/server.crt' }
+  tls_server_key: { file: '${CATUS_SECRETS_DIR:?}/tls/server.key' }
+  tls_ca_crt: { file: '${CATUS_SECRETS_DIR:?}/tls/ca.crt' }
+  backup_key: { file: '${CATUS_SECRETS_DIR:?}/backup.key' }

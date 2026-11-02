@@ -16,20 +16,20 @@ Dados: começar com clientes **sintéticos ou internos** até o portão G4. Núm
 
 ## 2. Portões (go/no-go)
 
-| Portão | Condição                                                                                              | Quem         | Situação nesta branch                                            |
-| ------ | ----------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------- |
-| G1     | Bateria automatizada verde no CI da branch, incluindo `e2e/pilot-journey.spec.ts`                     | Engenharia   | CI verde no `783f19f` (85/85 + 6/6); conferir o HEAD em PROGRESS |
-| G2     | Host privado com PostgreSQL de homologação e administrador de senha forte (não `catus_local_only`)    | Proprietário | Pendente; procedimento e verificador em [G2_HOST.md](G2_HOST.md) |
-| G3     | Cliente OAuth Google de homologação, `OIDC_HOSTED_DOMAIN`, redirect exato, egress Google, CA confiada | Proprietário | Pendente; login Google real **não verificado**                   |
-| G4     | Checklist A/B/C de HOMOLOGATION.md §4 executado com contas reais e evidências                         | Proprietário | Pendente                                                         |
-| G5     | Backup criptografado + restore descartável ensaiados no host do piloto; chave em cofre separado       | Operador     | Pendente no host (validado no CI)                                |
-| G6     | Alçadas comerciais e premissas econômicas aprovadas por pessoas diferentes                            | Admin/gestor | Configuração inicial do piloto                                   |
+| Portão | Condição                                                                                              | Quem         | Situação nesta branch                                                |
+| ------ | ----------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------- |
+| G1     | Bateria automatizada verde no CI da branch, incluindo `e2e/pilot-journey.spec.ts`                     | Engenharia   | CI verde no `783f19f` (85/85 + 6/6); conferir o HEAD em PROGRESS     |
+| G2     | Host privado com PostgreSQL de homologação e administrador de senha forte (não `catus_local_only`)    | Proprietário | Pendente; [G2_HOST.md](G2_HOST.md) ou Docker: [DOCKER.md](DOCKER.md) |
+| G3     | Cliente OAuth Google de homologação, `OIDC_HOSTED_DOMAIN`, redirect exato, egress Google, CA confiada | Proprietário | Pendente; login Google real **não verificado**                       |
+| G4     | Checklist A/B/C de HOMOLOGATION.md §4 executado com contas reais e evidências                         | Proprietário | Pendente                                                             |
+| G5     | Backup criptografado + restore descartável ensaiados no host do piloto; chave em cofre separado       | Operador     | Pendente no host (validado no CI)                                    |
+| G6     | Alçadas comerciais e premissas econômicas aprovadas por pessoas diferentes                            | Admin/gestor | Configuração inicial do piloto                                       |
 
 Não iniciar uso pela equipe antes de G1–G5. Interromper o piloto (voltar a G4) se: login falhar por motivo não explicado, aparecer dado de outra organização, uma escrita for aceita sem autoria na auditoria, ou backup/restore falhar.
 
 ## 3. Preparar o host (operador)
 
-Procedimento detalhado, modelos systemd e verificador somente leitura `scripts/g2-preflight.sh`: [G2_HOST.md](G2_HOST.md).
+Procedimento detalhado, modelos systemd e verificador somente leitura `scripts/g2-preflight.sh`: [G2_HOST.md](G2_HOST.md). Alternativa só com Docker Compose (Arch/Linux sem Node/PostgreSQL no host), com `deploy/catus.sh install|verify|backup|update`: [DOCKER.md](DOCKER.md).
 
 Host Linux privado, usuário de SO dedicado e sem root para o PostgreSQL, Node ≥ 22.12, OpenSSL e Docker local (somente para clientes `pg_dump`/`pg_restore` fixados).
 

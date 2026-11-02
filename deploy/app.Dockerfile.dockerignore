@@ -1,0 +1,12 @@
+# Allow-list build context: nothing else (no .env, .local, secrets, Git or host node_modules).
+*
+!package.json
+!package-lock.json
+!index.html
+!vite.config.ts
+!svelte.config.js
+!tsconfig.json
+!src/**
+!db/**
+!scripts/**
+!deploy/docker/**
