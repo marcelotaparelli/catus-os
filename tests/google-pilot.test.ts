@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/server/app';
-import { pool } from '../src/server/db';
+import pg from 'pg';
 import { oidcProvider } from '../src/server/auth/oidc';
 import { cookieName } from '../src/server/auth/cookies';
 import {
@@ -152,6 +152,8 @@ describe('G3: first administrator and consumer Google accounts', () => {
     oidc: { ...workspace.oidc!, hostedDomain: undefined },
   };
   let fetcher: Awaited<ReturnType<typeof mockOidcFetch>>;
+  // Own pool: other test files end the shared pool when the suite runs in one process.
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   const cleanup = async () => {
     await pool.query(
       "DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE '%@gmail.test')",
@@ -171,7 +173,10 @@ describe('G3: first administrator and consumer Google accounts', () => {
       'G3 pilot',
     ]);
   });
-  afterAll(cleanup);
+  afterAll(async () => {
+    await cleanup();
+    await pool.end();
+  });
 
   const bootstrap = async (env: Record<string, string>, email: string) => {
     const child = Bun.spawn(
@@ -268,6 +273,7 @@ describe('G3: first administrator and consumer Google accounts', () => {
 
   test('without Workspace domain: only provisioned verified accounts get a session', async () => {
     const app = createApp(consumer, oidcProvider(consumer, fetcher), {
+      pool,
       loginRate: { limit: 1000, windowSeconds: 60 },
     });
     const stranger = await login(app, 'estranho@gmail.test', 'consumer');
@@ -305,6 +311,7 @@ describe('G3: first administrator and consumer Google accounts', () => {
 
   test('with a Workspace domain configured, consumer accounts are refused', async () => {
     const app = createApp(workspace, oidcProvider(workspace, fetcher), {
+      pool,
       loginRate: { limit: 1000, windowSeconds: 60 },
     });
     const r = await login(app, 'dona.piloto@gmail.test', 'consumer');
