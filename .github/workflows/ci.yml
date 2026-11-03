@@ -91,8 +91,11 @@ jobs:
       - run: npm run build
       - name: Start pinned Playwright browser server (loopback only)
         run: |
-          docker run -d --name pw --network host --init --user pwuser --workdir /home/pwuser "$PLAYWRIGHT_IMAGE" \
-            npx -y playwright@1.58.2 run-server --port 3001 --host 127.0.0.1
+          # Server code comes from the lockfile-verified node_modules (npm ci), mounted
+          # read-only; browsers come from the digest-pinned image. No registry fetch.
+          docker run -d --name pw --network host --init --user pwuser --workdir /home/pwuser \
+            -v "$PWD/node_modules:/opt/catus/node_modules:ro" "$PLAYWRIGHT_IMAGE" \
+            node /opt/catus/node_modules/playwright/cli.js run-server --port 3001 --host 127.0.0.1
           for i in $(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:3001/ && exit 0; sleep 2; done
           docker logs pw; exit 1
       - name: Quality suite

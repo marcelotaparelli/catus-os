@@ -17,7 +17,7 @@ Dados: `e2e/quality/seed.setup.ts` cria dados sintéticos determinísticos pela 
 npm run build && npm run test:quality          # Chromium local: o visual pode divergir do CI
 CATUS_PW_WS=ws://127.0.0.1:3001/ npm run test:quality   # idêntico ao CI, com o servidor da imagem fixada:
 # docker run --rm --network host --init --user pwuser mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a… \
-#   npx -y playwright@1.58.2 run-server --port 3001 --host 127.0.0.1
+#   node /opt/catus/node_modules/playwright/cli.js run-server --port 3001 --host 127.0.0.1   # com -v "$PWD/node_modules:/opt/catus/node_modules:ro"
 ```
 
 ## Baselines visuais
