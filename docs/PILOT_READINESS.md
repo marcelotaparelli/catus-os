@@ -1,0 +1,55 @@
+# Prontidão do piloto com a equipe — auditoria objetiva (03/11/2026)
+
+Base: `feat/pilot-oidc @ 098e246` implantado no Arch (50/50 verificações de infraestrutura, 4/4 Google), mais as correções desta branch. Status: **OK** = resolvido e com evidência automatizada; **CORRIGIDO** = bloqueio resolvido nesta branch; **HOLD** = decisão ou ação do proprietário; **AÇÃO** = tarefa operacional sem decisão pendente.
+
+| #   | Requisito                                               | Situação                   | Evidência / próximo passo                                                                                                                                                                                                                                                               |
+| --- | ------------------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Autenticação só de identidades autorizadas              | OK                         | OIDC Google real (G3); pertencer ao domínio não dá acesso; membros autorizados em **Acesso e usuários** (testes `google-pilot`, `api`)                                                                                                                                                  |
+| 2   | Cota de requisições compartilhada atrás do encaminhador | **CORRIGIDO**              | Toda a equipe chegava como um único peer: 300 req/min de API e 20/min de autenticação para todos, e cada carga de página consumia a cota de login. Agora cada sessão válida tem cota própria; anônimo, cookie forjado, login e callback continuam por peer (`tests/operations.test.ts`) |
+| 3   | Acesso remoto seguro para membros                       | **HOLD**                   | Hoje só `https://localhost:3443` no próprio Arch. Ver “Arquitetura recomendada”. Código pronto: `CATUS_ORIGIN` em `deploy/.env`                                                                                                                                                         |
+| 4   | Hospedagem persistente e HTTPS                          | HOLD (aceitável no piloto) | Arch com `restart: unless-stopped`, volume persistente e TLS de CA própria. Disponibilidade depende de o Arch ficar ligado no horário de trabalho                                                                                                                                       |
+| 5   | Backups externos criptografados e restauração           | AÇÃO                       | Backup cifrado (AES-256-GCM, chave separada) e restauração bit a bit comprovados pelo G4 (estágio C). Falta: agendar diariamente e manter uma cópia fora do Arch (abaixo)                                                                                                               |
+| 6   | Convites e permissões                                   | OK                         | Administrador autoriza por e-mail e papel; revogação imediata; o primeiro administrador já existe (não repetir `admin-bootstrap`)                                                                                                                                                       |
+| 7   | Alçadas comerciais e aprovações independentes           | OK + AÇÃO                  | Quem cria não aprova (escopos, premissas, horas: testes `commercial`, `economics-api`, `pilot-journey`). AÇÃO: admin salva as alçadas no primeiro dia (G6)                                                                                                                              |
+| 8   | Monitoramento básico, logs e recuperação                | AÇÃO                       | Healthchecks, reinício automático e rotação de logs (10 MB × 5) já ativos; o G4 prova a recuperação após reinício do PostgreSQL. Falta: smoke diário agendado (abaixo)                                                                                                                  |
+| 9   | Dados confidenciais                                     | OK                         | Taxas e custos ficam ocultos para PO/desenvolvedor na API (403) e na UI; isolamento por organização; nenhum segredo em logs/imagens (verify); M2/M5 desligados, sem envio a terceiros                                                                                                   |
+| 10  | UI desktop e mobile                                     | OK                         | quality: 5 larguras, axe WCAG 2.2 AA, teclado e baselines exatas                                                                                                                                                                                                                        |
+
+## Arquitetura recomendada (mais simples, segura e econômica)
+
+Manter **um host (o Arch) + Docker Compose atual**, sem Kubernetes, sem banco gerenciado e sem porta aberta no roteador. Para os membros entrarem de fora do Arch, uma camada de acesso privado na frente de `127.0.0.1:3443`. A escolha é do proprietário (**HOLD**):
+
+| Opção                                                                                             | Custo                                                                                                                   | Segurança                                                                                                                                            | Observações                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Cloudflare Tunnel + Cloudflare Access** (recomendada se a Catus tiver domínio na Cloudflare) | Zero Trust gratuito até 50 usuários, uso comercial permitido                                                            | Conexão só de saída (nenhuma porta aberta); o Access exige login Google **antes** do tráfego chegar ao Catus; o Catus ainda exige sua própria sessão | Cria um nome público (ex.: `catus.dominio`) protegido pelo Access: exige autorização explícita do proprietário, por ser publicação fora da máquina |
+| B. Tailscale (`tailscale serve`, só dentro da rede privada)                                       | Plano Personal gratuito até 6 usuários, mas é para **uso não comercial**; uso pela empresa exige plano pago por usuário | Nada fica acessível fora da tailnet; certificado HTTPS válido `*.ts.net`                                                                             | Cada membro instala o cliente Tailscale                                                                                                            |
+| C. Túnel SSH por pessoa                                                                           | Zero                                                                                                                    | Exige conta SSH no Arch para cada membro                                                                                                             | Só para 1–2 pessoas técnicas; não recomendado para a equipe                                                                                        |
+
+Passos comuns depois da decisão (o proprietário executa; nenhum segredo passa pelo chat):
+
+1. Em `deploy/.env`, definir `CATUS_ORIGIN=https://<nome escolhido>` (sem barra final).
+2. No cliente OAuth Google, adicionar o redirect exato `https://<nome escolhido>/api/auth/callback`.
+3. `deploy/catus.sh start` (recria o app com a nova origem), depois `deploy/catus.sh google-check` e `deploy/g4.sh --skip-suite --skip-disposable`.
+4. Opção A: o `cloudflared` aponta para `https://localhost:3443`, com `caPool` = `ca.crt` do diretório de segredos. Opção B: `tailscale serve --bg https+insecure://localhost:3443`. A porta do host continua escutando só em 127.0.0.1.
+
+## Rotina mínima de operação (sem dependências novas)
+
+Timers systemd do usuário (`~/.config/systemd/user/`), para backup diário às 19:00 e smoke às 08:00:
+
+```ini
+# catus-backup.service
+[Service]
+Type=oneshot
+WorkingDirectory=%h/sandboxes/agent/projects/catus-os-m5
+ExecStart=%h/sandboxes/agent/projects/catus-os-m5/deploy/catus.sh backup
+# catus-backup.timer
+[Timer]
+OnCalendar=*-*-* 19:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
+
+Repetir o par para `catus-smoke` com `ExecStart=.../deploy/g4.sh --skip-suite --skip-disposable` e `OnCalendar=*-*-* 08:00`. Ativar com `systemctl --user enable --now catus-backup.timer catus-smoke.timer` e `loginctl enable-linger $USER`. Ver falhas com `journalctl --user -u catus-smoke`.
+
+Cópia externa: os arquivos `.catus` já são cifrados e podem ir para um disco externo ou para o Google Drive da Catus. A chave `backup.key` **nunca** fica junto dos backups: guarde-a num cofre de senhas (ou mídia offline). Sem a chave, o backup é irrecuperável; com chave e backup no mesmo lugar, a cifra não protege nada.

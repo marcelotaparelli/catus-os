@@ -105,6 +105,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# From here on every failure is recorded explicitly; never abort before the report.
+set +e
 echo "Catus OS G4 — SHA testado $SHA (checkout implantado $DEPLOYED)"
 echo "Evidências: $OUT"
 [ "$SHA" = "$DEPLOYED" ] || warn G4 "SHA testado difere do checkout implantado" "$DEPLOYED"
@@ -240,6 +242,8 @@ DISP_INDEX=""
 if [ $RUN_DISP = 1 ]; then
   log "C. Instalação descartável (projeto catus-g4, dados sintéticos)"
   mkdir -p "$WORK/secrets" "$WORK/backups" "$WORK/pgdata" && chmod 700 "$WORK/secrets" "$WORK/backups" "$WORK/pgdata"
+  # Empty OIDC files: Compose needs them; empty means login blocked (as in catus.sh).
+  : >"$WORK/secrets/oidc.env" && : >"$WORK/secrets/oidc_client_secret"
   cat >"$WORK/g4.env" <<EOF
 CATUS_UID=$(id -u)
 CATUS_GID=$(id -g)
@@ -350,8 +354,12 @@ EOF
         fi
         cp "$bk" "$WORK/backups/tampered.catus" && printf '\x00' | dd of="$WORK/backups/tampered.catus" bs=1 seek=$(($(stat -c %s "$bk") / 2)) conv=notrunc status=none
         printf '\xff' | dd of="$WORK/backups/tampered.catus" bs=1 seek=$(($(stat -c %s "$bk") / 2 + 1)) conv=notrunc status=none
-        dcg run --rm restore-test restore-test /backups/tampered.catus >"$OUT/logs/restore-tampered.log" 2>&1 &&
-          fail C "arquivo de backup adulterado foi aceito" || pass C "arquivo de backup adulterado rejeitado"
+        # Must fail on GCM authentication, before pg_restore runs (not for an unrelated reason).
+        if dcg run --rm restore-test restore-test /backups/tampered.catus >"$OUT/logs/restore-tampered.log" 2>&1; then
+          fail C "arquivo de backup adulterado foi aceito"
+        elif grep -q 'unable to authenticate' "$OUT/logs/restore-tampered.log"; then
+          pass C "arquivo de backup adulterado rejeitado na autenticação (antes do pg_restore)"
+        else fail C "restauração do arquivo adulterado falhou por outro motivo" "ver logs/restore-tampered.log"; fi
       else fail C "backup cifrado gerado" "nenhum arquivo"; fi
       run C recreate-containers dcg up -d --force-recreate && disp_healthy db edge app cleanup || true
       [ "$(disp_sql catus "$(digest_sql)")" = "$D0" ] && pass C "dados preservados após recriar contêineres" || fail C "dados mudaram após recriar contêineres"

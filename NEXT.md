@@ -16,7 +16,7 @@ Branch `feat/pilot-readiness` (base `feat/m5-acceptance @ b4fc3cf`). Runbook: [d
 
 ## P1 — Durante as primeiras semanas do piloto
 
-7. Cota de API é por peer TCP: atrás de um único túnel SSH, toda a equipe divide 300 req/min. Medir 429 nos primeiros dias; se ocorrer, decidir entre túneis por pessoa ou cota por sessão autenticada (mudança de segurança que exige revisão).
+7. ~~Cota de API por peer TCP~~ — resolvido em `feat/g4-homologation`: cota por sessão válida; anônimo/login seguem por peer. Acesso remoto da equipe: decisão em [docs/PILOT_READINESS.md](docs/PILOT_READINESS.md).
 8. Correção de cadastro: não há renomeação/arquivamento de clientes, projetos e atendimentos. Se o piloto mostrar necessidade, implementar edição versionada e auditada (sem exclusão física).
 9. Paginação/busca acima de 500 atendimentos, solicitações e eventos de auditoria.
 10. Atualização automática (polling leve) do Mission Control ou aviso de dados desatualizados; hoje o usuário usa **Atualizar dados**.
