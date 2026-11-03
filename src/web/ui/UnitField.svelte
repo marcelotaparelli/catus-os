@@ -7,11 +7,13 @@
   import {
     hoursText,
     moneyText,
+    parseDay,
     parseHours,
     parseMoney,
     parsePercent,
     percentText,
   } from '../../shared/units';
+  import { dayText } from '../../shared/domain';
   import { hoursLabel, moneyGrouped } from '../../shared/economics';
 
   // Typed value in human units; the bound value keeps the API's unit. An unreadable entry
@@ -23,31 +25,40 @@
     currency = 'BRL',
     hint = '',
     required = true,
-    placeholder = '',
+    placeholder = kind === 'date' ? 'DD/MM/AAAA' : '',
+    min = '',
+    max = '',
   }: {
     label: string;
-    kind: 'money' | 'percent' | 'hours';
+    kind: 'money' | 'percent' | 'hours' | 'date';
     value: string | number | undefined;
     currency?: string;
     hint?: string;
     required?: boolean;
     placeholder?: string;
+    /** ISO limits of a date. */
+    min?: string;
+    max?: string;
   } = $props();
 
   const id = `unit-${++next}`;
   const parse = (raw: string, cur: string) =>
-    kind === 'money'
-      ? parseMoney(raw, cur)
-      : kind === 'percent'
-        ? parsePercent(raw)
-        : parseHours(raw);
+    kind === 'date'
+      ? parseDay(raw, min, max)
+      : kind === 'money'
+        ? parseMoney(raw, cur)
+        : kind === 'percent'
+          ? parsePercent(raw)
+          : parseHours(raw);
   const format = (v: string | number | undefined, cur: string) =>
-    kind === 'money'
-      ? moneyText(v as string | undefined, cur)
-      : kind === 'percent'
-        ? percentText(v as number | undefined)
-        : hoursText(v as number | undefined);
-  const blank = () => (kind === 'money' ? '' : undefined);
+    kind === 'date'
+      ? dayText(v as string | undefined)
+      : kind === 'money'
+        ? moneyText(v as string | undefined, cur)
+        : kind === 'percent'
+          ? percentText(v as number | undefined)
+          : hoursText(v as number | undefined);
+  const blank = () => (kind === 'money' || kind === 'date' ? '' : undefined);
 
   let input = $state<HTMLInputElement>();
   let text = $state(untrack(() => format(value, currency)));
@@ -92,7 +103,11 @@
     bind:value={text}
     {required}
     {placeholder}
-    inputmode={kind === 'hours' ? 'text' : 'decimal'}
+    inputmode={kind === 'hours'
+      ? 'text'
+      : kind === 'date'
+        ? 'numeric'
+        : 'decimal'}
     autocomplete="off"
     aria-invalid={error ? 'true' : undefined}
     aria-describedby={`${id}-note`}

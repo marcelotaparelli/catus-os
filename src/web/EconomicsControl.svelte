@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
+  import { idempotentPost } from './ui/post';
+  import { timeLabel } from '../shared/domain';
+  import { roleLabels } from '../shared/identity';
   import type { Snapshot } from '../shared/domain';
   import type { Member } from '../shared/identity';
   import type {
@@ -152,12 +155,7 @@
     capacity: 'Horas que uma pessoa tem disponíveis para o projeto.',
     direct_cost: 'Fornecedor ou despesa ligada ao projeto.',
   };
-  const roleNames: Record<string, string> = {
-    developer: 'Desenvolvedor',
-    po: 'PO',
-    manager: 'Gestor',
-    administrator: 'Administrador',
-  };
+  const roleNames: Record<string, string> = roleLabels;
   const hourStates: Record<TimeEntry['state'], string> = {
     approved: 'Aprovadas',
     pending: 'Pendentes',
@@ -209,18 +207,7 @@
   const requestTitle = (id: unknown) =>
     data.requests.find((r) => r.id === id)?.title ?? 'Demanda indisponível';
 
-  const attempts = new Map<string, { json: string; key: string }>();
-  async function post<T>(path: string, body: unknown) {
-    const json = JSON.stringify(body);
-    let a = attempts.get(path);
-    if (!a || a.json !== json) {
-      a = { json, key: crypto.randomUUID() };
-      attempts.set(path, a);
-    }
-    const res = await api<T>(path, 'POST', body, a.key);
-    attempts.delete(path);
-    return res;
-  }
+  const post = untrack(() => idempotentPost(api));
   async function refresh() {
     const [economics, contracts] = await Promise.all([
       api<EconomicsView>('economics'),
@@ -811,6 +798,8 @@
       : r.decision === 'rejected'
         ? 'Rejeitado'
         : 'Pendente';
+  const hoursFact = (t: TimeEntry) =>
+    `${hoursLabel(t.minutes)} em ${dayLabel(t.work_date)}`;
   const period = (a: string, b: string) => `${dayLabel(a)} a ${dayLabel(b)}`;
 </script>
 
@@ -984,12 +973,12 @@
                 </p>{:else}<div class="actions">
                   <button
                     disabled={busy}
-                    aria-label={`Aprovar horas de ${who(t.user_id)}: ${hoursLabel(t.minutes)} em ${dayLabel(t.work_date)}`}
+                    aria-label={`Aprovar horas de ${who(t.user_id)}: ${hoursFact(t)}`}
                     onclick={() => decideHours(t, 'approved')}>Aprovar</button
                   ><button
                     class="secondary"
                     disabled={busy}
-                    aria-label={`Rejeitar horas de ${who(t.user_id)}: ${hoursLabel(t.minutes)} em ${dayLabel(t.work_date)}`}
+                    aria-label={`Rejeitar horas de ${who(t.user_id)}: ${hoursFact(t)}`}
                     onclick={() => decideHours(t, 'rejected')}>Rejeitar</button
                   >
                 </div>{/if}
@@ -1235,15 +1224,13 @@
                 kind="hours"
                 bind:value={remaining}
                 hint="Quanto ainda falta hoje."
-              /><label
-                >Data prevista de conclusão<input
-                  type="date"
-                  bind:value={expected}
-                  min={from || undefined}
-                  max={until || undefined}
-                  required
-                /></label
-              >{/if}
+              /><UnitField
+                label="Data prevista de conclusão"
+                kind="date"
+                bind:value={expected}
+                min={from}
+                max={until}
+              />{/if}
           {:else if kind === 'terms'}
             <label
               >Contrato econômico<select
@@ -1398,20 +1385,16 @@
                   >{/each}</select
               ></label
             >
-            <label
-              >Início da competência/vigência<input
-                type="date"
-                bind:value={from}
-                required
-              /></label
-            ><label
-              >Fim da competência/vigência<input
-                type="date"
-                bind:value={until}
-                min={from}
-                required
-              /></label
-            >{/if}
+            <UnitField
+              label="Início da competência/vigência"
+              kind="date"
+              bind:value={from}
+            /><UnitField
+              label="Fim da competência/vigência"
+              kind="date"
+              bind:value={until}
+              min={from}
+            />{/if}
           <label class="span"
             >Fonte das premissas<input
               bind:value={source}
@@ -1507,14 +1490,12 @@
                   >{/each}</optgroup
               >{/each}</select
           ></label
-        ><label
-          >Data trabalhada<input
-            type="date"
-            bind:value={workDate}
-            max={today}
-            required
-          /></label
         ><UnitField
+          label="Data trabalhada"
+          kind="date"
+          bind:value={workDate}
+          max={today}
+        /><UnitField
           label="Duração (horas)"
           kind="hours"
           bind:value={duration}
@@ -1604,7 +1585,7 @@
             {:else if (confidential && t.user_id !== userId && t.state === 'approved') || (t.user_id === userId && t.state === 'pending')}<button
                 class="secondary"
                 disabled={busy}
-                aria-label={`Reverter horas de ${who(t.user_id)}: ${hoursLabel(t.minutes)} em ${dayLabel(t.work_date)}`}
+                aria-label={`Reverter horas de ${who(t.user_id)}: ${hoursFact(t)}`}
                 onclick={() => {
                   reversing = t.id;
                   reverseReason = '';
@@ -1626,13 +1607,13 @@
         onsubmit={(e) => e.preventDefault()}
       >
         <h3>Calcular observação econômica</h3>
-        <label class="field-narrow"
-          >Data de corte das horas<input
-            type="date"
+        <div class="field-narrow">
+          <UnitField
+            label="Data de corte das horas"
+            kind="date"
             bind:value={asOf}
-            required
-          /></label
-        >
+          />
+        </div>
         {#each approvedTerms.filter((t) => matches(t.project_id)) as t}<div
             class="calc-row"
           >
@@ -1759,7 +1740,7 @@
     {:else}
       <h3>Auditoria econômica</h3>
       {#each view.events as e}<p class="audit-line">
-          {e.created_at} · {e.entity_type}
+          {timeLabel(e.created_at)} · {e.entity_type}
           {e.entity_id} · {e.action} · {who(e.actor_user_id)} ({e.actor_role})
         </p>{:else}<p class="empty-line">Nenhum evento econômico.</p>{/each}
     {/if}

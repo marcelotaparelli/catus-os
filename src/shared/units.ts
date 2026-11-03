@@ -1,3 +1,4 @@
+import { dayFromText, dayText } from './domain';
 /**
  * What people type on screen ⇄ what the API stores. Display concern only: the payload the
  * server validates is unchanged (integer minor units, basis points, integer minutes).
@@ -92,4 +93,15 @@ export function hoursText(minutes: number | null | undefined): string {
   const h = Math.floor(minutes / 60),
     m = minutes % 60;
   return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+}
+
+/** DD/MM/AAAA to ISO, within optional ISO limits. */
+export function parseDay(raw: string, min = '', max = ''): Parsed<string> {
+  if (!raw.trim()) return empty;
+  const day = dayFromText(raw);
+  if (!day) return refuse('Use uma data válida em DD/MM/AAAA.');
+  if (min && day < min) return refuse(`Não pode ser antes de ${dayText(min)}.`);
+  if (max && day > max)
+    return refuse(`Não pode ser depois de ${dayText(max)}.`);
+  return { ok: true, value: day };
 }

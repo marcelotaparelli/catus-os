@@ -408,7 +408,9 @@ test('common Comercial and Economia tasks stay within their measured effort', as
     await m.fill(form.getByLabel('Horas para concluir'), '8');
     await m.fill(
       form.getByLabel('Data prevista de conclusão'),
-      new Date(Date.now() + 864e6).toISOString().slice(0, 10),
+      new Date(Date.now() + 864e6).toLocaleDateString('pt-BR', {
+        timeZone: 'UTC',
+      }),
     );
     await shot(po, 'after-po-estimativa-1280');
     await atMobile(po, 'after-po-estimativa');

@@ -115,3 +115,9 @@ Nada mudou no servidor além dos links das recomendações: payloads, regras e p
 4. Espaço superior excessivo no cartão de item do escopo (padding do cartão + margem do título).
 5. Ordem de cabeçalhos (h3 → h4) dentro do detalhe do escopo (`heading-order`, prática recomendada, não WCAG).
 6. Jornada visual ponta a ponta cliente → projeto → atendimento → solicitação → triagem → escopo → execução → horas → rentabilidade. Hoje a jornada funcional é coberta por `e2e/pilot-journey.spec.ts`; o visual cobre Mission Control e M3.
+
+## Datas e orçamento de JS
+
+Datas aparecem e são digitadas em DD/MM/AAAA (`UnitField kind="date"`). O `input[type=date]` foi retirado porque ele segue o idioma do navegador, e não o da aplicação: em um navegador em inglês mostrava mm/dd/aaaa, e o calendário nativo deixa de existir. A API e o banco continuam em ISO; `e2e/value-first.spec.ts` confere o valor enviado e o valor persistido.
+
+O JS total fica em 79,8 de 80 kB gzip, sem aumento de orçamento. A economia veio de retirar o polyfill de modulepreload, unir chunks muito pequenos e eliminar duplicações (rótulos, formatador de horário e POST idempotente). A próxima adição exige nova otimização antes de qualquer aumento.

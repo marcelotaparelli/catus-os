@@ -115,8 +115,8 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
       name: 'Preparar registro econômico',
     });
     await form.getByRole('radio', { name: /^Premissas econômicas/ }).check();
-    await form.getByLabel('Início da competência/vigência').fill('2026-01-01');
-    await form.getByLabel('Fim da competência/vigência').fill('2026-12-31');
+    await form.getByLabel('Início da competência/vigência').fill('01/01/2026');
+    await form.getByLabel('Fim da competência/vigência').fill('31/12/2026');
     await form
       .getByLabel('Fonte das premissas')
       .fill('SYNTHETIC-E2E-M4-CONFIG');
@@ -218,7 +218,7 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
     await pf.getByLabel('Fonte das premissas').fill('SYNTHETIC-PO-FORECAST');
     await pf.getByLabel('Horas previstas').fill('10');
     await pf.getByLabel('Horas para concluir').fill('20');
-    await pf.getByLabel('Data prevista de conclusão').fill('2026-11-20');
+    await pf.getByLabel('Data prevista de conclusão').fill('20/11/2026');
     await pf.getByRole('button', { name: 'Preparar versão econômica' }).click();
     await expect(pe.getByRole('status')).toContainText('Versão preparada');
     await ae.getByRole('button', { name: 'Atualizar economia' }).click();
@@ -234,7 +234,7 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
     await df
       .getByRole('combobox', { name: 'Demanda das horas', exact: true })
       .selectOption(request.id);
-    await df.getByLabel('Data trabalhada').fill('2026-11-01');
+    await df.getByLabel('Data trabalhada').fill('01/11/2026');
     await df.getByLabel('Duração (horas)').fill('2');
     await df
       .getByLabel('Comentário do apontamento')
@@ -274,7 +274,7 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
     const rf = econ.getByRole('form', {
       name: 'Calcular observação econômica',
     });
-    await rf.getByLabel('Data de corte das horas').fill('2026-11-01');
+    await rf.getByLabel('Data de corte das horas').fill('01/11/2026');
     await rf
       .getByRole('button', { name: 'Calcular e preservar M4 Projeto' })
       .click();

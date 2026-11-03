@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
+  import { idempotentPost } from './ui/post';
+  import { timeLabel } from '../shared/domain';
   import type { Snapshot } from '../shared/domain';
   import type { DeliveryView, DeliverySettings } from '../shared/delivery';
   import type { EconomicsView } from '../shared/economics';
@@ -66,20 +68,9 @@
   let currentPolicy = $derived(
     view.policies.find((p) => p.project_id === project),
   );
-  const keys = new Map<string, { body: string; key: string }>();
   let destroyed = false,
     timer: ReturnType<typeof setInterval> | undefined;
-  async function post<T>(path: string, body: unknown) {
-    const json = JSON.stringify(body);
-    let a = keys.get(path);
-    if (!a || a.body !== json) {
-      a = { body: json, key: crypto.randomUUID() };
-      keys.set(path, a);
-    }
-    const r = await api<T>(path, 'POST', body, a.key);
-    keys.delete(path);
-    return r;
-  }
+  const post = untrack(() => idempotentPost(api));
   async function refresh() {
     view = await api<View>('delivery');
     if (manager) reports = (await api<EconomicsView>('economics')).reports;
@@ -377,7 +368,9 @@
         >Observação M4 para execução<select bind:value={reportId} required
           ><option value="">Selecione a mais recente e completa</option
           >{#each reports as r}<option value={r.id}
-              >{data.projects.find((p) => p.id === r.project_id)?.name} · {r.created_at}
+              >{data.projects.find((p) => p.id === r.project_id)?.name} · {timeLabel(
+                r.created_at,
+              )}
               · {r.id}</option
             >{/each}</select
         ></label
@@ -528,7 +521,7 @@
     </p>{/each}
   <details>
     <summary>Eventos de execução</summary>{#each view.events as e}<p>
-        {e.created_at} · {e.action} · {e.actor} · {e.actor_user_id ??
+        {timeLabel(e.created_at)} · {e.action} · {e.actor} · {e.actor_user_id ??
           'serviço, sem autoria humana simulada'}
       </p>{/each}
   </details>

@@ -80,6 +80,123 @@ async function noOverflow(page: Page) {
   ).toBe(true);
 }
 
+/** Recommendation → the right demand, surviving reload, for both demands and for edge cases. */
+async function demandDeepLink(
+  po: Page,
+  requests: { dIndica: string; eLanding: string; aPix: string },
+) {
+  const m3 = po.getByRole('region', { name: 'Controle comercial' });
+  const coverage = m3.getByRole('combobox', { name: 'Demanda para cobertura' });
+  const card = (id: string) => po.locator(`[id="link-${id}"]`);
+  const expectTarget = async (id: string, other: string) => {
+    await expect(card(id)).toBeFocused();
+    await expect(card(id)).toBeInViewport();
+    await expect(card(id)).toHaveAttribute('aria-current', 'true');
+    await expect(card(other)).not.toHaveAttribute('aria-current', 'true');
+    await expect(coverage).toHaveValue(id);
+  };
+  // From the recommendation, through the menu state a person actually has.
+  for (const [title, id, other] of [
+    ['Programa de indicação', requests.dIndica, requests.eLanding],
+    ['Landing da campanha', requests.eLanding, requests.dIndica],
+  ] as const) {
+    await open(po, 'Mission Control');
+    await po
+      .getByRole('region', { name: 'Operação do PO' })
+      .getByRole('link', { name: `Abrir: Vincular “${title}”` })
+      .click();
+    await expect(po).toHaveURL(new RegExp(`#/comercial\\?demanda=${id}$`));
+    await expectTarget(id, other);
+    await po.reload();
+    await expect(po).toHaveURL(new RegExp(`#/comercial\\?demanda=${id}$`));
+    await expectTarget(id, other);
+  }
+  await po.screenshot({ path: `${EVIDENCE}/11-po-deep-link-demanda.png` });
+  // Covered demand has no card: the coverage form is what opens, with it selected.
+  await po.goto(`/#/comercial?demanda=${requests.aPix}`);
+  await po.reload();
+  await expect(coverage).toHaveValue(requests.aPix);
+  await expect(coverage).toBeFocused();
+  await expect(coverage).toBeInViewport();
+  // An id that is not here never selects anything else.
+  await po.goto(`/#/comercial?demanda=${crypto.randomUUID()}`);
+  await po.reload();
+  await expect(m3.getByRole('alert')).toContainText('não foi encontrada');
+  await expect(coverage).toHaveValue('');
+  await expect(po.locator('.queue-card.targeted')).toHaveCount(0);
+}
+/** DD/MM/AAAA on screen and in fields; the API still receives ISO. */
+async function brazilianDates(po: Page) {
+  await po.goto('/#/comercial');
+  await po.reload();
+  const m3 = po.getByRole('region', { name: 'Controle comercial' });
+  await m3.getByText('Cadastrar contrato', { exact: true }).click();
+  const from = m3.getByLabel('Vigência inicial (UTC)'),
+    until = m3.getByLabel('Vigência final (UTC)');
+  await m3
+    .getByRole('combobox', { name: 'Projeto contratual' })
+    .selectOption({ label: NAMES.e });
+  await m3.getByLabel('Título do contrato').fill('Contrato de datas');
+  await m3.getByLabel('Referência documental').fill('SINTETICO-DATAS');
+  // Impossible and US-order days are refused on the spot and nothing is sent.
+  let posted: Record<string, string> | undefined;
+  po.on('request', (r) => {
+    if (r.method() === 'POST' && r.url().endsWith('/api/contracts'))
+      posted = r.postDataJSON();
+  });
+  await from.fill('31/02/2026');
+  await until.fill('13/25/2026');
+  await m3
+    .getByRole('button', { name: 'Registrar contrato', exact: true })
+    .click();
+  await expect(m3).toContainText('Use uma data válida em DD/MM/AAAA.');
+  expect(posted).toBeUndefined();
+  // 02/03 must mean 2 March: the ambiguous case this field exists to settle.
+  await from.fill('02/03/2026');
+  await until.fill('01/03/2026');
+  await expect(m3).toContainText('Não pode ser antes de 02/03/2026.');
+  await until.fill('31122026');
+  await m3
+    .getByRole('button', { name: 'Registrar contrato', exact: true })
+    .click();
+  await expect
+    .poll(() => posted)
+    .toMatchObject({ valid_from: '2026-03-02', valid_until: '2026-12-31' });
+  const contract = m3
+    .locator('article')
+    .filter({ has: po.getByRole('heading', { name: 'Contrato de datas' }) });
+  await expect(contract).toContainText('Vigência 02/03/2026 a 31/12/2026');
+  await shot(po, '12-po-datas-brasileiras');
+  // Same value back from the persisted record, and no native date field left anywhere.
+  const saved = await request<{ contracts: Record<string, string>[] }>(
+    po,
+    'commercial',
+  );
+  const row = saved.contracts.find((c) => c.title === 'Contrato de datas')!;
+  expect(row.valid_from!.slice(0, 10)).toBe('2026-03-02');
+  expect(row.valid_until!.slice(0, 10)).toBe('2026-12-31');
+  for (const module of [
+    'Mission Control',
+    'Comercial',
+    'Economia',
+    'Clientes e projetos',
+  ] as const) {
+    await open(po, module);
+    await po.evaluate(() =>
+      document.querySelectorAll('details').forEach((d) => (d.open = true)),
+    );
+    await expect(
+      po.locator('main input[type="date"], main input[type="datetime-local"]'),
+    ).toHaveCount(0);
+    const text = await po.locator('main').evaluate((m) => {
+      const copy = m.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('pre').forEach((p) => p.remove());
+      return copy.innerText;
+    });
+    expect(text.match(/\b\d{4}-\d{2}-\d{2}\b/g), module).toBeNull();
+  }
+}
+
 test('value first: synthetic agency → role readings with verified figures → action reached in one click', async ({
   browser,
 }) => {
@@ -101,7 +218,7 @@ test('value first: synthetic agency → role readings with verified figures → 
       members.find((m) => m.email === EMAILS[who])!.id,
     ]),
   ) as Record<Actor, string>;
-  await buildEcommerceScenario(
+  const scenario = await buildEcommerceScenario(
     (who, path, method = 'GET', body) =>
       request(pages[who], path, method, body),
     people,
@@ -235,6 +352,10 @@ test('value first: synthetic agency → role readings with verified figures → 
   await expect(po.locator('main')).not.toContainText('BRL');
   await shot(po, '05-po-operacao');
   await noSeriousAxe(po, 'po');
+  await po.reload();
+  await demandDeepLink(po, scenario.requests);
+  await brazilianDates(po);
+  await open(po, 'Mission Control');
 
   // Developer: own work, next action, own hours; one click to log with fields filled.
   const dev = pages.dev;

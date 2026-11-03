@@ -1,7 +1,15 @@
+import {
+  dayFromText,
+  dayText,
+  instantFromText,
+  timeLabel,
+} from '../src/shared/domain';
+import { dayLabel } from '../src/shared/economics';
 import { describe, expect, test } from 'bun:test';
 import {
   hoursText,
   moneyText,
+  parseDay,
   parseHours,
   parseMoney,
   parsePercent,
@@ -106,5 +114,60 @@ describe('hours typed on screen', () => {
   test('absent stays blank', () => {
     expect(hoursText(null)).toBe('');
     expect(parseHours('')).toMatchObject({ ok: false, empty: true });
+  });
+});
+
+test('dates: people type DD/MM/AAAA, the API keeps ISO, and no day is guessed', () => {
+  expect(dayFromText('02/03/2026')).toBe('2026-03-02');
+  expect(dayFromText(' 31/12/2026 ')).toBe('2026-12-31');
+  expect(dayFromText('29022028')).toBe('2028-02-29');
+  for (const bad of [
+    '31/02/2026',
+    '29/02/2026',
+    '13/25/2026',
+    '2026-03-02',
+    '3/2/2026',
+    '00/01/2026',
+    '01/01/0050',
+    '',
+  ])
+    expect(dayFromText(bad)).toBeNull();
+  expect(dayText('2026-03-02')).toBe('02/03/2026');
+  expect(dayText('2026-03-02T23:59:00.000Z')).toBe('02/03/2026');
+  expect(dayText(null)).toBe('');
+  for (const iso of ['2026-01-31', '2026-12-01', '2028-02-29'])
+    expect(dayFromText(dayText(iso))).toBe(iso);
+  expect(dayLabel('2026-03-02')).toBe('02/03/2026');
+  expect(dayLabel(null)).toBe('Indisponível');
+});
+test('date and time: local reading to one instant; impossible values refused', () => {
+  expect(instantFromText('02/03/2026 14:30')).toBe(
+    new Date(2026, 2, 2, 14, 30).toISOString(),
+  );
+  for (const bad of [
+    '31/02/2026 10:00',
+    '02/03/2026 24:00',
+    '02/03/2026 10:60',
+    '02/03/2026',
+    '2026-03-02T10:00',
+  ])
+    expect(instantFromText(bad)).toBeNull();
+  expect(timeLabel('2026-03-02T15:04:00.000Z')).toMatch(
+    /^\d{2}\/\d{2}\/2026,? \d{2}:\d{2}$/,
+  );
+  expect(timeLabel('não é data')).toBe('não é data');
+});
+test('date field: limits compare calendar days; blank stays blank, never a day', () => {
+  expect(value(parseDay('02/03/2026'))).toBe('2026-03-02');
+  expect(parseDay('')).toMatchObject({ ok: false, empty: true });
+  expect(parseDay('31/02/2026').ok).toBe(false);
+  expect(value(parseDay('02/03/2026', '2026-03-02', '2026-03-02'))).toBe(
+    '2026-03-02',
+  );
+  expect(parseDay('01/03/2026', '2026-03-02')).toMatchObject({
+    message: 'Não pode ser antes de 02/03/2026.',
+  });
+  expect(parseDay('03/03/2026', '', '2026-03-02')).toMatchObject({
+    message: 'Não pode ser depois de 02/03/2026.',
   });
 });

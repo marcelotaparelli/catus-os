@@ -1,6 +1,9 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import { idempotentPost } from './ui/post';
+  import { dayText } from '../shared/domain';
   import type { Snapshot, WorkRequest } from '../shared/domain';
+  import UnitField from './ui/UnitField.svelte';
   import type {
     Contract,
     ScopeItem,
@@ -38,7 +41,7 @@
     const d = new Date(iso);
     return Number.isNaN(d.getTime())
       ? iso
-      : d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+      : `${dayText(iso)} ${d.toISOString().slice(11, 16)} UTC`;
   }
   // Display-only names; identity and authority remain server-side.
   function who(id: string | null | undefined) {
@@ -137,19 +140,36 @@
     detail.focus({ preventScroll: true });
     focusDetail = false;
   });
+  // Named demand: its card when uncovered, otherwise the coverage form. The card only
+  // exists after the first load, and the frame wait lets the route's own scroll finish.
+  let targetDemand = $state(''),
+    pendingDemand = $state('');
   $effect(() => {
     const scope = query?.get('escopo'),
       demand = query?.get('demanda');
     untrack(() => {
       if (scope) openScope(scope);
-      if (demand) {
-        coverageRequest = demand;
-        void tick().then(() =>
-          document
-            .getElementById(`link-${demand}`)
-            ?.scrollIntoView({ block: 'center' }),
-        );
+      if (demand) pendingDemand = demand;
+    });
+  });
+  $effect(() => {
+    const demand = pendingDemand;
+    if (!demand || !loaded) return;
+    untrack(() => {
+      pendingDemand = '';
+      if (!data.requests.some((r) => r.id === demand)) {
+        targetDemand = coverageRequest = '';
+        error = 'A demanda deste link não foi encontrada nesta organização.';
+        return;
       }
+      targetDemand = coverageRequest = demand;
+      coverageItem = '';
+      requestAnimationFrame(() => {
+        const card = document.getElementById(`link-${demand}`),
+          form = document.getElementById('coverage-demand');
+        (card ?? form)?.scrollIntoView({ block: 'center' });
+        (card ?? form)?.focus({ preventScroll: true });
+      });
     });
   });
   let canPrepare = $derived(role !== 'developer');
@@ -198,18 +218,7 @@
     superseded: 'Substituído',
     pending: 'Pendente',
   };
-  const attempts = new Map<string, { json: string; key: string }>();
-  async function post<T>(path: string, body: unknown): Promise<T> {
-    const json = JSON.stringify(body);
-    let a = attempts.get(path);
-    if (!a || a.json !== json) {
-      a = { json, key: crypto.randomUUID() };
-      attempts.set(path, a);
-    }
-    const result = await api<T>(path, 'POST', body, a.key);
-    attempts.delete(path);
-    return result;
-  }
+  const post = untrack(() => idempotentPost(api));
   async function refresh() {
     view = await api<CommercialSnapshot>('commercial');
   }
@@ -445,7 +454,10 @@
         </h3>
         {#each uncovered as u}<article
             class="queue-card"
+            class:targeted={targetDemand === u.request.id}
             id={`link-${u.request.id}`}
+            tabindex="-1"
+            aria-current={targetDemand === u.request.id ? 'true' : undefined}
           >
             <div class="queue-body">
               <p class="eyebrow">{u.project ?? 'Projeto indisponível'}</p>
@@ -533,20 +545,16 @@
                   >{/each}</select
               ></label
             >
-            <label
-              >Vigência inicial (UTC)<input
-                type="date"
-                bind:value={validFrom}
-                required
-              /></label
-            ><label
-              >Vigência final (UTC)<input
-                type="date"
-                bind:value={validUntil}
-                min={validFrom}
-                required
-              /></label
-            >
+            <UnitField
+              label="Vigência inicial (UTC)"
+              kind="date"
+              bind:value={validFrom}
+            /><UnitField
+              label="Vigência final (UTC)"
+              kind="date"
+              bind:value={validUntil}
+              min={validFrom}
+            />
             <label class="span"
               >Referência documental<input
                 bind:value={reference}
@@ -579,10 +587,8 @@
                 : 'Retainer / banco de horas'} · {c.currency}
             </p>
             <p>
-              Vigência {c.valid_from.slice(0, 10)} a {c.valid_until.slice(
-                0,
-                10,
-              )} UTC · revisão {c.version}
+              Vigência {dayText(c.valid_from)} a {dayText(c.valid_until)} UTC · revisão
+              {c.version}
             </p>
             <p class="description">Documento: {c.document_reference}</p>
             {#if ['manager', 'administrator'].includes(role) && c.state !== 'closed'}<button
@@ -880,6 +886,7 @@
         <h3>Alterar ou remover cobertura</h3>
         <label class="field-narrow"
           >Demanda para cobertura<select
+            id="coverage-demand"
             bind:value={coverageRequest}
             onchange={() => (coverageItem = '')}
             required

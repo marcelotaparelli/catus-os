@@ -14,8 +14,8 @@ const CONTRACT = `PILOTO ${run} Contrato Sintético`;
 const MEETING = `SYNTHETIC PILOT ${run} reunião: checkout com abandono alto`;
 const ITEM = `PILOTO ${run} checkout contratado`;
 const REQUEST = `PILOTO ${run} Revisar checkout`;
-const FROM = '2026-10-01',
-  UNTIL = '2026-10-31';
+const FROM = '01/10/2026',
+  UNTIL = '31/10/2026';
 
 function econ(page: Page) {
   return page.getByRole('region', { name: 'Inteligência econômica' });
@@ -224,8 +224,8 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     await pc
       .getByRole('combobox', { name: 'Moeda', exact: true })
       .selectOption('USD');
-    await pc.getByLabel('Vigência inicial (UTC)').fill('2020-01-01');
-    await pc.getByLabel('Vigência final (UTC)').fill('2099-12-31');
+    await pc.getByLabel('Vigência inicial (UTC)').fill('01/01/2020');
+    await pc.getByLabel('Vigência final (UTC)').fill('31/12/2099');
     await pc.getByLabel('Referência documental').fill(`SYNTHETIC-PILOT-${run}`);
     await pc
       .getByRole('button', { name: 'Registrar contrato', exact: true })
@@ -472,7 +472,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
           .selectOption({ label: 'Dev Browser · dev@browser.test' });
         await f.getByLabel('Horas previstas').fill('10');
         await f.getByLabel('Horas para concluir').fill('20');
-        await f.getByLabel('Data prevista de conclusão').fill('2026-10-30');
+        await f.getByLabel('Data prevista de conclusão').fill('30/10/2026');
       },
       false,
     );
@@ -506,7 +506,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     await hours
       .getByRole('combobox', { name: 'Demanda das horas', exact: true })
       .selectOption({ label: `${REQUEST} · ${PROJECT}` });
-    await hours.getByLabel('Data trabalhada').fill('2026-10-15');
+    await hours.getByLabel('Data trabalhada').fill('15/10/2026');
     await hours.getByLabel('Duração (horas)').fill('2');
     await hours
       .getByLabel('Comentário do apontamento')
