@@ -9,7 +9,7 @@
     "cssGzipBytes": 5000
   },
   "runtime": {
-    "note": "Production build (vite preview) in the pinned Playwright container, median of 3 runs. Measured in CI run 41604179137: ready 240 ms, LCP 92 ms, CLS 0.004, interaction 34 ms; budgets allow ~4x for runner variance.",
+    "note": "Production build (vite preview) in the pinned Playwright container, median of 3 runs. CI 41629444027/41629496779: Mission Control ready 240-243 ms, LCP 72-96 ms, CLS 0.004, 4 API calls at start, first switch to Comercial 143-149 ms, M3 interaction 38 ms. Budgets allow ~3-4x for runner variance; startApiCalls is exact.",
     "readyMs": 1000,
     "lcpMs": 1000,
     "cls": 0.05,

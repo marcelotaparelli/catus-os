@@ -38,7 +38,7 @@ CATUS_PW_WS=ws://127.0.0.1:3001/ npm run test:quality   # idêntico ao CI, com o
 
 ## Desempenho
 
-`perf-budget.json` registra os orçamentos e as medições de referência. Telas de módulo são carregadas na primeira visita (chunks separados); o JS inicial é o script de entrada mais os `modulepreload` do `index.html`.
+`perf-budget.json` registra os orçamentos e as medições de referência (CI 41629444027 e 41629496779). Telas de módulo são carregadas na primeira visita (chunks separados); o JS inicial é o script de entrada mais os `modulepreload` do `index.html`.
 
 | Métrica                                        | Antes (página única)     | Navegação por módulo | Orçamento      |
 | ---------------------------------------------- | ------------------------ | -------------------- | -------------- |
@@ -46,10 +46,10 @@ CATUS_PW_WS=ws://127.0.0.1:3001/ npm run test:quality   # idêntico ao CI, com o
 | JS total bruto / gzip (soma dos chunks)        | 153,3 kB / 51,1 kB       | 166,2 kB / 61,7 kB   | 180 kB / 70 kB |
 | CSS bruto / gzip                               | 10,4 kB / 3,0 kB         | 11,7 kB / 3,3 kB     | 16 kB / 5 kB   |
 | Chamadas de API na abertura                    | 10–11 (todos os módulos) | 4                    | 4              |
-| Tela inicial utilizável (preview)              | 240–517 ms (tudo)        | ver PR               | 1000 ms        |
-| Troca para o Comercial (chunk + dados, 1ª vez) | —                        | ver PR               | 500 ms         |
-| LCP / CLS                                      | 92–156 ms / 0,004        | ver PR               | 1000 ms / 0,05 |
-| Interação M3 (abrir formulário / escopo)       | 32–66 ms                 | ver PR               | 150 ms         |
+| Tela inicial utilizável (preview)              | 240–517 ms (tudo)        | 240–243 ms           | 1000 ms        |
+| Troca para o Comercial (chunk + dados, 1ª vez) | —                        | 143–149 ms           | 500 ms         |
+| LCP / CLS                                      | 92–156 ms / 0,004        | 72–96 ms / 0,004     | 1000 ms / 0,05 |
+| Interação M3 (abrir formulário / escopo)       | 32–66 ms                 | 38 ms                | 150 ms         |
 
 O total cresce porque cada chunk é comprimido separadamente e pela navegação (cerca de 5 kB gzip); o que o usuário baixa para começar caiu 44%.
 
