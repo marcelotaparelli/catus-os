@@ -77,5 +77,6 @@ Lighthouse não foi adicionado: traria uma dependência pesada e um segundo nave
 1. **Página longa:** todos os módulos ficam num único fluxo. Próximo passo: navegação por módulo (rota ou abas), mantendo as âncoras atuais. Exige ajustar as jornadas E2E.
 2. Estender a regressão visual e as capturas de UX a M4 (horas/rentabilidade), atendimento inteligente e M5.
 3. Formato de data `mm/dd/yyyy` no renderizador do CI (locale do navegador sem dados pt-BR); avaliar campos de data com formato explícito.
-4. Ordem de cabeçalhos (h3 → h4) dentro do detalhe do escopo (`heading-order`, prática recomendada, não WCAG).
-5. Jornada visual ponta a ponta cliente → projeto → atendimento → solicitação → triagem → escopo → execução → horas → rentabilidade. Hoje a jornada funcional é coberta por `e2e/pilot-journey.spec.ts`; o visual cobre Mission Control e M3.
+4. Espaço superior excessivo no cartão de item do escopo (padding do cartão + margem do título).
+5. Ordem de cabeçalhos (h3 → h4) dentro do detalhe do escopo (`heading-order`, prática recomendada, não WCAG).
+6. Jornada visual ponta a ponta cliente → projeto → atendimento → solicitação → triagem → escopo → execução → horas → rentabilidade. Hoje a jornada funcional é coberta por `e2e/pilot-journey.spec.ts`; o visual cobre Mission Control e M3.
