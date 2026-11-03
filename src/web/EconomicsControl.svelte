@@ -233,6 +233,8 @@
         r.project_id === project,
     );
     untrack(() => {
+      // Terms of another project must not linger behind the hidden period fields.
+      if (terms && !approved.some((r) => r.id === terms)) terms = '';
       if (approved.length !== 1 || previous) return;
       if (kind === 'capacity') {
         if (from || until) return;
