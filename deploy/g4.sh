@@ -430,7 +430,7 @@ VERDICT=GO
 [ $RUN_REAL = 1 ] && [ $RUN_SUITE = 1 ] && [ $RUN_DISP = 1 ] || VERDICT="$VERDICT (parcial: estágios ignorados)"
 counts() { # log file → "N passed/failed" summary from Bun or Playwright
   [ -f "$1" ] || return 0
-  grep -hE '^\s*[0-9]+ (pass|fail|passed|failed|flaky|skipped)$' "$1" | sed 's/^ *//' | paste -sd, - || true
+  grep -hE '^\s*[0-9]+ (pass|fail|passed|failed|flaky|skipped)( \(.*\))?$' "$1" | sed 's/^ *//; s/ (.*)$//' | paste -sd, - || true
 }
 PERF=$(grep -ohE 'perf runtime \{.*\}' "$OUT/suite/logs/quality.log" 2>/dev/null | tail -1 | sed 's/^perf runtime //')
 BUNDLE=$(grep -vE '^\s*$|^>' "$OUT/suite/logs/bundle-budget.log" 2>/dev/null | tail -8)
