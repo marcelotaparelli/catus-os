@@ -29,6 +29,14 @@
     onChanged: () => Promise<void>;
     members?: { id: string; name: string }[];
   } = $props();
+  // Fixed-length UTC timestamp (database values carry a variable number of
+  // fractional digits); the full value stays in the datetime attribute.
+  function when(iso: string) {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  }
   // Display-only names; identity and authority remain server-side.
   function who(id: string | null | undefined) {
     if (!id) return 'Sistema';
@@ -608,7 +616,7 @@
             )} ({selected.decision.actor_role}), política v{selected.decision
               .policy_version}, revisão {selected.decision.scope_version}, em
             <time datetime={selected.decision.decided_at}
-              >{selected.decision.decided_at}</time
+              >{when(selected.decision.decided_at)}</time
             >. {selected.decision.reason}
           </p>{/if}
         {#if canPrepare && selected.state === 'draft'}<button
@@ -734,7 +742,7 @@
     {#each view.events as e}<details>
         <summary
           >{e.entity_type} · {e.action} · {who(e.actor_user_id)} ({e.actor_role})
-          · <time datetime={e.created_at}>{e.created_at}</time></summary
+          · <time datetime={e.created_at}>{when(e.created_at)}</time></summary
         >
         <!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable region must be keyboard reachable, WCAG 2.1.1) -->
         <pre tabindex="0">{JSON.stringify(

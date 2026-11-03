@@ -802,3 +802,6 @@ label.check-option {
   color: #187554;
   font-size: 12px;
 }
+time {
+  font-variant-numeric: tabular-nums;
+}
