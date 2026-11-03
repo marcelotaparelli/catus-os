@@ -1,8 +1,10 @@
 {
-  "note": "Budgets derived from measurements on 2026-11-02 (JS 153.0 kB raw / 50.8 kB gzip, CSS 10.4 kB / 3.1 kB) with ~15-20% headroom. Raise only with justification in the PR.",
+  "note": "Budgets with ~15% headroom over measured values. Initial JS (entry + modulepreloads in index.html) was 76.5 kB raw / 28.6 kB gzip on 2026-11-03 after splitting module screens into on-demand chunks (single bundle before: 153.3 kB / 51.1 kB). Totals sum every chunk compressed separately, so splitting adds per-file gzip overhead; total JS gzip was raised from 60 kB to 70 kB for that reason and for the navigation shell (+~5 kB gzip). Raise only with justification in the PR.",
   "bundle": {
+    "initialJsRawBytes": 90000,
+    "initialJsGzipBytes": 33000,
     "jsRawBytes": 180000,
-    "jsGzipBytes": 60000,
+    "jsGzipBytes": 70000,
     "cssRawBytes": 16000,
     "cssGzipBytes": 5000
   },
@@ -11,6 +13,8 @@
     "readyMs": 1000,
     "lcpMs": 1000,
     "cls": 0.05,
-    "interactionMs": 150
+    "interactionMs": 150,
+    "startApiCalls": 4,
+    "routeMs": 500
   }
 }

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { login } from './login';
+import { open } from './nav';
 test('PO completes M0, developer executes assigned work, session survives reload, logout revokes access', async ({
   page,
   browser,
@@ -8,6 +9,7 @@ test('PO completes M0, developer executes assigned work, session survives reload
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await login(page, 'po@browser.test');
+  await open(page, 'Clientes e projetos');
   await expect(
     page.getByRole('heading', { name: 'Registrar contexto' }),
   ).toBeVisible();
@@ -43,6 +45,7 @@ test('PO completes M0, developer executes assigned work, session survives reload
   await page
     .getByRole('button', { name: 'Criar solicitação', exact: true })
     .click();
+  await open(page, 'Solicitações');
   const card = page.locator('article').filter({
     has: page.getByRole('heading', { name: 'Revisar checkout', exact: true }),
   });
@@ -58,7 +61,9 @@ test('PO completes M0, developer executes assigned work, session survives reload
     await edit.getByRole('button', { name: 'Salvar atualização' }).click();
     await expect(edit).toHaveCount(0);
   }
+  // Reload keeps the module (hash route) and the session.
   await page.reload();
+  await expect(page).toHaveURL(/#\/solicitacoes/);
   await expect(card).toContainText('Pronta');
   await expect(
     page.getByText('po@browser.test', { exact: false }).first(),
@@ -68,9 +73,11 @@ test('PO completes M0, developer executes assigned work, session survives reload
   dev.on('pageerror', (e) => errors.push(e.message));
   try {
     await login(dev, 'dev@browser.test');
+    await open(dev, 'Clientes e projetos');
     await expect(
       dev.getByRole('heading', { name: 'Registrar contexto' }),
     ).toHaveCount(0);
+    await open(dev, 'Solicitações');
     const devCard = dev.locator('article').filter({
       has: dev.getByRole('heading', {
         name: 'Revisar checkout',
@@ -122,6 +129,7 @@ test('PO completes M0, developer executes assigned work, session survives reload
   const other = await outsider.newPage();
   try {
     await login(other, 'outsider@browser.test');
+    await open(other, 'Solicitações');
     await expect(
       other.getByRole('heading', { name: 'Revisar checkout', exact: true }),
     ).toHaveCount(0);

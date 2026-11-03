@@ -2,7 +2,7 @@
  * Permissions, error/loading feedback and concurrent edits in M3. Runs last
  * because it changes seeded data (policy version).
  */
-import { test, expect } from './fixtures';
+import { test, expect, visit } from './fixtures';
 import type { Page } from '@playwright/test';
 
 const m3 = (page: Page) =>
@@ -31,6 +31,7 @@ test('role matrix: controls offered match each role', async ({
     const { login } = await import('../login');
     const { ROLES } = await import('./fixtures');
     await login(p, ROLES[role as keyof typeof ROLES]);
+    await visit(p, 'Comercial');
     const r = m3(p);
     await expect(
       r.getByRole('heading', { name: 'Contrato Portal B2B 2026' }),
@@ -89,6 +90,7 @@ test('loading, network failure and invalid responses give visible feedback', asy
   as,
 }) => {
   await as('po');
+  await visit(page, 'Comercial');
   const refresh = m3(page).getByRole('button', { name: 'Atualizar comercial' });
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
@@ -137,6 +139,7 @@ test('concurrent policy edit: stale screen is refused with a clear message', asy
   const other = await (await browser.newContext()).newPage();
   const { login } = await import('../login');
   await login(other, 'admin@browser.test');
+  for (const p of [page, other]) await visit(p, 'Comercial');
   for (const p of [page, other])
     await m3(p)
       .getByText('Configurar alçadas comerciais', { exact: true })

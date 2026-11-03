@@ -11,7 +11,20 @@ const sum = (ext, gzip) =>
       const b = readFileSync(`dist/assets/${f}`);
       return n + (gzip ? gzipSync(b, { level: 9 }).length : b.length);
     }, 0);
+// Initial JS: entry script plus modulepreloads referenced by index.html. Module
+// screens are separate chunks fetched on first visit and only count in the totals.
+const html = readFileSync('dist/index.html', 'utf8');
+const initial = [...html.matchAll(/(?:src|href)="\/assets\/([^"]+\.js)"/g)].map(
+  (m) => m[1],
+);
+const size = (gzip) =>
+  initial.reduce((n, f) => {
+    const b = readFileSync(`dist/assets/${f}`);
+    return n + (gzip ? gzipSync(b, { level: 9 }).length : b.length);
+  }, 0);
 const measured = {
+  initialJsRawBytes: size(false),
+  initialJsGzipBytes: size(true),
   jsRawBytes: sum('.js', false),
   jsGzipBytes: sum('.js', true),
   cssRawBytes: sum('.css', false),
@@ -24,7 +37,7 @@ for (const [k, v] of Object.entries(measured)) {
   const ok = v <= budget[k];
   failed ||= !ok;
   console.log(
-    `${ok ? 'PASS' : 'FAIL'}  ${k.padEnd(13)} ${String(v).padStart(7)} / ${budget[k]}`,
+    `${ok ? 'PASS' : 'FAIL'}  ${k.padEnd(18)} ${String(v).padStart(7)} / ${budget[k]}`,
   );
 }
 mkdirSync('test-results', { recursive: true });

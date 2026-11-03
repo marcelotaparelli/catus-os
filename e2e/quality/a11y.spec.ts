@@ -6,7 +6,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { test, expect, expandAll, ROLES } from './fixtures';
+import { test, expect, expandAll, visit, MODULES, ROLES } from './fixtures';
 import type { QualityRole } from './fixtures';
 
 type Baseline = Record<string, Record<string, number>>;
@@ -59,10 +59,40 @@ test('login screen', async ({ page }) => {
 });
 
 for (const role of Object.keys(ROLES) as QualityRole[])
-  test(`Mission Control as ${role} with all sections expanded`, async ({
-    as,
-  }) => {
+  test(`every module as ${role} with all sections expanded`, async ({ as }) => {
+    test.setTimeout(90000);
     const page = await as(role);
-    await expandAll(page);
-    await scan(page, `mission-control-${role}`);
+    for (const module of MODULES[role]) {
+      await visit(page, module);
+      await expandAll(page);
+      // Mission Control keeps its historical baseline key.
+      await scan(
+        page,
+        module === 'Mission Control'
+          ? `mission-control-${role}`
+          : `${slug(module)}-${role}`,
+      );
+    }
   });
+
+test('restricted and unknown routes', async ({ as }) => {
+  const page = await as('developer');
+  await page.goto('/#/acesso');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Acesso restrito' }),
+  ).toBeVisible();
+  await scan(page, 'restricted-developer');
+  await page.goto('/#/inexistente');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Página não encontrada' }),
+  ).toBeVisible();
+  await scan(page, 'not-found-developer');
+});
+
+function slug(s: string) {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z]+/g, '-');
+}

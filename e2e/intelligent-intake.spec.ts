@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from './login';
+import { open } from './nav';
 import { syntheticSource } from '../tests/support/extraction-fixture';
 test('M2 synthetic meeting → three AI proposals → review → two approved and one rejected → traceable Mission Control', async ({
   page,
@@ -7,6 +8,7 @@ test('M2 synthetic meeting → three AI proposals → review → two approved an
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await login(page, 'po@browser.test');
+  await open(page, 'Clientes e projetos');
   await page
     .getByLabel('Nome do cliente', { exact: true })
     .fill('IA Cliente Sintético');
@@ -25,6 +27,7 @@ test('M2 synthetic meeting → three AI proposals → review → two approved an
   await page
     .getByRole('button', { name: 'Registrar atendimento', exact: true })
     .click();
+  await open(page, 'Atendimento inteligente');
   const intake = page.getByRole('region', {
     name: 'Atendimento inteligente',
     exact: true,
@@ -110,6 +113,7 @@ test('M2 synthetic meeting → three AI proposals → review → two approved an
     .getByRole('button', { name: 'Criar demandas selecionadas' })
     .click();
   await expect(intake.getByRole('status')).toContainText('2 demandas criadas');
+  await open(page, 'Solicitações');
   const cards = page.locator('article.request').filter({
     has: page.getByRole('button', { name: 'Atualizar solicitação' }),
   });
@@ -134,8 +138,11 @@ test('M2 synthetic meeting → three AI proposals → review → two approved an
       }),
     }),
   ).toHaveCount(0);
+  // Returning to the module keeps the reviewed extraction open.
+  await open(page, 'Atendimento inteligente');
   await expect(review).toContainText('accepted');
   await expect(review).toContainText('rejected');
+  await open(page, 'Solicitações');
   await page.screenshot({
     path: 'test-results/m2-human-reviewed.png',
     fullPage: true,

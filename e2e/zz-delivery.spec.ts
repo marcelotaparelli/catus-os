@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { login } from './login';
+import { open } from './nav';
 import { governedTask } from '../tests/support/delivery-governance';
 import type { TestApi } from '../tests/support/delivery-governance';
 test('M5 M2-approved synthetic request → governed M3/M4 → automatic queue → real isolated fixture runner → tests/diff → human review', async ({
@@ -45,6 +46,8 @@ test('M5 M2-approved synthetic request → governed M3/M4 → automatic queue �
     await po
       .getByRole('button', { name: 'Atualizar dados', exact: true })
       .click();
+    await open(page, 'Entrega agêntica');
+    await open(po, 'Entrega agêntica');
     const control = page.getByRole('region', { name: 'Entrega agêntica' }),
       pc = po.getByRole('region', { name: 'Entrega agêntica' });
     await pc.getByText('Preparar tarefa Nuvemshop', { exact: true }).click();
@@ -109,6 +112,7 @@ test('M5 M2-approved synthetic request → governed M3/M4 → automatic queue �
     await expect(
       control.getByRole('article', { name: /^Job de entrega/ }),
     ).toHaveCount(0);
+    await open(admin, 'Entrega agêntica');
     const ac = admin.getByRole('region', { name: 'Entrega agêntica' });
     await ac.getByRole('button', { name: 'Atualizar entrega' }).click();
     const ef = ac.getByRole('form', {
