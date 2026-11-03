@@ -19,13 +19,16 @@ export async function rateSubject(
   path: string,
   peer: string,
   sessionToken: string,
+  issuer: string,
 ) {
   if (path === '/api/auth/login' || path === '/api/auth/callback')
     return `auth:${peer}`;
   if (/^[A-Za-z0-9_-]{43}$/.test(sessionToken)) {
+    // Same validity predicate as authenticate() in auth/session.ts.
     const live = await db.query(
-      "SELECT id FROM sessions WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now() AND last_seen_at>now()-interval '30 minutes'",
-      [hash(sessionToken)],
+      `SELECT s.id FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id AND m.organization_id=s.organization_id
+ WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>now() AND s.last_seen_at>now()-interval '30 minutes' AND u.active AND m.active AND u.issuer=$2`,
+      [hash(sessionToken), issuer],
     );
     if (live.rowCount) return `session:${live.rows[0].id}`;
   }

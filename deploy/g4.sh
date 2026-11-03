@@ -18,8 +18,9 @@
 #      adulterado rejeitado, persistência após recriar e recuperação após reinício
 #      do PostgreSQL. Ao final: `down` sem -v e remoção do diretório temporário.
 #
-# Garantias: nunca escreve na instalação real (sem update, migrate, backup,
-# restore-test ou admin-bootstrap nela); nunca usa `down -v`, `volume rm` ou
+# Garantias: não altera dados de negócio nem a configuração da instalação real
+# (sem update, migrate, backup, restore-test ou admin-bootstrap nela; o verify só
+# cria um contêiner temporário de teste e contadores de cota/login transitórios); nunca usa `down -v`, `volume rm` ou
 # `prune`; não lê cookies/tokens de usuários; não publica portas fora de
 # 127.0.0.1; não instala nada no sistema (só bash, git, Docker Compose v2, curl, ss).
 set -euo pipefail
@@ -56,11 +57,12 @@ for t in git docker curl ss tar sha256sum; do command -v "$t" >/dev/null || die 
 docker info >/dev/null 2>&1 || die "Docker não acessível"
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 ausente"
 DEPLOYED="$(git -C "$REPO" rev-parse HEAD)"
-SHA="$(git -C "$REPO" rev-parse "${SHA:-$DEPLOYED}^{commit}" 2>/dev/null)" ||
+SHA="$(git -C "$REPO" rev-parse --verify --end-of-options "${SHA:-$DEPLOYED}^{commit}" 2>/dev/null)" ||
   die "commit não encontrado; rode antes: git -C $REPO fetch origin"
 S7=${SHA:0:7}
 OUT="$OUT_BASE/$(date -u +%Y%m%dT%H%M%SZ)-$S7"
-mkdir -p "$OUT/logs" && chmod 700 "$OUT_BASE" "$OUT"
+[ -d "$OUT_BASE" ] || install -d -m 700 "$OUT_BASE"
+install -d -m 700 "$OUT" "$OUT/logs"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/catus-g4.XXXXXXXX")"
 RES="$OUT/results.tsv" && : >"$RES"
 STARTED=$(date -u +%FT%TZ)
@@ -90,7 +92,7 @@ DISP_UP=0
 dcg() {
   local unset=() v
   for v in $(compgen -e | grep '^CATUS_' || true); do unset+=(-u "$v"); done
-  env "${unset[@]}" docker compose -p catus-g4 -f "$WORK/src/deploy/compose.yaml" -f "$WORK/g4.override.yaml" --env-file "$WORK/g4.env" "$@"
+  env "${unset[@]}" ${G4_TIMEOUT:+timeout "$G4_TIMEOUT"} docker compose -p catus-g4 -f "$WORK/src/deploy/compose.yaml" -f "$WORK/g4.override.yaml" --env-file "$WORK/g4.env" "$@"
 }
 cleanup() {
   set +e
@@ -290,8 +292,9 @@ EOF
   cfg=$(dcg --profile admin config 2>&1) || why="configuração inválida"
   printf '%s\n' "$cfg" >"$OUT/logs/disposable-config.yaml"
   grep -q '^name: catus-g4$' <<<"$cfg" || why="$why; projeto não é catus-g4"
-  imgs=$(dcg --profile admin config --images 2>/dev/null | sort -u | tr '\n' ' ')
-  [ -n "$imgs" ] && ! grep -qvE '^catus-g4-(app|tools|postgres):' <<<"${imgs// /$'\n'}" || why="$why; imagens fora de catus-g4-*: $imgs"
+  imgs=$(dcg --profile admin config --images 2>/dev/null | sort -u)
+  bad=$(grep -vE '^catus-g4-(app|tools|postgres):' <<<"$imgs" | grep . || true)
+  [ -n "$imgs" ] && [ -z "$bad" ] || why="$why; imagens fora de catus-g4-*: ${bad:-nenhuma resolvida}"
   [ -z "$(dcg --profile admin config --volumes 2>/dev/null)" ] || why="$why; declara volumes nomeados"
   grep -qF "source: $WORK/pgdata" <<<"$cfg" && ! grep -q 'catus_pgdata' <<<"$cfg" || why="$why; dados do banco fora do diretório temporário"
   [ -z "${R_S:-}" ] || ! grep -qF "$R_S" <<<"$cfg" || why="$why; referencia o diretório de segredos real"
@@ -330,10 +333,11 @@ EOF
       [ -z "$(docker inspect "$(dcg ps -q db)" -f '{{range $p,$b := .HostConfig.PortBindings}}{{$p}}{{end}}')" ] && pass C "banco sem porta publicada" || fail C "banco publica porta"
       c=$(disp_sql catus "SELECT string_agg(name,',' ORDER BY name) FROM schema_migrations")
       [ "$c" = "$(cd "$WORK/src/db/migrations" && ls ./*.sql | sed 's#./##' | paste -sd, -)" ] && pass C "todas as migrations aplicadas" "$c" || fail C "migrations" "$c"
-      c=$(disp_sql catus "SELECT string_agg(rolname,',') FROM pg_roles WHERE rolname LIKE 'catus\_%' AND rolname<>'catus_admin' AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls)")
-      [ -z "$c" ] && pass C "papéis da aplicação sem privilégios elevados" || fail C "papéis privilegiados" "$c"
+      c=$(disp_sql catus "SELECT count(*)||':'||coalesce(string_agg(rolname,','),'') FROM pg_roles WHERE rolname LIKE 'catus\_%' AND rolname<>'catus_admin' AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls)")
+      [ "$c" = "0:" ] && pass C "papéis da aplicação sem privilégios elevados" || fail C "papéis privilegiados" "$c"
       tmp=$(mktemp "$S/.refuse.XXXXXX") && cat "$S/migrator_database_url" >"$tmp"
-      c=$(dcg run --rm --no-deps -e PORT=3445 -v "$tmp:/run/secrets/runtime_database_url:ro" app 2>&1 || true) && rm -f "$tmp"
+      # Bounded: if the refusal ever regressed, the server would otherwise run forever.
+      c=$(G4_TIMEOUT=90 dcg run --rm --no-deps -e PORT=3445 -v "$tmp:/run/secrets/runtime_database_url:ro" app 2>&1 || true) && rm -f "$tmp"
       grep -q 'excessive privileges' <<<"$c" && pass C "runtime recusa credencial do migrator" || fail C "runtime aceitou credencial do migrator"
       for id in $(dcg ps -q); do
         c=$(docker inspect -f '{{.Name}} {{.Config.User}} {{.HostConfig.Privileged}} {{.HostConfig.CapDrop}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.SecurityOpt}}' "$id")
@@ -352,7 +356,8 @@ EOF
       bk=$(find "$WORK/backups" -maxdepth 1 -type f -name '*.catus' | head -1)
       if [ -n "$bk" ]; then
         pass C "backup cifrado gerado" "$(stat -c %s "$bk") bytes"
-        grep -qa 'Cliente Sintético' "$bk" && fail C "backup contém texto em claro" || pass C "backup não contém dados em claro"
+        # pg_dump custom archives start with PGDMP; inside the AES-GCM stream it never appears.
+        grep -qa PGDMP "$bk" && fail C "backup contém um arquivo pg_dump em claro" || pass C "backup cifrado (nenhum cabeçalho pg_dump em claro)"
         if run C restore-test dcg run --rm restore-test restore-test "/backups/$(basename "$bk")"; then
           rdb=$(grep -oE 'catus_r[0-9]+_restore_test' "$OUT/logs/restore-test.log" | tail -1)
           D1=$(disp_sql "$rdb" "$(digest_sql)" 2>&1 || true)
@@ -368,11 +373,11 @@ EOF
           pass C "arquivo de backup adulterado rejeitado na autenticação (antes do pg_restore)"
         else fail C "restauração do arquivo adulterado falhou por outro motivo" "ver logs/restore-tampered.log"; fi
       else fail C "backup cifrado gerado" "nenhum arquivo"; fi
-      run C recreate-containers dcg up -d --force-recreate && disp_healthy db edge app cleanup || true
-      [ "$(disp_sql catus "$(digest_sql)")" = "$D0" ] && pass C "dados preservados após recriar contêineres" || fail C "dados mudaram após recriar contêineres"
-      run C down-up dcg down && run C up-again dcg up -d && disp_healthy db edge app cleanup || true
-      [ "$(disp_sql catus "$(digest_sql)")" = "$D0" ] && pass C "dados preservados após down (sem -v) e up" || fail C "dados mudaram após down/up"
-      run C restart-db dcg restart db && disp_healthy db || true
+      run C recreate-containers dcg up -d --force-recreate && { disp_healthy db edge app cleanup || fail C "saudáveis após recriar"; }
+      [ -n "$D0" ] && [ "$(disp_sql catus "$(digest_sql)")" = "$D0" ] && pass C "dados preservados após recriar contêineres" || fail C "dados mudaram após recriar contêineres"
+      run C down-up dcg down && run C up-again dcg up -d && { disp_healthy db edge app cleanup || fail C "saudáveis após down/up"; }
+      [ -n "$D0" ] && [ "$(disp_sql catus "$(digest_sql)")" = "$D0" ] && pass C "dados preservados após down (sem -v) e up" || fail C "dados mudaram após down/up"
+      run C restart-db dcg restart db && { disp_healthy db || fail C "banco saudável após reinício"; }
       c=""
       for i in $(seq 1 30); do
         c=$(curl -s --max-time 5 --cacert "$CA" "$BASE/api/auth/config" || true)

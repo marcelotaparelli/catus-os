@@ -139,6 +139,7 @@ export function createApp(
         pathForLimit,
         peerAddress,
         readCookie(request, cookieName(config, 'session')),
+        config.oidc?.issuer ?? '',
       );
       const policy = subject.startsWith('auth:')
         ? (options.loginRate ?? loginPolicy)
