@@ -1,5 +1,9 @@
 # Progresso
 
+## Value-first MVP — branch `feat/value-first-mvp` · 03/11/2026
+
+Mission Control por papel sobre M0–M4, sem migration e sem regra econômica nova. Guia, regras e conferência manual em [docs/VALUE_FIRST.md](docs/VALUE_FIRST.md); capturas em `docs/quality/value-first/`. `GET /api/overview` não grava nada e usa o mesmo cálculo de `POST /api/economics/reports`. Cenário sintético pela API pública, somente em banco descartável. Verificação local em PostgreSQL descartável, sem Docker: testes que dependem de Docker (7 Bun e `e2e/zz-delivery.spec.ts`) só rodam no CI. Baselines visuais do Mission Control pelo processo de docs/QUALITY.md. Sem merge nem deploy.
+
 ## G3 Google OIDC no Docker — branch `feat/pilot-oidc` · 02/11/2026
 
 Status: **G3 NÃO VERIFICADO** — G2 aprovado pelo proprietário no Arch real (49 PASS, 0 FAIL). Entregues `deploy/catus.sh google-setup | google-check | admin-bootstrap`, segredo do cliente como Compose secret (0600, fora do Git), `scripts/google-client-setup.ts` + `scripts/lib/google-client.ts`, regressões em `tests/google-pilot.test.ts` (importação, bootstrap, contas sem Workspace). `src/` e migrations inalterados. Ensaio sintético em [docs/DOCKER.md](docs/DOCKER.md) §8–9. Pendente: cliente Google real e primeiro login do proprietário.

@@ -795,7 +795,8 @@ label.check-option {
   border: 1px solid #d4dce6;
   padding: 1rem;
 }
-.money-preview {
+.money-preview,
+.bps-preview {
   display: block;
   min-height: 1em;
   margin: -4px 0 6px;
@@ -907,5 +908,240 @@ h1:focus {
   .work-list li {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+}
+.exec h2 {
+  margin-top: 0;
+}
+.exec h3 {
+  margin: 22px 0 10px;
+}
+.health {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
+  border-radius: 4px;
+  padding: 3px 8px;
+  background: #eceff3;
+  color: #4a5867;
+}
+.health[data-health='negative'] {
+  background: #fce8e6;
+  color: #9a3a30;
+}
+.health[data-health='at_risk'] {
+  background: #fdf1dc;
+  color: #7a4a0c;
+}
+.health[data-health='positive'] {
+  background: #dcf6e9;
+  color: #176444;
+}
+.health-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 0;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.action-list,
+.gov-checks,
+.plain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.action-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 12px 0;
+  border-top: 1px solid #e7edf2;
+  overflow-wrap: anywhere;
+}
+.action-list li:first-child {
+  border-top: 0;
+}
+.action-list p {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+.action-list strong {
+  font-size: 14px;
+}
+.project {
+  border: 1px solid #dfe6ec;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.project-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.project-head h4 {
+  margin: 0;
+  font-size: 16px;
+}
+.project-head p {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin: 14px 0;
+}
+.metrics h5 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #4a5867;
+}
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+.kv dt {
+  color: #5d6c7b;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.kv dd {
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kv dd.strong {
+  font-weight: 700;
+}
+.hours-bar {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  margin-top: 8px;
+}
+.hours-bar span {
+  border-radius: 2px;
+}
+.hours-bar .done {
+  background: #3d5a84;
+}
+.hours-bar .left {
+  background: #a9bbd2;
+}
+.hours-bar i {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: #202b3a;
+}
+.table-scroll {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+.table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.table-scroll th,
+.table-scroll td {
+  text-align: left;
+  padding: 6px 8px;
+  border-top: 1px solid #e7edf2;
+  vertical-align: top;
+}
+.table-scroll tbody th {
+  font-weight: 600;
+}
+.sources {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.gov-checks li {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid #e7edf2;
+}
+.gov-checks p {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+.project summary,
+.exec-collapsed summary {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.metrics dl {
+  margin: 0;
+}
+.gov-checks .health {
+  justify-self: start;
+}
+.gov-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 8px;
+}
+.exec-collapsed {
+  margin-top: 14px;
+}
+.plain li {
+  font-size: 13px;
+  padding: 3px 0;
+}
+@media (max-width: 1000px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+  .project-head,
+  .action-list li {
+    display: block;
+  }
+  .project-head .health {
+    margin-top: 6px;
+  }
+  .action-list li .button-link {
+    margin-top: 8px;
+  }
+  .gov-checks li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .gov-checks .health {
+    justify-self: start;
   }
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import type { Snapshot } from '../shared/domain';
   import type { Member } from '../shared/identity';
   import type {
@@ -7,7 +7,7 @@
     EconomicRecord,
     EconomicsView,
   } from '../shared/economics';
-  import { moneyLabel } from '../shared/economics';
+  import { moneyLabel, percentLabel } from '../shared/economics';
   import type { CommercialSnapshot } from '../shared/commercial';
   import { currencies } from '../shared/commercial';
   let {
@@ -16,6 +16,7 @@
     members,
     role,
     userId,
+    query,
   }: {
     api: <T>(
       path: string,
@@ -27,6 +28,8 @@
     members: Member[];
     role: string;
     userId: string;
+    /** Deep link from the executive reading: opens the right form, already filled. */
+    query?: URLSearchParams;
   } = $props();
   let view = $state<EconomicsView>({
     records: [],
@@ -56,8 +59,8 @@
     commission = $state<number | undefined>(),
     ohRule = $state(''),
     ohRate = $state(''),
-    weekdays = $state(''),
-    minutesDay = $state<number | undefined>(),
+    weekdays = $state('1,2,3,4,5'),
+    minutesDay = $state<number | undefined>(480),
     holidays = $state('');
   let person = $state(''),
     functionRole = $state(''),
@@ -70,11 +73,11 @@
     directComplete = $state(false),
     timeComplete = $state(false),
     included = $state<number | undefined>(),
-    overage = $state(''),
+    overage = $state('none'),
     overageRate = $state(''),
-    rollover = $state(''),
-    cap = $state<number | undefined>(),
-    carry = $state<number | undefined>(),
+    rollover = $state('none'),
+    cap = $state<number | undefined>(0),
+    carry = $state<number | undefined>(0),
     priorTerms = $state(''),
     changeId = $state('');
   let terms = $state(''),
@@ -98,6 +101,38 @@
     replaces = $state('');
   let reason = $state('');
   let costRole = $state('');
+  let prepareOpen = $state(false),
+    decisionsOpen = $state(false),
+    logOpen = $state(false),
+    hoursOpen = $state(false);
+  $effect(() => {
+    const q = query;
+    if (!q || ![...q.keys()].length) return;
+    const wanted = q.get('preparar') as EconomicKind | null,
+      panel = q.get('painel'),
+      target = q.get('projeto') ?? '',
+      demand = q.get('demanda') ?? '';
+    untrack(() => {
+      if (
+        wanted &&
+        wanted in names &&
+        (confidential || wanted === 'estimate')
+      ) {
+        kind = wanted;
+        previous = '';
+        project = target;
+        if (wanted === 'estimate') request = demand;
+        prepareOpen = true;
+      }
+      if (panel === 'decisoes') decisionsOpen = true;
+      if (panel === 'horas') hoursOpen = true;
+      if (panel === 'apontar') {
+        timeProject = target;
+        timeRequest = demand;
+        logOpen = true;
+      }
+    });
+  });
   const names: Record<EconomicKind, string> = {
     config: 'Premissas econômicas',
     rate: 'Custo por hora',
@@ -158,6 +193,25 @@
     if (role === 'po') kind = 'estimate';
     void run(async () => {});
   });
+  // The contract already defines currency, period and (usually) the approved scope.
+  let chosenContract = $derived(
+    commercial.contracts.find((c) => c.id === contractId),
+  );
+  let retainer = $derived(chosenContract?.kind === 'retainer');
+  function chooseContract() {
+    const c = chosenContract;
+    if (!c) return;
+    cur = c.currency;
+    if (!from) from = String(c.valid_from).slice(0, 10);
+    if (!until) until = String(c.valid_until).slice(0, 10);
+    const approved = commercial.scopes.filter(
+      (s) =>
+        s.project_id === project &&
+        s.contract_id === c.id &&
+        s.state === 'approved',
+    );
+    scopeId = approved.length === 1 ? approved[0]!.id : '';
+  }
   function chooseTerm(id: string) {
     const t = view.records.find((r) => r.id === id);
     if (t) {
@@ -168,6 +222,26 @@
       until = t.valid_until;
     }
   }
+  // A project's approved terms already define what these records must match.
+  $effect(() => {
+    if (!['capacity', 'estimate', 'direct_cost'].includes(kind) || !project)
+      return;
+    const approved = view.records.filter(
+      (r) =>
+        r.kind === 'terms' &&
+        r.decision === 'approved' &&
+        r.project_id === project,
+    );
+    untrack(() => {
+      if (approved.length !== 1 || previous) return;
+      if (kind === 'capacity') {
+        if (from || until) return;
+        cur = approved[0]!.currency;
+        from = approved[0]!.valid_from;
+        until = approved[0]!.valid_until;
+      } else if (!terms) chooseTerm(approved[0]!.id);
+    });
+  });
   function loadRecord(r: EconomicRecord) {
     kind = r.kind;
     project = r.project_id ?? '';
@@ -263,13 +337,15 @@
           recognized_minor: recognition === 'manual' ? recognized : null,
           direct_costs_complete: directComplete,
           time_entries_complete: timeComplete,
-          included_minutes: included ?? null,
-          overage_rule: overage,
-          overage_rate_minor: overage === 'billable' ? overageRate : null,
-          rollover_rule: rollover,
-          rollover_cap_minutes: cap,
-          carry_in_minutes: carry,
-          prior_terms_id: priorTerms || null,
+          // Fixed price has no balance, overage or rollover: the server refuses them.
+          included_minutes: retainer ? (included ?? null) : null,
+          overage_rule: retainer ? overage : 'none',
+          overage_rate_minor:
+            retainer && overage === 'billable' ? overageRate : null,
+          rollover_rule: retainer ? rollover : 'none',
+          rollover_cap_minutes: retainer ? cap : 0,
+          carry_in_minutes: retainer ? carry : 0,
+          prior_terms_id: retainer ? priorTerms || null : null,
           change_request_id: changeId || null,
         };
       case 'estimate':
@@ -328,10 +404,15 @@
     });
     notice = 'Decisão/reversão de horas registrada.';
   }
-  const percent = (bps: string | null) =>
-    bps === null
-      ? 'Indisponível'
-      : `${BigInt(bps) < 0n && BigInt(bps) > -100n ? '-' : ''}${BigInt(bps) / 100n},${(BigInt(bps) < 0n ? -BigInt(bps) % 100n : BigInt(bps) % 100n).toString().padStart(2, '0')}%`;
+  const percent = percentLabel;
+  const bpsPreview = (value: number | undefined) =>
+    value === undefined || value === null
+      ? ''
+      : `= ${percentLabel(String(value))}`;
+  let pendingRecords = $derived(view.records.filter((r) => !r.decision).length);
+  let pendingHours = $derived(
+    view.times.filter((t) => t.state === 'pending').length,
+  );
 </script>
 
 <section class="panel economics" aria-label="Inteligência econômica">
@@ -345,16 +426,26 @@
     >
   </div>
   <p class="muted">
-    Valores em unidades mínimas da moeda e durações em minutos inteiros. Receita
-    contratada não é recebimento. Projeções e realizado têm bases distintas;
-    dados ausentes não viram zero.
+    Dinheiro em centavos (R$ 100,00 = 10000; a conversão aparece ao digitar) e
+    durações em minutos inteiros. Receita contratada não é recebimento.
+    Projeções e realizado têm bases distintas; dados ausentes não viram zero.
   </p>
   {#if error}<p role="alert" class="error">{error}</p>{/if}{#if notice}<p
       role="status"
     >
       {notice}
     </p>{/if}
-  {#if role !== 'developer'}<details>
+  {#if confidential && (pendingRecords || pendingHours)}<p
+      class="next-step"
+      role="note"
+    >
+      <strong>Próximo passo:</strong>
+      {pendingRecords}
+      {pendingRecords === 1 ? 'registro aguarda' : 'registros aguardam'} e {pendingHours}
+      {pendingHours === 1 ? 'apontamento aguarda' : 'apontamentos aguardam'} decisão
+      independente. Preencha a justificativa abaixo para habilitar a decisão.
+    </p>{/if}
+  {#if role !== 'developer'}<details bind:open={prepareOpen}>
       <summary>Preparar premissas e estimativas</summary>
       <form
         aria-label="Preparar registro econômico"
@@ -394,33 +485,37 @@
               onchange={() => chooseTerm(terms)}
               required
               ><option value="">Selecione</option
-              >{#each view.records.filter((r) => r.kind === 'terms' && r.decision === 'approved') as t}<option
+              >{#each view.records.filter((r) => r.kind === 'terms' && r.decision === 'approved' && (!project || r.project_id === project)) as t}<option
                   value={t.id}
                   >{data.projects.find((p) => p.id === t.project_id)?.name} · {t.valid_from}
-                  a {t.valid_until} · {t.id}</option
+                  a {t.valid_until} · revisão {t.revision}</option
                 >{/each}</select
             ></label
           >{/if}
-        <label
-          >Moeda econômica<select bind:value={cur}
-            >{#each currencies as c}<option value={c}>{c}</option
-              >{/each}</select
-          ></label
-        >
-        <label
-          >Início da competência/vigência<input
-            type="date"
-            bind:value={from}
-            required
-          /></label
-        ><label
-          >Fim da competência/vigência<input
-            type="date"
-            bind:value={until}
-            min={from}
-            required
-          /></label
-        >
+        {#if ['estimate', 'direct_cost'].includes(kind)}<p class="muted">
+            {#if terms && from}Moeda {cur} e competência {from} a {until} herdadas
+              dos termos selecionados.{:else}Moeda e competência vêm dos termos
+              selecionados.{/if}
+          </p>{:else}<label
+            >Moeda econômica<select bind:value={cur}
+              >{#each currencies as c}<option value={c}>{c}</option
+                >{/each}</select
+            ></label
+          >
+          <label
+            >Início da competência/vigência<input
+              type="date"
+              bind:value={from}
+              required
+            /></label
+          ><label
+            >Fim da competência/vigência<input
+              type="date"
+              bind:value={until}
+              min={from}
+              required
+            /></label
+          >{/if}
         <label
           >Fonte das premissas<input
             bind:value={source}
@@ -439,6 +534,8 @@
               bind:value={tax}
               required
             /></label
+          ><small class="bps-preview" aria-live="polite"
+            >{bpsPreview(tax)}</small
           ><label
             >Comissões em pontos-base<input
               type="number"
@@ -448,6 +545,8 @@
               bind:value={commission}
               required
             /></label
+          ><small class="bps-preview" aria-live="polite"
+            >{bpsPreview(commission)}</small
           >
           <label
             >Regra de overhead<select bind:value={ohRule} required
@@ -564,7 +663,10 @@
             >{/if}
         {:else if kind === 'terms'}
           <label
-            >Contrato econômico<select bind:value={contractId} required
+            >Contrato econômico<select
+              bind:value={contractId}
+              onchange={chooseContract}
+              required
               ><option value="">Selecione</option
               >{#each commercial.contracts.filter((c) => c.project_id === project) as c}<option
                   value={c.id}
@@ -616,61 +718,67 @@
             ><input type="checkbox" bind:checked={timeComplete} /> Apontamentos estão
             completos para a observação aprovada</label
           >
-          <label
-            >Minutos incluídos no retainer (vazio para preço fechado)<input
-              type="number"
-              min="0"
-              step="1"
-              bind:value={included}
-            /></label
-          ><label
-            >Regra de excedente<select bind:value={overage} required
-              ><option value="">Selecione</option><option value="none"
-                >Sem receita adicional por excedente</option
-              ><option value="billable">Excedente faturável por hora</option
-              ></select
-            ></label
-          >{#if overage === 'billable'}<label
-              >Preço por hora excedente em unidades mínimas<input
-                bind:value={overageRate}
-                required
+          {#if retainer}
+            <label
+              >Minutos incluídos no retainer (vazio para preço fechado)<input
+                type="number"
+                min="0"
+                step="1"
+                bind:value={included}
               /></label
-            ><small class="money-preview" aria-live="polite"
-              >{preview(overageRate)}</small
-            >{/if}
-          <label
-            >Regra de rollover<select bind:value={rollover} required
-              ><option value="">Selecione</option><option value="none"
-                >Sem transferência entre períodos</option
-              ><option value="carry_capped"
-                >Transferência com teto e origem aprovada</option
-              ></select
-            ></label
-          ><label
-            >Teto de rollover em minutos (0 explícito sem rollover)<input
-              type="number"
-              min="0"
-              step="1"
-              bind:value={cap}
-              required
-            /></label
-          ><label
-            >Entrada de rollover em minutos (0 explícito sem saldo)<input
-              type="number"
-              min="0"
-              step="1"
-              bind:value={carry}
-              required
-            /></label
-          >
-          <label
-            >Origem aprovada do rollover<select bind:value={priorTerms}
-              ><option value="">Sem entrada de saldo</option
-              >{#each view.records.filter((r) => r.kind === 'terms' && r.decision === 'approved') as t}<option
-                  value={t.id}>{t.id} · {t.valid_from} a {t.valid_until}</option
-                >{/each}</select
-            ></label
-          >
+            ><label
+              >Regra de excedente<select bind:value={overage} required
+                ><option value="">Selecione</option><option value="none"
+                  >Sem receita adicional por excedente</option
+                ><option value="billable">Excedente faturável por hora</option
+                ></select
+              ></label
+            >{#if overage === 'billable'}<label
+                >Preço por hora excedente em unidades mínimas<input
+                  bind:value={overageRate}
+                  required
+                /></label
+              ><small class="money-preview" aria-live="polite"
+                >{preview(overageRate)}</small
+              >{/if}
+            <details>
+              <summary>Avançado: saldo entre períodos (rollover)</summary>
+              <label
+                >Regra de rollover<select bind:value={rollover} required
+                  ><option value="">Selecione</option><option value="none"
+                    >Sem transferência entre períodos</option
+                  ><option value="carry_capped"
+                    >Transferência com teto e origem aprovada</option
+                  ></select
+                ></label
+              ><label
+                >Teto de rollover em minutos (0 explícito sem rollover)<input
+                  type="number"
+                  min="0"
+                  step="1"
+                  bind:value={cap}
+                  required
+                /></label
+              ><label
+                >Entrada de rollover em minutos (0 explícito sem saldo)<input
+                  type="number"
+                  min="0"
+                  step="1"
+                  bind:value={carry}
+                  required
+                /></label
+              >
+              <label
+                >Origem aprovada do rollover<select bind:value={priorTerms}
+                  ><option value="">Sem entrada de saldo</option
+                  >{#each view.records.filter((r) => r.kind === 'terms' && r.decision === 'approved') as t}<option
+                      value={t.id}
+                      >{t.id} · {t.valid_from} a {t.valid_until}</option
+                    >{/each}</select
+                ></label
+              >
+            </details>
+          {/if}
           <label
             >Change request M3 aprovado para aditivo<select
               bind:value={changeId}
@@ -740,9 +848,11 @@
         placeholder="Conferência independente e fonte"
       /></label
     >{/if}
-  {#if role !== 'developer'}<details>
-      <summary>Versões e decisões econômicas</summary
-      >{#each view.records.filter((r) => r.kind !== 'terms' || confidential) as r}<article
+  {#if role !== 'developer'}<details bind:open={decisionsOpen}>
+      <summary>Versões e decisões econômicas</summary>{#each view.records
+        .filter((r) => r.kind !== 'terms' || confidential)
+        .slice()
+        .sort((a: EconomicRecord, b: EconomicRecord) => Number(!b.decision) - Number(!a.decision)) as r}<article
           class="request"
         >
           <h3>{names[r.kind]} · revisão {r.revision}</h3>
@@ -779,7 +889,7 @@
             >{/if}
         </article>{:else}<p>Nenhuma versão econômica.</p>{/each}
     </details>{/if}
-  <details>
+  <details bind:open={logOpen}>
     <summary>Apontar horas próprias</summary>
     <form
       aria-label="Apontar horas próprias"
@@ -848,8 +958,10 @@
       ><button disabled={busy}>Registrar minutos</button>
     </form>
   </details>
-  <details>
-    <summary>Horas e decisões</summary>{#each view.times as t}<article
+  <details bind:open={hoursOpen}>
+    <summary>Horas e decisões</summary>{#each view.times
+      .slice()
+      .sort((a, b) => Number(b.state === 'pending') - Number(a.state === 'pending')) as t}<article
         class="request"
       >
         <h3>{t.comment}</h3>
