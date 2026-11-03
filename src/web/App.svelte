@@ -29,6 +29,17 @@
   // Role reading of the Mission Control. Awaited with the first data load so the page
   // does not shift when it appears; separate chunk to keep the initial bundle small.
   const loadOverview = () => import('./Overview.svelte');
+  let Reading = $state.raw<Component<any> | null>(null);
+  let readingFailed = $state(false);
+  async function ensureReading() {
+    if (Reading) return;
+    try {
+      Reading = (await loadOverview()).default as Component<any>;
+      readingFailed = false;
+    } catch {
+      readingFailed = true;
+    }
+  }
   let overview = $state<OverviewData | null>(null);
   let overviewError = $state('');
   type LazyId = keyof typeof loaders;
@@ -234,6 +245,7 @@
     }
     if (next.id && session && allowed(next.id, session.role))
       visited[next.id] = true;
+    if (next.id === 'mission-control' && session) void ensureReading();
   }
   async function navigated() {
     if (route.id) scrollTops.set(route.id, window.scrollY);
@@ -404,7 +416,7 @@
     await Promise.all([
       refresh(),
       parse(location.hash).id === 'mission-control'
-        ? loadOverview().catch(() => {})
+        ? ensureReading()
         : undefined,
     ]);
     const back = takeReturn();
@@ -600,12 +612,13 @@
         </section>
       {/if}
       {#if show('mission-control')}
-        {#await loadOverview() then mod}{@const Reading = mod.default}<Reading
+        <!-- Ready before the first paint (see initialize), so nothing shifts when it appears. -->
+        {#if Reading}<Reading
             {overview}
             error={overviewError}
             requests={data.requests}
             userId={session.user.id}
-          />{:catch}{@render chunkFailed()}{/await}
+          />{:else if readingFailed}{@render chunkFailed()}{/if}
         <section class="stats" aria-label="Resumo operacional">
           <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
           <div>
