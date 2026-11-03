@@ -903,3 +903,9 @@ h1:focus {
     gap: 0;
   }
 }
+@media (max-width: 760px) {
+  .work-list li {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
