@@ -1,0 +1,31 @@
+name: G4 homologation rehearsal
+# Runs the same one-command executor the operator runs on the homologation host
+# (deploy/g4.sh) against an ephemeral rehearsal install on the runner: synthetic
+# data only, OIDC not configured (login blocked), nothing leaves the runner.
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g4:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Rehearsal install standing in for the real homologation (catus project)
+        run: |
+          deploy/catus.sh install
+          deploy/catus.sh backup
+      - name: G4 (read-only real checks, isolated suite, disposable stack)
+        run: deploy/g4.sh --out "$RUNNER_TEMP/g4"
+      - name: GO/NO-GO report in the job summary
+        if: always()
+        run: cat "$RUNNER_TEMP"/g4/*/REPORT.md >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Upload G4 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g4-evidence
+          path: ${{ runner.temp }}/g4/
+          retention-days: 14

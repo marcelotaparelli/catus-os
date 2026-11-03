@@ -9,7 +9,7 @@ import { economicRoute } from './economics/service';
 import { commercialRoute } from './modules/commercial';
 import { pool as defaultPool } from './db';
 import type { Pool } from 'pg';
-import { consumeRate, loginPolicy, apiPolicy } from './rate-limit';
+import { consumeRate, loginPolicy, apiPolicy, rateSubject } from './rate-limit';
 import type { RatePolicy } from './rate-limit';
 import {
   creationRoutes,
@@ -29,7 +29,7 @@ import {
   issueSession,
 } from './auth/session';
 import { audit, authorize } from './auth/policy';
-import { cookie } from './auth/cookies';
+import { cookie, cookieName, readCookie } from './auth/cookies';
 import { configuredProvider } from './ai/provider';
 import type { ExtractionProvider } from './ai/provider';
 import {
@@ -133,15 +133,17 @@ export function createApp(
   ): Promise<Response> => {
     const pathForLimit = new URL(request.url).pathname;
     try {
-      const policy = pathForLimit.startsWith('/api/auth/')
+      // Socket peer is supplied by server, never Forwarded/X-Forwarded-For from a request.
+      const subject = await rateSubject(
+        pool,
+        pathForLimit,
+        peerAddress,
+        readCookie(request, cookieName(config, 'session')),
+      );
+      const policy = subject.startsWith('auth:')
         ? (options.loginRate ?? loginPolicy)
         : (options.apiRate ?? apiPolicy);
-      // Socket peer is supplied by server, never Forwarded/X-Forwarded-For from a request.
-      const rate = await consumeRate(
-        pool,
-        `${pathForLimit.startsWith('/api/auth/') ? 'auth' : 'api'}:${peerAddress}`,
-        policy,
-      );
+      const rate = await consumeRate(pool, subject, policy);
       if (!rate.allowed)
         return response({ error: 'Limite de requisições excedido' }, 429, {
           'Retry-After': String(rate.retryAfter),

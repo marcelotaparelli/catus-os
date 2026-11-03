@@ -2,7 +2,7 @@ import { dropDisposableDatabase } from './support/disposable';
 import { test, expect, beforeAll, afterAll } from 'bun:test';
 import pg from 'pg';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { provisionRoles } from '../scripts/lib/provision-roles';
 import { ident, assertRuntimePrivileges } from '../scripts/lib/privileges';
 import { createApp } from '../src/server/app';
@@ -291,6 +291,54 @@ test('rate limit is atomic/persistent, counts denied requests and ignores spoofe
   expect((await a(failures, 'failed-peer')).status).toBe(503);
   expect((await b(failures, 'failed-peer')).status).toBe(503);
   expect((await a(failures, 'failed-peer')).status).toBe(429);
+});
+test('API quota is per live session behind one shared peer; anonymous, forged and login traffic stay per peer', async () => {
+  const c = { ...config, secureCookies: false };
+  const limited = createApp(c, oidcProvider(c, await mockOidcFetch()), {
+    pool: runtime,
+    loginRate: { limit: 2, windowSeconds: 60 },
+    apiRate: { limit: 2, windowSeconds: 60 },
+  });
+  const token = randomBytes(32).toString('base64url');
+  await fixture.query(
+    'INSERT INTO sessions(id,token_hash,csrf_token,user_id,organization_id) VALUES($1,$2,$3,$4,$5)',
+    [
+      crypto.randomUUID(),
+      createHash('sha256').update(token).digest('hex'),
+      randomBytes(32).toString('base64url'),
+      user,
+      org,
+    ],
+  );
+  const get = (path: string, session?: string) =>
+    limited(
+      new Request(config.origin + '/api/' + path, {
+        headers: session ? { Cookie: session } : {},
+      }),
+      'team-edge-peer',
+    );
+  const second = `catus_session=${token}`;
+  expect((await get('session', cookie)).status).toBe(200);
+  expect((await get('session', cookie)).status).toBe(200);
+  expect((await get('session', cookie)).status).toBe(429);
+  // Same peer, another live session: its own quota.
+  expect((await get('session', second)).status).toBe(200);
+  // Anonymous and forged (well-formed, unknown) cookies share the peer bucket.
+  const forged = `catus_session=${randomBytes(32).toString('base64url')}`;
+  expect((await get('auth/config')).status).toBe(200);
+  expect((await get('auth/config', forged)).status).toBe(200);
+  expect((await get('auth/config')).status).toBe(429);
+  expect((await get('session', forged)).status).toBe(429);
+  // Page loads (auth/config) do not consume the login quota.
+  expect((await get('auth/login')).status).toBe(303);
+  expect((await get('auth/login')).status).toBe(303);
+  expect((await get('auth/login')).status).toBe(429);
+  // A revoked session falls back to the exhausted peer bucket.
+  await fixture.query(
+    'UPDATE sessions SET revoked_at=now() WHERE token_hash=$1',
+    [createHash('sha256').update(token).digest('hex')],
+  );
+  expect((await get('session', second)).status).toBe(429);
 });
 test('encrypted pg_dump restores business data/audit into a fresh database, rejects tampering and invalidates sessions', async () => {
   const keyFile = dir + '/backup.key',

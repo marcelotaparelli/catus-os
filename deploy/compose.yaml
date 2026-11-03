@@ -107,7 +107,7 @@ services:
     # 127.0.0.1:3443 and is reachable solely through the edge forwarder.
     network_mode: 'service:edge'
     environment:
-      APP_ORIGIN: https://localhost:${CATUS_HOST_PORT:-3443}
+      APP_ORIGIN: ${CATUS_ORIGIN:-https://localhost:${CATUS_HOST_PORT:-3443}}
       PORT: '3443'
       TLS_CERT_FILE: /run/secrets/tls_server_crt
       TLS_KEY_FILE: /run/secrets/tls_server_key
@@ -215,14 +215,14 @@ services:
     network_mode: none
     depends_on: []
     environment:
-      APP_ORIGIN: https://localhost:${CATUS_HOST_PORT:-3443}
+      APP_ORIGIN: ${CATUS_ORIGIN:-https://localhost:${CATUS_HOST_PORT:-3443}}
     volumes: ['${CATUS_SECRETS_DIR:?}:/app/.local']
 
   bootstrap-admin:
     <<: *task
     networks: [backend]
     environment:
-      APP_ORIGIN: https://localhost:${CATUS_HOST_PORT:-3443}
+      APP_ORIGIN: ${CATUS_ORIGIN:-https://localhost:${CATUS_HOST_PORT:-3443}}
     env_file: ['${CATUS_SECRETS_DIR:?}/oidc.env']
     secrets: [migrator_database_url, oidc_client_secret]
 
