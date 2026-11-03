@@ -252,7 +252,7 @@ export function recommendActions(f: ActionFacts): RecommendedAction[] {
       reason: d.logged_minutes
         ? `${hoursLabel(d.logged_minutes)} já apontadas sem item de escopo aprovado: trabalho que pode não ser receita.`
         : 'Demanda aberta sem item de escopo aprovado.',
-      target: { route: 'comercial' },
+      target: { route: 'comercial', query: { demanda: d.id } },
     });
   if (r && (r.hours_variance_minutes ?? 0) > 0)
     out.push({

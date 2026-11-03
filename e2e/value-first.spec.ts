@@ -198,7 +198,8 @@ test('value first: synthetic agency → role readings with verified figures → 
     .getByLabel('Justificativa econômica de decisão/reversão')
     .fill('Horas conferidas');
   await pending.getByRole('button', { name: /^Aprovar horas/ }).click();
-  await expect(pending).toContainText('Aprovadas');
+  await expect(econ.getByRole('status')).toContainText('decisão registrada');
+  await expect(pending).toHaveCount(0);
   await open(manager, 'Mission Control');
   await expect(d.locator('.metrics')).toContainText('6h');
   await expect(d).not.toContainText('Decisão de horas pendentes');
@@ -213,8 +214,8 @@ test('value first: synthetic agency → role readings with verified figures → 
   const form = econ.getByRole('form', { name: 'Preparar registro econômico' });
   await expect(form).toBeVisible();
   await expect(
-    form.getByRole('combobox', { name: 'Tipo de registro econômico' }),
-  ).toHaveValue('capacity');
+    form.getByRole('radio', { name: /^Capacidade alocada/ }),
+  ).toBeChecked();
   await expect(
     form.getByRole('combobox', { name: 'Projeto econômico' }),
   ).not.toHaveValue('');
@@ -254,9 +255,6 @@ test('value first: synthetic agency → role readings with verified figures → 
     .click();
   const log = dev.getByRole('form', { name: 'Apontar horas próprias' });
   await expect(log).toBeVisible();
-  await expect(
-    log.getByRole('combobox', { name: 'Projeto das horas' }),
-  ).not.toHaveValue('');
   await expect(
     log.getByRole('combobox', { name: 'Demanda das horas' }),
   ).not.toHaveValue('');

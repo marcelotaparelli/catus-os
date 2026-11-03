@@ -496,7 +496,7 @@ async function operationalOverview(ctx: Context): Promise<OperationalOverview> {
         owner: pos,
         owner_basis: 'PO da organização',
         reason: `Sem cobertura comercial em ${d.project_name}.`,
-        target: { route: 'comercial' as const },
+        target: { route: 'comercial' as const, query: { demanda: d.id } },
       })),
     ...scopes.map((s) =>
       s.state === 'draft'
@@ -506,7 +506,7 @@ async function operationalOverview(ctx: Context): Promise<OperationalOverview> {
             owner: pos,
             owner_basis: 'PO da organização',
             reason: `Rascunho sem efeito comercial em ${s.project_name}.`,
-            target: { route: 'comercial' as const },
+            target: { route: 'comercial' as const, query: { escopo: s.id } },
           }
         : {
             code: 'scope_submitted',
@@ -514,7 +514,7 @@ async function operationalOverview(ctx: Context): Promise<OperationalOverview> {
             owner: decisionMakers,
             owner_basis: 'Alçada comercial',
             reason: `Submetido e aguardando decisão em ${s.project_name}.`,
-            target: { route: 'comercial' as const },
+            target: { route: 'comercial' as const, query: { escopo: s.id } },
           },
     ),
     ...demands

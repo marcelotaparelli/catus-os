@@ -340,6 +340,7 @@ button:disabled {
   margin-bottom: 18px;
 }
 .status {
+  white-space: nowrap;
   font-size: 11px;
   background: #e7edf6;
   color: #3d5a84;
@@ -795,13 +796,231 @@ label.check-option {
   border: 1px solid #d4dce6;
   padding: 1rem;
 }
-.money-preview,
-.bps-preview {
-  display: block;
-  min-height: 1em;
-  margin: -4px 0 6px;
-  color: #187554;
+.econ-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  margin: 18px 0;
+  border-bottom: 1px solid #d4dce6;
+}
+.econ-tabs button {
+  background: none;
+  color: #4a5867;
+  font-size: 13px;
+  border-radius: 5px 5px 0 0;
+  border-bottom: 3px solid transparent;
+}
+.queue-card details {
+  margin: 4px 0 0;
+}
+.queue-card summary {
   font-size: 12px;
+  cursor: pointer;
+}
+.econ-tabs button[aria-selected='true'] {
+  color: #145d44;
+  border-bottom-color: #187554;
+}
+.econ-tabs button:focus-visible {
+  outline-offset: -2px;
+}
+.econ-group {
+  font-size: 15px;
+  margin: 18px 0 8px;
+}
+.econ-decision-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 0 16px;
+  padding: 12px 14px 8px;
+  background: #f1f7f4;
+  border: 1px solid #cfe3da;
+  border-radius: 6px;
+}
+.econ-decision-bar label {
+  margin-bottom: 4px;
+}
+.econ-decision-bar small {
+  grid-column: 1 / -1;
+  color: #4a5867;
+}
+.econ-filter,
+.econ-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 13px;
+}
+.queue-card,
+.hour-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  border: 1px solid #dce5eb;
+  border-radius: 6px;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.queue-card {
+  padding: 12px 14px;
+}
+.queue-body {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.queue-card .eyebrow {
+  margin: 0;
+}
+.queue-card h4,
+.hour-row h4 {
+  margin: 2px 0;
+  font-size: 14px;
+}
+.queue-card p,
+.hour-row p {
+  margin: 2px 0;
+  font-size: 13px;
+}
+.queue-blocked {
+  flex: 0 1 280px;
+  color: #74420b;
+  background: #fff5e6;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.econ-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 6px 16px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.econ-facts dt {
+  color: #5d6c7b;
+  font-size: 12px;
+}
+.econ-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.hour-row {
+  padding: 8px 14px;
+}
+.hour-row h4 {
+  flex: 1 1 100%;
+}
+.hour-row p {
+  flex: 1 1 240px;
+}
+.hour-reverse {
+  flex: 1 1 100%;
+}
+.kind-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  border: 0 !important;
+  padding: 0 !important;
+}
+.kind-picker legend {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 8px;
+}
+label.kind-option {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  cursor: pointer;
+}
+label.kind-option:has(:checked) {
+  border-color: #187554;
+  background: #f1f7f4;
+}
+.kind-option input {
+  margin-top: 2px;
+}
+.kind-option small {
+  display: block;
+  font-weight: 400;
+  color: #5d6c7b;
+}
+.econ-prepare {
+  max-width: 860px;
+}
+.economics .span {
+  grid-column: 1 / -1;
+}
+.unit-field {
+  margin-bottom: 12px;
+}
+.unit-field label {
+  margin: 0;
+}
+.unit-field input {
+  font-size: 12px;
+}
+.economics .request p {
+  font-size: 13px;
+}
+.unit-field small {
+  display: block;
+  min-height: 18px;
+  font-size: 12px;
+  color: #5d6c7b;
+}
+.field-error,
+.unit-field small.field-error,
+.econ-decision-bar small.field-error {
+  display: block;
+  color: #a44338;
+  font-weight: 600;
+}
+.calc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 8px 0;
+  border-top: 1px solid #e3e9ef;
+  font-size: 13px;
+}
+.calc-row p {
+  margin: 0;
+}
+.link-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex: 1 1 280px;
+}
+.link-row label {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.audit-line {
+  font-size: 12px;
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .econ-decision-bar {
+    position: static;
+    grid-template-columns: 1fr;
+  }
 }
 time {
   font-variant-numeric: tabular-nums;

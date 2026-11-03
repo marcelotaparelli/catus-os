@@ -56,6 +56,7 @@
           userId: s.user.id,
           members,
           onChanged: refresh,
+          query: route.query,
         };
       case 'economia':
         return {
@@ -65,6 +66,7 @@
           role,
           userId: s.user.id,
           query: route.query,
+          onChanged: refresh,
         };
       case 'atendimento-inteligente':
         return {

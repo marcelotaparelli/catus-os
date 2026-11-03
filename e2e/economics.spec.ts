@@ -110,33 +110,22 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
     });
     await open(page, 'Economia');
     const econ = page.getByRole('region', { name: 'Inteligência econômica' });
-    await econ
-      .getByText('Preparar premissas e estimativas', { exact: true })
-      .click();
+    await econ.getByRole('tab', { name: 'Preparar' }).click();
     const form = econ.getByRole('form', {
       name: 'Preparar registro econômico',
     });
-    await form
-      .getByRole('combobox', {
-        name: 'Tipo de registro econômico',
-        exact: true,
-      })
-      .selectOption('config');
+    await form.getByRole('radio', { name: /^Premissas econômicas/ }).check();
     await form.getByLabel('Início da competência/vigência').fill('2026-01-01');
     await form.getByLabel('Fim da competência/vigência').fill('2026-12-31');
     await form
       .getByLabel('Fonte das premissas')
       .fill('SYNTHETIC-E2E-M4-CONFIG');
-    await form.getByLabel('Tributos em pontos-base').fill('1000');
-    await form.getByLabel('Comissões em pontos-base').fill('500');
+    await form.getByLabel('Tributos (%)').fill('10');
+    await form.getByLabel('Comissões (%)').fill('5');
     await form
       .getByRole('combobox', { name: 'Regra de overhead', exact: true })
       .selectOption('per_labor_minute');
-    await form.getByLabel('Overhead por hora em unidades mínimas').fill('1200');
-    await form
-      .getByLabel('Dias de trabalho ISO separados por vírgula')
-      .fill('1,2,3,4,5');
-    await form.getByLabel('Minutos de trabalho por dia').fill('480');
+    await form.getByLabel('Overhead por hora (BRL)').fill('12,00');
     await form
       .getByRole('button', { name: 'Preparar versão econômica' })
       .click();
@@ -145,16 +134,17 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
     const ae = admin.getByRole('region', { name: 'Inteligência econômica' });
     await ae.getByRole('button', { name: 'Atualizar economia' }).click();
     await ae
-      .getByText('Versões e decisões econômicas', { exact: true })
-      .click();
-    await ae
       .getByLabel('Justificativa econômica de decisão/reversão')
       .fill('Premissas sintéticas conferidas independentemente');
     const configCard = ae
       .locator('article')
       .filter({ hasText: 'SYNTHETIC-E2E-M4-CONFIG' });
+    // The values are read on the card, in human units, before deciding.
+    await expect(configCard).toContainText('10,00%');
+    await expect(configCard).toContainText('BRL 12,00 por hora');
     await configCard.getByRole('button', { name: /^Aprovar registro/ }).click();
-    await expect(configCard).toContainText('Aprovado');
+    await expect(ae.getByRole('status')).toContainText('decisão registrada');
+    await expect(configCard).toHaveCount(0);
     const approve = async (r: { id: string; revision: number }) =>
       write(admin, 'economics/records/' + r.id + '/decide', {
         revision: r.revision,
@@ -217,25 +207,17 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
     await open(po, 'Economia');
     const pe = po.getByRole('region', { name: 'Inteligência econômica' });
     await pe.getByRole('button', { name: 'Atualizar economia' }).click();
-    await pe
-      .getByText('Preparar premissas e estimativas', { exact: true })
-      .click();
     const pf = pe.getByRole('form', { name: 'Preparar registro econômico' });
-    await pf
-      .getByRole('combobox', {
-        name: 'Termos aprovados para planejamento',
-        exact: true,
-      })
-      .selectOption(terms.id);
-    await pf.getByLabel('Fonte das premissas').fill('SYNTHETIC-PO-FORECAST');
-    await pf
-      .getByRole('combobox', { name: 'Profissional econômico', exact: true })
-      .selectOption(developer);
     await pf
       .getByRole('combobox', { name: 'Demanda a estimar', exact: true })
       .selectOption(request.id);
-    await pf.getByLabel('Baseline prevista em minutos').fill('600');
-    await pf.getByLabel('Minutos para concluir').fill('1200');
+    // Project, the only approved term and the owner all come from the demand.
+    await expect(
+      pf.getByRole('combobox', { name: 'Profissional econômico', exact: true }),
+    ).toHaveValue(developer);
+    await pf.getByLabel('Fonte das premissas').fill('SYNTHETIC-PO-FORECAST');
+    await pf.getByLabel('Horas previstas').fill('10');
+    await pf.getByLabel('Horas para concluir').fill('20');
     await pf.getByLabel('Data prevista de conclusão').fill('2026-11-20');
     await pf.getByRole('button', { name: 'Preparar versão econômica' }).click();
     await expect(pe.getByRole('status')).toContainText('Versão preparada');
@@ -244,24 +226,20 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
       .locator('article')
       .filter({ hasText: 'SYNTHETIC-PO-FORECAST' });
     await forecast.getByRole('button', { name: /^Aprovar registro/ }).click();
-    await expect(forecast).toContainText('Aprovado');
+    await expect(forecast).toHaveCount(0);
     await login(dev, 'dev@browser.test');
     await open(dev, 'Economia');
     const de = dev.getByRole('region', { name: 'Inteligência econômica' });
-    await de.getByText('Apontar horas próprias', { exact: true }).click();
     const df = de.getByRole('form', { name: 'Apontar horas próprias' });
-    await df
-      .getByRole('combobox', { name: 'Projeto das horas', exact: true })
-      .selectOption(project.id);
     await df
       .getByRole('combobox', { name: 'Demanda das horas', exact: true })
       .selectOption(request.id);
     await df.getByLabel('Data trabalhada').fill('2026-11-01');
-    await df.getByLabel('Duração em minutos').fill('120');
+    await df.getByLabel('Duração (horas)').fill('2');
     await df
       .getByLabel('Comentário do apontamento')
       .fill('SYNTHETIC developer work 120 minutes');
-    await df.getByRole('button', { name: 'Registrar minutos' }).click();
+    await df.getByRole('button', { name: 'Registrar horas' }).click();
     await expect(de.getByRole('status')).toContainText('Horas pendentes');
     const safe = JSON.stringify(
       await (await dev.request.get('/api/economics')).json(),
@@ -277,10 +255,10 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
       de.getByRole('form', { name: 'Preparar registro econômico' }),
     ).toHaveCount(0);
     await econ.getByRole('button', { name: 'Atualizar economia' }).click();
+    await econ.getByRole('tab', { name: /^Para decidir/ }).click();
     await econ
       .getByLabel('Justificativa econômica de decisão/reversão')
       .fill('Minutos sintéticos conferidos');
-    await econ.getByText('Horas e decisões', { exact: true }).click();
     const time = econ.locator('article').filter({
       has: page.getByRole('heading', {
         name: 'SYNTHETIC developer work 120 minutes',
@@ -288,22 +266,25 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
       }),
     });
     await time.getByRole('button', { name: /^Aprovar horas/ }).click();
+    await expect(econ.getByRole('status')).toContainText('2h de');
+    await expect(time).toHaveCount(0);
+    await econ.getByRole('tab', { name: 'Horas' }).click();
     await expect(time).toContainText('Aprovadas');
+    await econ.getByRole('tab', { name: 'Rentabilidade' }).click();
     const rf = econ.getByRole('form', {
       name: 'Calcular observação econômica',
     });
-    await rf
-      .getByRole('combobox', { name: 'Termos para relatório', exact: true })
-      .selectOption(terms.id);
     await rf.getByLabel('Data de corte das horas').fill('2026-11-01');
-    await rf.getByRole('button', { name: 'Calcular e preservar' }).click();
+    await rf
+      .getByRole('button', { name: 'Calcular e preservar M4 Projeto' })
+      .click();
     const report = econ
       .getByRole('article', { name: /^Relatório econômico/ })
       .first();
-    await expect(report).toContainText('BRL 3284,00');
-    await expect(report).toContainText('BRL 6716,00');
+    await expect(report).toContainText('BRL 3.284,00');
+    await expect(report).toContainText('BRL 6.716,00');
     await expect(report).toContainText('EAC acima do orçamento');
-    await expect(report).toContainText('1200');
+    await expect(report).toContainText('20h');
     await report
       .getByText('Fórmulas, premissas e fontes desta observação', {
         exact: true,
@@ -317,9 +298,10 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
       fullPage: true,
     });
     await page.reload();
+    await econ.getByRole('tab', { name: 'Rentabilidade' }).click();
     await expect(
       econ.getByRole('article', { name: /^Relatório econômico/ }).first(),
-    ).toContainText('BRL 3284,00');
+    ).toContainText('BRL 3.284,00');
     await open(page, 'Solicitações');
     await expect(
       page.getByRole('heading', { name: 'M4 Demanda Sintética', exact: true }),
