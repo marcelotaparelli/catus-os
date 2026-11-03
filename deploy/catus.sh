@@ -29,6 +29,10 @@ load_env() {
   set -a && . "$ENV_FILE" && set +a
   [ ! -d "${CATUS_SECRETS_DIR:-}" ] || ensure_oidc_files
 }
+# Origin users type in the browser. Default: loopback only. A private network
+# name (e.g. https://catus.<tailnet>.ts.net) needs CATUS_ORIGIN in deploy/.env and
+# that exact redirect URI in the Google client (docs/PILOT_READINESS.md).
+origin() { printf '%s' "${CATUS_ORIGIN:-https://localhost:$CATUS_HOST_PORT}"; }
 # Compose needs both files to exist; empty means "OIDC not configured" (login blocked).
 ensure_oidc_files() {
   local f
@@ -168,7 +172,8 @@ cmd_google_setup() {
 google_checks() {
   local base="https://localhost:$CATUS_HOST_PORT" CA="$CATUS_SECRETS_DIR/tls/ca.crt" c loc id redirect
   id=$(sed -n 's/^OIDC_CLIENT_ID=//p' "$CATUS_SECRETS_DIR/oidc.env")
-  redirect="https%3A%2F%2Flocalhost%3A$CATUS_HOST_PORT%2Fapi%2Fauth%2Fcallback"
+  # Requests go to the loopback port; the redirect URI follows the public origin.
+  redirect=$(printf '%s/api/auth/callback' "$(origin)" | sed 's#:#%3A#g; s#/#%2F#g')
   c=$(curl -sS --max-time 10 --cacert "$CA" "$base/api/auth/config" 2>&1 || true)
   [ "$c" = '{"configured":true}' ] && ok "OIDC configured ($c)" || ko "auth config: $c"
   [ "$(stat -c '%a %u' "$CATUS_SECRETS_DIR/oidc_client_secret")" = "600 $(id -u)" ] && [ -s "$CATUS_SECRETS_DIR/oidc_client_secret" ] &&
@@ -230,7 +235,7 @@ cmd_verify() {
   curl -s --max-time 5 -o /dev/null "$base/api/auth/config" && ko "request without CA accepted" || { [ $? -eq 60 ] && ok "unknown CA rejected (curl 60)" || ko "unexpected error without CA"; }
   c=$(curl -s --max-time 5 --cacert "$CA" -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://evil.example' -H 'Content-Type: application/json' -d '{}' "$base/api/clients")
   [ "$c" = 403 ] && ok "forged Origin refused (403)" || ko "forged Origin returned $c"
-  c=$(curl -s --max-time 5 --cacert "$CA" -o /dev/null -w '%{http_code}' -X POST -H "Origin: https://localhost:$port" -H 'Content-Type: application/json' -d '{}' "$base/api/clients")
+  c=$(curl -s --max-time 5 --cacert "$CA" -o /dev/null -w '%{http_code}' -X POST -H "Origin: $(origin)" -H 'Content-Type: application/json' -d '{}' "$base/api/clients")
   case "$c" in 401 | 403 | 503) ok "same-origin write without session refused ($c)" ;; *) ko "same-origin write without session returned $c" ;; esac
   c=$(curl -sI --max-time 5 --cacert "$CA" "$base/")
   for h in strict-transport-security content-security-policy x-frame-options x-content-type-options; do
