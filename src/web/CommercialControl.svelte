@@ -111,7 +111,9 @@
     if (drafts)
       return `${drafts} ${drafts === 1 ? 'rascunho de escopo a submeter' : 'rascunhos de escopo a submeter'}.`;
     if (view.scopes.some((s) => s.state === 'approved'))
-      return 'Vincule as demandas aos itens aprovados em “Cobertura de demanda”.';
+      return canPrepare
+        ? 'Vincule as demandas aos itens aprovados em “Cobertura de demanda”.'
+        : 'Escopo aprovado; a cobertura das demandas é feita por PO, gestor ou administrador.';
     return 'Sem pendências comerciais.';
   });
   const contractStates: Record<string, string> = {
