@@ -178,9 +178,14 @@ step typecheck npm run check
 step build npm run build
 step bundle-budget npm run perf:budget
 step tls-local npm run tls:local
-step unit-integration npm test
+# Without a Docker socket (deliberately): M5 runner files and the two pg_dump tests
+# need Docker and are reported as SKIP; they stay mandatory in CI `validate`, and
+# backup/restore is proven by stage C with the production tools image.
+mapfile -t files < <(ls tests/*.test.ts | grep -v '^tests/delivery-' | sed 's#^#./#')
+step unit-integration node_modules/.bin/bun test --preload ./tests/setup.ts "${files[@]}" \
+  --test-name-pattern '^(?!.*(pg_dump restores|backup/restore preserves M4)).*'
 step format npm run format:check
-step journeys npm run test:e2e
+step journeys npm run test:e2e -- --grep-invert 'M5 M2-approved'
 mv playwright-report /home/pwuser/out/journeys-report 2>/dev/null
 mv test-results /home/pwuser/out/journeys-results 2>/dev/null
 step quality npm run test:quality
@@ -211,6 +216,8 @@ EOF
       if [ "$rc" = 0 ]; then pass B "$name" "${secs}s"; else fail B "$name" "exit $rc em ${secs}s, ver suite/logs/$name.log"; fi
     done <"$OUT/logs/suite.log"
     grep -q "$SUITE_MARK quality" "$OUT/logs/suite.log" || fail B "suíte concluída" "interrompida; ver logs/suite.log"
+    skip B "M5: tests/delivery-*.test.ts e e2e/zz-delivery.spec.ts" "M5 desligado no piloto; exigem Docker; obrigatórios no CI validate"
+    skip B "pg_dump em operations/economics-api" "exigem Docker; obrigatórios no CI validate; backup/restore real provado no estágio C"
   fi
 else skip B "suíte isolada" "--skip-suite"; fi
 
