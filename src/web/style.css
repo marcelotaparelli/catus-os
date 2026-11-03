@@ -555,14 +555,6 @@ h4 {
 
 /* Checkboxes and radios keep their natural size next to the label text
    (the generic full-width input rule above is meant for text fields). */
-input[type='checkbox'],
-input[type='radio'] {
-  display: inline-block;
-  width: auto;
-  margin: 0;
-  flex: none;
-  accent-color: #187554;
-}
 .check input[type='checkbox'] {
   margin-top: 3px;
 }
