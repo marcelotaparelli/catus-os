@@ -1,7 +1,8 @@
 import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { codeFor } from '../tests/support/oidc-provider';
-export async function login(page: Page, email: string) {
+/** Logs in from `start` (default "/"); the app returns to that address afterwards. */
+export async function login(page: Page, email: string, start = '/') {
   // Simulate only the IdP authorization screen. Execute the real login endpoint,
   // preserve its state cookie, then return a code to the real callback without DNS/network to .test.
   await page.route('**/api/auth/login', async (route) => {
@@ -16,10 +17,10 @@ export async function login(page: Page, email: string) {
       },
     });
   });
-  await page.goto('/');
+  await page.goto(start);
   await page
     .getByRole('link', { name: 'Entrar com conta corporativa' })
     .click();
-  await expect(page).toHaveURL('http://127.0.0.1:5173/');
+  await expect(page).toHaveURL('http://127.0.0.1:5173' + start);
   await expect(page.getByText(email, { exact: false }).first()).toBeVisible();
 }

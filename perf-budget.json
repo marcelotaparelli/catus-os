@@ -1,16 +1,20 @@
 {
-  "note": "Budgets derived from measurements on 2026-11-02 (JS 153.0 kB raw / 50.8 kB gzip, CSS 10.4 kB / 3.1 kB) with ~15-20% headroom. Raise only with justification in the PR.",
+  "note": "Budgets with ~15% headroom over measured values. Initial JS (entry + modulepreloads in index.html) was 76.5 kB raw / 28.6 kB gzip on 2026-11-03 after splitting module screens into on-demand chunks (single bundle before: 153.3 kB / 51.1 kB). Totals sum every chunk compressed separately, so splitting adds per-file gzip overhead; total JS gzip was raised from 60 kB to 70 kB for that reason and for the navigation shell (+~5 kB gzip). Raise only with justification in the PR.",
   "bundle": {
+    "initialJsRawBytes": 90000,
+    "initialJsGzipBytes": 33000,
     "jsRawBytes": 180000,
-    "jsGzipBytes": 60000,
+    "jsGzipBytes": 70000,
     "cssRawBytes": 16000,
     "cssGzipBytes": 5000
   },
   "runtime": {
-    "note": "Production build (vite preview) in the pinned Playwright container, median of 3 runs. Measured in CI run 41604179137: ready 240 ms, LCP 92 ms, CLS 0.004, interaction 34 ms; budgets allow ~4x for runner variance.",
+    "note": "Production build (vite preview) in the pinned Playwright container, median of 3 runs. CI 41629444027/41629496779: Mission Control ready 240-243 ms, LCP 72-96 ms, CLS 0.004, 4 API calls at start, first switch to Comercial 143-149 ms, M3 interaction 38 ms. Budgets allow ~3-4x for runner variance; startApiCalls is exact.",
     "readyMs": 1000,
     "lcpMs": 1000,
     "cls": 0.05,
-    "interactionMs": 150
+    "interactionMs": 150,
+    "startApiCalls": 4,
+    "routeMs": 500
   }
 }

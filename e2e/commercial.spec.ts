@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { login } from './login';
+import { open } from './nav';
 async function selectVersion(page: Page, n: number) {
   const control = page.getByRole('region', { name: 'Controle comercial' });
   const select = control.getByRole('combobox', {
@@ -48,6 +49,7 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await login(page, 'po@browser.test');
+  await open(page, 'Clientes e projetos');
   await page
     .getByLabel('Nome do cliente', { exact: true })
     .fill('M3 Cliente Sintético');
@@ -72,6 +74,7 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
   await page
     .getByRole('button', { name: 'Registrar atendimento', exact: true })
     .click();
+  await open(page, 'Comercial');
   const commercial = page.getByRole('region', { name: 'Controle comercial' });
   await commercial.getByText('Cadastrar contrato', { exact: true }).click();
   await commercial
@@ -100,6 +103,7 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
   try {
     const admin = await adminCtx.newPage();
     await login(admin, 'admin@browser.test');
+    await open(admin, 'Comercial');
     const ac = admin.getByRole('region', { name: 'Controle comercial' });
     await ac
       .getByText('Configurar alçadas comerciais', { exact: true })
@@ -109,6 +113,7 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
     const manager = await managerCtx.newPage();
     manager.on('pageerror', (e) => errors.push(e.message));
     await login(manager, 'manager@browser.test');
+    await open(manager, 'Comercial');
     const mc = manager.getByRole('region', { name: 'Controle comercial' });
     const contract = mc.locator('article').filter({
       has: manager.getByRole('heading', {
@@ -184,6 +189,7 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
     await commercial
       .getByRole('button', { name: 'Atualizar comercial', exact: true })
       .click();
+    await open(page, 'Clientes e projetos');
     for (const title of ['M3 Checkout coberto', 'M3 Cupom fora do escopo']) {
       const select = page.getByRole('combobox', {
         name: 'Atendimento de origem',
@@ -206,10 +212,14 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
       await page
         .getByRole('button', { name: 'Criar solicitação', exact: true })
         .click();
+      await expect(page.getByRole('status')).toContainText('Registro salvo');
+    }
+    await open(page, 'Solicitações');
+    for (const title of ['M3 Checkout coberto', 'M3 Cupom fora do escopo'])
       await expect(
         page.getByRole('heading', { name: title, exact: true }),
       ).toBeVisible();
-    }
+    await open(page, 'Comercial');
     const coverage = commercial.getByRole('form', {
       name: 'Revisar cobertura comercial',
     });
@@ -220,6 +230,8 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
       .getByRole('combobox', { name: 'Item de escopo aprovado', exact: true })
       .selectOption({ label: 'V1 · Checkout sintético contratado' });
     await coverage.getByRole('button', { name: 'Confirmar cobertura' }).click();
+    await expect(commercial.getByRole('status')).toBeVisible();
+    await open(page, 'Solicitações');
     const covered = page.locator('article.request').filter({
         has: page.getByRole('heading', {
           name: 'M3 Checkout coberto',
@@ -234,6 +246,8 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
       });
     await expect(covered).toContainText('Cobertura comercial aprovada');
     await expect(outside).toContainText('Pendente de análise comercial');
+    // Back in Comercial, the selected scope version is still open (context preserved).
+    await open(page, 'Comercial');
     await detail
       .getByLabel('Motivo da alteração')
       .fill('Incluir cupom sintético');
@@ -251,8 +265,10 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
       .getByRole('button', { name: 'Submeter escopo', exact: true })
       .click();
     await expect(detail).toContainText('Submetido');
+    await open(page, 'Solicitações');
     await expect(outside).toContainText('Pendente de análise comercial');
     await expect(covered).toContainText('Cobertura comercial aprovada');
+    await open(page, 'Comercial');
     await mc
       .getByRole('button', { name: 'Atualizar comercial', exact: true })
       .click();
@@ -275,7 +291,9 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
     await expect(detail).toContainText(
       'Conferido contrato sintético e critérios V1',
     );
+    await open(page, 'Solicitações');
     await expect(covered).toContainText('Pendente de análise comercial');
+    await open(page, 'Comercial');
     await coverage
       .getByRole('combobox', { name: 'Demanda para cobertura', exact: true })
       .selectOption({ label: 'M3 Cupom fora do escopo' });
@@ -283,10 +301,13 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
       .getByRole('combobox', { name: 'Item de escopo aprovado', exact: true })
       .selectOption({ label: 'V2 · Checkout e cupom contratados' });
     await coverage.getByRole('button', { name: 'Confirmar cobertura' }).click();
+    await expect(commercial.getByRole('status')).toBeVisible();
+    await open(page, 'Solicitações');
     await expect(outside).toContainText('Cobertura comercial aprovada');
     await page.reload();
     await expect(outside).toContainText('Cobertura comercial aprovada');
     await expect(covered).toContainText('Pendente de análise comercial');
+    await open(page, 'Comercial');
     await selectVersion(page, 1);
     await expect(detail).toContainText('Substituído');
     await page.screenshot({
@@ -295,6 +316,7 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
     });
     const foreign = await foreignCtx.newPage();
     await login(foreign, 'outsider@browser.test');
+    await open(foreign, 'Comercial');
     await expect(
       foreign.getByRole('heading', {
         name: 'M3 Contrato Sintético',

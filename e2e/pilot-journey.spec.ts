@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import { login } from './login';
+import { open } from './nav';
 
 // Controlled-pilot acceptance: one synthetic operation carried end to end through the
 // real UI by four roles. Inputs mirror e2e/economics.spec.ts (which builds them via API),
@@ -41,6 +42,7 @@ async function prepareEconomic(
   fill: (form: Locator) => Promise<void>,
   period = true,
 ) {
+  await open(page, 'Economia');
   const e = econ(page);
   await e.getByRole('button', { name: 'Atualizar economia' }).click();
   await openDetails(e, 'Preparar premissas e estimativas');
@@ -65,6 +67,7 @@ async function prepareEconomic(
   await expect(e.getByRole('status')).toContainText('Versão preparada');
 }
 async function approveEconomic(page: Page, source: string) {
+  await open(page, 'Economia');
   const e = econ(page);
   await e.getByRole('button', { name: 'Atualizar economia' }).click();
   await openDetails(e, 'Versões e decisões econômicas');
@@ -79,6 +82,7 @@ async function editRequest(
   page: Page,
   values: { status?: string; owner?: string; action?: string },
 ) {
+  await open(page, 'Solicitações');
   const c = card(page);
   await c.getByRole('button', { name: 'Atualizar solicitação' }).click();
   const edit = c.getByRole('region', { name: 'Editar solicitação' });
@@ -120,16 +124,18 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     // Role-aware navigation: modules are reachable, privileged entries are hidden.
     const poNav = po.getByRole('navigation', { name: 'Módulos', exact: true });
     await expect(
-      poNav.getByRole('link', { name: 'Registrar atendimento' }),
+      poNav.getByRole('link', { name: 'Atendimento inteligente' }),
     ).toBeVisible();
     await expect(poNav.getByRole('link', { name: 'Auditoria' })).toHaveCount(0);
-    await expect(poNav.getByRole('link', { name: 'Acesso' })).toHaveCount(0);
+    await expect(
+      poNav.getByRole('link', { name: 'Acesso e usuários' }),
+    ).toHaveCount(0);
     const devNav = dev.getByRole('navigation', {
       name: 'Módulos',
       exact: true,
     });
     await expect(
-      devNav.getByRole('link', { name: 'Registrar atendimento' }),
+      devNav.getByRole('link', { name: 'Atendimento inteligente' }),
     ).toHaveCount(0);
     await expect(
       manager
@@ -138,6 +144,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     ).toBeVisible();
 
     // 1. Admin sets the commercial approval authority (manager/admin decide).
+    await open(admin, 'Comercial');
     const ac = commercial(admin);
     await ac
       .getByText('Configurar alçadas comerciais', { exact: true })
@@ -146,7 +153,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     await expect(ac.getByRole('status')).toContainText('Política v');
 
     // 2. PO records client, project and the meeting.
-    await poNav.getByRole('link', { name: 'Registrar atendimento' }).click();
+    await open(po, 'Clientes e projetos');
     await po.getByLabel('Nome do cliente', { exact: true }).fill(CLIENT);
     await po.getByRole('button', { name: 'Cadastrar cliente' }).click();
     await expect(po.getByRole('status').last()).toContainText('Registro salvo');
@@ -198,11 +205,13 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     await po
       .getByRole('button', { name: 'Criar solicitação', exact: true })
       .click();
+    await open(po, 'Solicitações');
     await expect(card(po)).toContainText('Nova');
     await expect(card(po)).toContainText('Dev Browser');
     await expect(card(po)).toContainText('Pendente de análise comercial');
 
     // 4. Contract (PO registers, manager activates) and scope V1 (PO prepares, manager approves).
+    await open(po, 'Comercial');
     const pc = commercial(po);
     await pc.getByText('Cadastrar contrato', { exact: true }).click();
     await pc
@@ -218,6 +227,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     await pc
       .getByRole('button', { name: 'Registrar contrato', exact: true })
       .click();
+    await open(manager, 'Comercial');
     const mc = commercial(manager);
     await mc.getByRole('button', { name: 'Atualizar comercial' }).click();
     const contract = mc.locator('article').filter({
@@ -309,6 +319,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
       .getByRole('combobox', { name: 'Item de escopo aprovado', exact: true })
       .selectOption({ label: `V1 · ${ITEM}` });
     await coverage.getByRole('button', { name: 'Confirmar cobertura' }).click();
+    await open(po, 'Solicitações');
     await expect(card(po)).toContainText('Cobertura comercial aprovada');
     await expect(card(po)).toContainText(`Escopo V1 · ${CONTRACT}`);
     for (const [status, action] of [
@@ -499,9 +510,16 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
 
     // 8. Developer finds own work, starts it and logs hours.
     await dev.getByRole('button', { name: 'Atualizar dados' }).click();
+    // Mission Control lists the developer's own priority with its next action.
+    await expect(
+      dev.getByRole('region', { name: 'Minhas prioridades' }),
+    ).toContainText(REQUEST);
+    await open(dev, 'Solicitações');
     await dev
       .getByRole('combobox', { name: 'Filtrar responsável', exact: true })
       .selectOption('me');
+    // The filter is part of the URL, so it survives reload and back/forward.
+    await expect(dev).toHaveURL(/#\/solicitacoes\?responsavel=me$/);
     await expect(card(dev)).toContainText('você');
     const devEdit = await editRequest(dev, {
       status: 'in_progress',
@@ -512,6 +530,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     ).toBeDisabled();
     await devEdit.getByRole('button', { name: 'Salvar atualização' }).click();
     await expect(card(dev)).toContainText('Em execução');
+    await open(dev, 'Economia');
     const de = econ(dev);
     await de.getByText('Apontar horas próprias', { exact: true }).click();
     const hours = de.getByRole('form', { name: 'Apontar horas próprias' });
@@ -540,6 +559,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
       expect(devEconomics).not.toContain(secret);
 
     // 9. Manager approves the hours (by name) and calculates profitability.
+    await open(manager, 'Economia');
     const me = econ(manager);
     await me.getByRole('button', { name: 'Atualizar economia' }).click();
     await me
@@ -586,6 +606,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
 
     // 10. Mission Control shows one consistent state for every role.
     for (const p of [po, manager, dev]) {
+      await open(p, 'Solicitações');
       await p.reload();
       const c = card(p);
       await expect(c).toContainText('Em execução');
@@ -597,6 +618,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
       await expect(c).toContainText(`Escopo V1 · ${CONTRACT}`);
       await expect(c).toContainText(MEETING);
     }
+    await open(dev, 'Mission Control');
     await expect(
       dev
         .getByRole('region', { name: 'Resumo operacional' })
@@ -604,6 +626,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
         .filter({ hasText: 'Atribuídas a mim' }),
     ).toContainText(/[1-9]/);
     await manager.reload();
+    await open(manager, 'Economia');
     await expect(
       econ(manager)
         .getByRole('article', { name: /^Relatório econômico/ })
@@ -611,10 +634,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     ).toContainText('USD 3284,00');
 
     // 11. Audit trail: manager sees who did what; PO cannot read it.
-    await manager
-      .getByRole('navigation', { name: 'Módulos', exact: true })
-      .getByRole('link', { name: 'Auditoria' })
-      .click();
+    await open(manager, 'Auditoria');
     const audit = manager.getByRole('region', { name: 'Auditoria' });
     await audit.getByRole('button', { name: 'Carregar auditoria' }).click();
     await audit

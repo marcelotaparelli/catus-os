@@ -2,10 +2,10 @@
 
 Todo PR roda dois jobs no CI (`.github/workflows/ci.yml`). Ambos são obrigatórios.
 
-| Job        | O que bloqueia                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `validate` | typecheck (`svelte-check` + `tsc`), build, formatação, testes unitários/API (Bun + PostgreSQL descartável), orçamento de bundle (`npm run perf:budget`), jornadas E2E M0–M5 (`npm run test:e2e`)                                                                                                                                                                                                                                                                   |
-| `quality`  | `npm run test:quality` com navegador da imagem Playwright **fixada por digest**: regressão visual (comparação exata), axe-core WCAG 2.2 A/AA, layout em 360/390/768/1280/1440 px (sem overflow, corte ou sobreposição de controles), foco visível em cada parada de Tab, M3 operável por teclado, matriz de papéis, recusas diretas da API, feedback de carregamento/falha de rede/resposta inválida, edição concorrente, orçamento de runtime (build de produção) |
+| Job        | O que bloqueia                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `validate` | typecheck (`svelte-check` + `tsc`), build, formatação, testes unitários/API (Bun + PostgreSQL descartável), orçamento de bundle (`npm run perf:budget`), jornadas E2E M0–M5 navegando pelo menu de módulos (`npm run test:e2e`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `quality`  | `npm run test:quality` com navegador da imagem Playwright **fixada por digest**: regressão visual (comparação exata), axe-core WCAG 2.2 A/AA em todos os módulos de cada papel, layout de todos os módulos em 360/390/768/1280/1440 px (sem overflow, corte ou sobreposição de controles), foco visível em cada parada de Tab, M3 e menu operáveis por teclado, navegação (menu e rotas por papel, rotas restritas sem download do módulo, link direto através do login, recarregar, voltar/avançar, âncoras antigas, rota inexistente, carregamento sob demanda, rascunhos e filtros preservados, desmontagem ao sair), matriz de papéis, recusas diretas da API, feedback de carregamento/falha de rede/resposta inválida, edição concorrente, orçamento de runtime (build de produção) |
 
 Qualquer falha publica o artefato `quality-evidence` (ou `journeys-evidence`), com relatório HTML, traces, capturas, diffs visuais (`*-diff.png`), `axe.json` e medições de desempenho.
 
@@ -38,16 +38,20 @@ CATUS_PW_WS=ws://127.0.0.1:3001/ npm run test:quality   # idêntico ao CI, com o
 
 ## Desempenho
 
-`perf-budget.json` registra os orçamentos e as medições de referência.
+`perf-budget.json` registra os orçamentos e as medições de referência (CI 41629444027 e 41629496779). Telas de módulo são carregadas na primeira visita (chunks separados); o JS inicial é o script de entrada mais os `modulepreload` do `index.html`.
 
-| Métrica (CI 41604179137)                 | Medido             | Orçamento      |
-| ---------------------------------------- | ------------------ | -------------- |
-| JS bruto / gzip                          | 153,0 kB / 51,0 kB | 180 kB / 60 kB |
-| CSS bruto / gzip                         | 10,4 kB / 3,0 kB   | 16 kB / 5 kB   |
-| Mission Control utilizável (preview)     | 240 ms             | 1000 ms        |
-| LCP                                      | 92 ms              | 1000 ms        |
-| CLS                                      | 0,004              | 0,05           |
-| Interação M3 (abrir formulário / escopo) | 34 ms              | 150 ms         |
+| Métrica                                        | Antes (página única)     | Navegação por módulo | Orçamento      |
+| ---------------------------------------------- | ------------------------ | -------------------- | -------------- |
+| JS inicial bruto / gzip                        | 153,3 kB / 51,1 kB       | 76,5 kB / 28,6 kB    | 90 kB / 33 kB  |
+| JS total bruto / gzip (soma dos chunks)        | 153,3 kB / 51,1 kB       | 166,2 kB / 61,7 kB   | 180 kB / 70 kB |
+| CSS bruto / gzip                               | 10,4 kB / 3,0 kB         | 11,7 kB / 3,3 kB     | 16 kB / 5 kB   |
+| Chamadas de API na abertura                    | 10–11 (todos os módulos) | 4                    | 4              |
+| Tela inicial utilizável (preview)              | 240–517 ms (tudo)        | 240–243 ms           | 1000 ms        |
+| Troca para o Comercial (chunk + dados, 1ª vez) | —                        | 143–149 ms           | 500 ms         |
+| LCP / CLS                                      | 92–156 ms / 0,004        | 72–96 ms / 0,004     | 1000 ms / 0,05 |
+| Interação M3 (abrir formulário / escopo)       | 32–66 ms                 | 38 ms                | 150 ms         |
+
+O total cresce porque cada chunk é comprimido separadamente e pela navegação (cerca de 5 kB gzip); o que o usuário baixa para começar caiu 44%.
 
 Lighthouse não foi adicionado: traria uma dependência pesada e um segundo navegador, e não mede nada além do que estas métricas cobrem para um SPA autenticado em rede local.
 
@@ -74,7 +78,7 @@ Lighthouse não foi adicionado: traria uma dependência pesada e um segundo nave
 
 ## Backlog priorizado
 
-1. **Página longa:** todos os módulos ficam num único fluxo. Próximo passo: navegação por módulo (rota ou abas), mantendo as âncoras atuais. Exige ajustar as jornadas E2E.
+1. ~~Página longa~~: resolvido com a navegação por módulo (rotas `#/…`, `src/web/routes.ts`).
 2. Estender a regressão visual e as capturas de UX a M4 (horas/rentabilidade), atendimento inteligente e M5.
 3. Formato de data `mm/dd/yyyy` no renderizador do CI (locale do navegador sem dados pt-BR); avaliar campos de data com formato explícito.
 4. Espaço superior excessivo no cartão de item do escopo (padding do cartão + margem do título).

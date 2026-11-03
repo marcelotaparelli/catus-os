@@ -1,15 +1,95 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
+  import type { Component } from 'svelte';
   import { statuses, transitions } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
   import './style.css';
-  import DeliveryControl from './DeliveryControl.svelte';
-  import EconomicsControl from './EconomicsControl.svelte';
-  import CommercialControl from './CommercialControl.svelte';
-  import IntelligentIntake from './IntelligentIntake.svelte';
-  import AccessAdmin from './AccessAdmin.svelte';
-  import AuditLog from './AuditLog.svelte';
+  import {
+    allowed,
+    href,
+    parse,
+    rememberReturn,
+    routeById,
+    routes,
+    takeReturn,
+  } from './routes';
+  import type { Location, RouteId } from './routes';
   import type { SessionView, Member, Role } from '../shared/identity';
+  // Module screens load on first visit (separate chunks), then stay mounted while
+  // hidden so drafts, selections and scroll survive switching between modules.
+  const loaders = {
+    comercial: () => import('./CommercialControl.svelte'),
+    economia: () => import('./EconomicsControl.svelte'),
+    'atendimento-inteligente': () => import('./IntelligentIntake.svelte'),
+    acesso: () => import('./AccessAdmin.svelte'),
+    auditoria: () => import('./AuditLog.svelte'),
+    entrega: () => import('./DeliveryControl.svelte'),
+  };
+  type LazyId = keyof typeof loaders;
+  const lazyIds = Object.keys(loaders) as LazyId[];
+  /** Props per module screen; identical to the former single-page wiring. */
+  function moduleProps(id: LazyId, s: SessionView): Record<string, unknown> {
+    const role = s.role;
+    switch (id) {
+      case 'comercial':
+        return {
+          api,
+          data,
+          role,
+          userId: s.user.id,
+          members,
+          onChanged: refresh,
+        };
+      case 'economia':
+        return { api, data, members, role, userId: s.user.id };
+      case 'atendimento-inteligente':
+        return {
+          api,
+          interactions: data.interactions,
+          projects: data.projects,
+          members,
+          role,
+          onCreated: refresh,
+        };
+      case 'acesso':
+        return {
+          members,
+          currentUserId: s.user.id,
+          busy,
+          onProvision: (body: unknown) =>
+            execute(async () => {
+              await api('memberships', 'POST', body);
+              await refresh();
+              notice = 'Acesso atualizado.';
+            }),
+          onRevoke: (memberId: string) =>
+            execute(async () => {
+              await api(`memberships/${memberId}/revoke`, 'POST', {});
+              await refresh();
+              notice = 'Acesso revogado.';
+            }),
+        };
+      case 'auditoria':
+        return { api, members };
+      case 'entrega':
+        return { api, data, role };
+    }
+  }
+  const chunks = new Map<LazyId, Promise<unknown>>();
+  function load(id: LazyId) {
+    let chunk = chunks.get(id);
+    if (!chunk) {
+      chunk = loaders[id]().catch((e: unknown) => {
+        chunks.delete(id);
+        throw e;
+      });
+      chunks.set(id, chunk);
+    }
+    return chunk as Promise<{ default: unknown }>;
+  }
+  function prefetch(id: RouteId) {
+    if (id in loaders) load(id as LazyId).catch(() => {});
+  }
   let session = $state<SessionView | null>(null);
   let members = $state<Member[]>([]);
   let configured = $state(false);
@@ -80,30 +160,94 @@
     ).length,
   );
   let open = $derived(data.requests.filter((r) => r.status !== 'done').length);
-  // Navigation is role-aware but never a security boundary: the API authorizes every call.
-  let sections = $derived(
-    session
-      ? [
-          { id: 'solicitacoes', label: 'Solicitações' },
-          ...(session.role !== 'developer'
-            ? [{ id: 'registro', label: 'Registrar atendimento' }]
-            : []),
-          { id: 'clientes', label: 'Clientes e projetos' },
-          { id: 'comercial', label: 'Contratos e escopos' },
-          { id: 'economia', label: 'Horas e economia' },
-          ...(session.role !== 'developer'
-            ? [{ id: 'ia', label: 'Atendimento inteligente' }]
-            : []),
-          ...(session.role === 'administrator'
-            ? [{ id: 'acesso', label: 'Acesso' }]
-            : []),
-          ...(['administrator', 'manager'].includes(session.role)
-            ? [{ id: 'auditoria', label: 'Auditoria' }]
-            : []),
-          { id: 'entrega', label: 'Entrega agêntica (experimental)' },
-        ]
-      : [],
+  const urgency: Record<Status, number> = {
+    blocked: 0,
+    in_progress: 1,
+    ready: 2,
+    triage: 3,
+    new: 4,
+    done: 5,
+  };
+  let priorities = $derived(
+    data.requests
+      .filter(
+        (r) => r.owner_user_id === session?.user.id && r.status !== 'done',
+      )
+      .sort((a, b) => urgency[a.status] - urgency[b.status]),
   );
+  let blocked = $derived(data.requests.filter((r) => r.status === 'blocked'));
+  let uncovered = $derived(
+    data.requests.filter(
+      (r) => r.status !== 'done' && r.commercial_coverage !== 'covered',
+    ).length,
+  );
+  // Navigation is role-aware but never a security boundary: the API authorizes every call.
+  let route = $state<Location>(parse(location.hash));
+  let visited = $state<Partial<Record<RouteId, boolean>>>({});
+  let heading = $state<HTMLHeadingElement>();
+  const scrollTops = new Map<RouteId, number>();
+  let nav = $derived(
+    session ? routes.filter((r) => allowed(r.id, session!.role)) : [],
+  );
+  let permitted = $derived(
+    !!session && !!route.id && allowed(route.id, session.role),
+  );
+  let page = $derived(
+    !route.id
+      ? {
+          eyebrow: 'NAVEGAÇÃO',
+          title: 'Página não encontrada',
+          description: 'O endereço não corresponde a nenhum módulo.',
+        }
+      : session && !permitted
+        ? {
+            eyebrow: 'NAVEGAÇÃO',
+            title: 'Acesso restrito',
+            description: 'Este módulo não está disponível para o seu papel.',
+          }
+        : routeById[route.id],
+  );
+  function show(id: RouteId) {
+    return route.id === id && permitted;
+  }
+  /** Applies the current hash: canonical URL, filters from the query, module mount. */
+  function applyRoute(next: Location) {
+    if (next.canonical) history.replaceState(history.state, '', next.canonical);
+    route = next;
+    if (next.id === 'solicitacoes' && [...next.query.keys()].length) {
+      const estado = next.query.get('estado') ?? '';
+      filter = (statuses as readonly string[]).includes(estado) ? estado : '';
+      ownerFilter = next.query.get('responsavel') ?? '';
+    }
+    if (next.id && session && allowed(next.id, session.role))
+      visited[next.id] = true;
+  }
+  async function navigated() {
+    if (route.id) scrollTops.set(route.id, window.scrollY);
+    applyRoute(parse(location.hash));
+    error = notice = '';
+    await tick();
+    window.scrollTo({
+      top: (route.id && scrollTops.get(route.id)) || 0,
+      behavior: 'instant',
+    });
+    heading?.focus({ preventScroll: true });
+  }
+  // Filters live in the URL so a filtered list can be shared, reloaded or revisited.
+  $effect(() => {
+    const target = href('solicitacoes', {
+      estado: filter,
+      responsavel: ownerFilter,
+    });
+    if (route.id === 'solicitacoes' && connected)
+      untrack(() => {
+        if (location.hash !== target)
+          history.replaceState(history.state, '', target);
+      });
+  });
+  $effect(() => {
+    document.title = `Catus OS · ${connected ? page.title : 'Mission Control'}`;
+  });
   function when(iso: string) {
     const d = new Date(iso);
     return Number.isNaN(d.getTime())
@@ -119,7 +263,10 @@
     occurred = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 16);
+    applyRoute(route);
     void execute(initialize);
+    addEventListener('hashchange', navigated);
+    return () => removeEventListener('hashchange', navigated);
   });
   const creationAttempts = new Map<string, { payload: string; key: string }>();
   async function api<T>(
@@ -208,6 +355,8 @@
     ownerFilter = '';
     members = [];
     data = { clients: [], projects: [], interactions: [], requests: [] };
+    // Unmount module screens so nothing from this session or organization lingers.
+    visited = {};
   }
   async function initialize() {
     configured = (await api<{ configured: boolean }>('auth/config')).configured;
@@ -225,6 +374,10 @@
     if (!res.ok) throw new Error('Não foi possível verificar a sessão');
     session = (await res.json()) as SessionView;
     await refresh();
+    const back = takeReturn();
+    if (back && !location.hash.replace(/^#\/?/, ''))
+      history.replaceState(history.state, '', back);
+    applyRoute(parse(location.hash));
     connected = true;
     loaded = true;
   }
@@ -286,6 +439,16 @@
   }
 </script>
 
+{#snippet chunkFailed()}<div class="panel route-message" role="alert">
+    <h2>Não foi possível carregar este módulo</h2>
+    <p class="muted">
+      A conexão falhou ou o Catus OS foi atualizado. Recarregue a página para
+      continuar.
+    </p>
+    <button type="button" onclick={() => location.reload()}
+      >Recarregar página</button
+    >
+  </div>{/snippet}
 <svelte:head
   ><meta
     name="description"
@@ -294,11 +457,16 @@
 >
 <div class="shell">
   <aside>
-    <a class="brand" href="/">CATUS<span>OS</span></a>
+    <a class="brand" href="#/">CATUS<span>OS</span></a>
     <p class="eyebrow">WORKSPACE DA AGÊNCIA</p>
     <nav aria-label="Módulos">
-      {#if connected && sections.length}
-        {#each sections as s}<a class="nav" href={'#' + s.id}>{s.label}</a
+      {#if connected && nav.length}
+        {#each nav as r (r.id)}<a
+            class="nav"
+            href={href(r.id)}
+            aria-current={route.id === r.id ? 'page' : undefined}
+            onpointerenter={() => prefetch(r.id)}
+            onfocus={() => prefetch(r.id)}>{r.label}</a
           >{/each}
       {:else}<span class="nav active">Mission Control</span>{/if}
     </nav>
@@ -308,11 +476,17 @@
   <main>
     <header>
       <div>
-        <p class="eyebrow">OPERAÇÃO / VISÃO GERAL</p>
-        <h1>Mission Control</h1>
-        <p class="muted">
-          Da conversa à próxima ação, com contexto e responsabilidade.
-        </p>
+        {#if connected}
+          <p class="eyebrow">{page.eyebrow}</p>
+          <h1 tabindex="-1" bind:this={heading}>{page.title}</h1>
+          <p class="muted">{page.description}</p>
+        {:else}
+          <p class="eyebrow">OPERAÇÃO / VISÃO GERAL</p>
+          <h1>Mission Control</h1>
+          <p class="muted">
+            Da conversa à próxima ação, com contexto e responsabilidade.
+          </p>
+        {/if}
       </div>
       <span class="badge">IA assistida · revisão humana obrigatória</span>
     </header>
@@ -324,7 +498,10 @@
             Use sua conta corporativa previamente autorizada. O acesso depende
             dos vínculos da sua organização.
           </p>
-          <a class="login-button" href="/api/auth/login"
+          <a
+            class="login-button"
+            href="/api/auth/login"
+            onclick={() => rememberReturn(location.hash)}
             >Entrar com conta corporativa</a
           >
         {:else}<p role="status">
@@ -361,460 +538,533 @@
         >
       </div>
       <nav class="mobile-nav" aria-label="Módulos (compacto)">
-        {#each sections as s}<a href={'#' + s.id}>{s.label}</a>{/each}
+        {#each nav as r (r.id)}<a
+            href={href(r.id)}
+            aria-current={route.id === r.id ? 'page' : undefined}>{r.label}</a
+          >{/each}
       </nav>
-      <section class="stats" aria-label="Resumo operacional">
-        <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
-        <div><span>Projetos</span><strong>{data.projects.length}</strong></div>
-        <div>
-          <span>Solicitações carregadas</span><strong
-            >{data.requests.length}</strong
+      {#if !route.id || !permitted}
+        <section class="panel route-message" aria-label={page.title}>
+          <h2>
+            {route.id
+              ? 'Você não tem acesso a este módulo'
+              : 'Não encontramos este endereço'}
+          </h2>
+          <p class="muted">
+            {route.id
+              ? 'O menu mostra apenas os módulos do seu papel, e o servidor recusa operações fora dele. Peça acesso a um administrador, se necessário.'
+              : 'Ele pode ter sido digitado incorretamente ou ser de uma versão anterior.'}
+          </p>
+          <a class="button-link" href={href('mission-control')}
+            >Ir para o Mission Control</a
           >
-        </div>
-        <div><span>Em aberto</span><strong>{open}</strong></div>
-        <div>
-          <span>Atribuídas a mim (abertas)</span><strong>{mine}</strong>
-        </div>
-        <div>
-          <span>Bloqueadas</span><strong
-            >{data.requests.filter((r) => r.status === 'blocked')
-              .length}</strong
-          >
-        </div>
-      </section>
-      <section class="panel" id="solicitacoes" aria-label="Solicitações">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">ACOMPANHAMENTO</p>
-            <h2>Solicitações</h2>
-          </div>
-          <div class="filters">
-            <label
-              >Filtrar responsável<select bind:value={ownerFilter}
-                ><option value="">Todos os responsáveis</option><option
-                  value="me">Atribuídas a mim</option
-                ><option value="unassigned">Sem vínculo de responsável</option
-                >{#each members as m}<option value={m.id}>{m.name}</option
-                  >{/each}</select
-              ></label
-            ><label
-              >Filtrar estado<select bind:value={filter}
-                ><option value="">Todos os estados</option
-                >{#each statuses as s}<option value={s}>{labels[s]}</option
-                  >{/each}</select
-              ></label
-            >
-          </div>
-        </div>
-        <p class="muted">
-          Até 500 solicitações mais recentes. Novas solicitações entram em
-          “Nova”; estados seguintes exigem triagem. Cada cartão mostra o
-          responsável e a próxima ação.
-        </p>
-        {#if !visible.length}<div class="empty">
-            <h3>Nenhuma solicitação neste recorte</h3>
-            <p>
-              {#if data.requests.length}Ajuste os filtros para ver as demais
-                solicitações.{:else if session.role === 'developer'}Nenhum
-                trabalho registrado ainda; o PO atribuirá solicitações a você.{:else}Registre
-                um atendimento e sua primeira solicitação para começar.{/if}
-            </p>
-          </div>{:else}<div class="cards">
-            {#each visible as r (r.id)}<article
-                class="request"
-                class:editing={editing?.id === r.id}
-              >
-                <div class="card-top">
-                  <span class="status" data-status={r.status}
-                    >{labels[r.status]}</span
-                  ><span class="muted">v{r.version}</span>
-                </div>
-                <p class="eyebrow">{r.client_name} / {r.project_name}</p>
-                <h3>{r.title}</h3>
-                <p
-                  class="commercial-coverage"
-                  data-coverage={r.commercial_coverage}
-                >
-                  {r.commercial_coverage === 'covered'
-                    ? 'Cobertura comercial aprovada'
-                    : 'Pendente de análise comercial'}{#if r.scope_item_id}
-                    · Escopo V{r.scope_number} · {r.contract_title}{/if}
-                </p>
-                <p class="description">{r.description}</p>
-                {#if r.origin_proposal_id}<p class="muted">
-                    Origem IA revisada por humano · proposta {r.origin_proposal_id}
-                  </p>{/if}
-                {#if r.suggested_acceptance_criteria?.length}<details>
-                    <summary>Critérios revisados</summary>
-                    <ul>
-                      {#each r.suggested_acceptance_criteria as c}<li>
-                          {c.text}
-                        </li>{/each}
-                    </ul>
-                  </details>{/if}
-                <dl>
-                  <dt>Responsável</dt>
-                  <dd>
-                    {r.owner}{#if r.owner_user_id === session.user.id}<span
-                        class="mine-tag">· você</span
-                      >{/if}{#if !r.owner_user_id}<span class="muted">
-                        · legado, vinculação pendente</span
-                      >{/if}
-                  </dd>
-                  <dt>Próxima ação</dt>
-                  <dd>{r.next_action}</dd>
-                  <dt>Atendimento de origem</dt>
-                  <dd>
-                    {data.interactions.find((i) => i.id === r.interaction_id)
-                      ?.summary ?? r.interaction_id}
-                  </dd>
-                </dl>
-                {#if editing?.id === r.id}<section
-                    class="edit"
-                    aria-label="Editar solicitação"
-                    use:focusFirst
-                  >
-                    <form
-                      onsubmit={(e) => {
-                        e.preventDefault();
-                        void save();
-                      }}
-                    >
-                      <label
-                        >Estado<select bind:value={editStatus}
-                          ><option value={editing.status}
-                            >{labels[editing.status]}</option
-                          >{#each transitions[editing.status].filter((s) => session?.role !== 'developer' || ['in_progress', 'blocked', 'done'].includes(s)) as s}<option
-                              value={s}>{labels[s]}</option
-                            >{/each}</select
-                        ></label
-                      ><label
-                        >Responsável<select
-                          bind:value={editOwner}
-                          required
-                          disabled={session.role === 'developer'}
-                          ><option value="">Vincule um membro</option
-                          >{#each members as m}<option value={m.id}
-                              >{m.name} · {m.email}</option
-                            >{/each}</select
-                        ></label
-                      ><label
-                        >Próxima ação<textarea
-                          bind:value={editAction}
-                          required
-                          maxlength="2000"
-                        ></textarea></label
-                      ><button disabled={busy}>Salvar atualização</button
-                      ><button
-                        type="button"
-                        class="secondary"
-                        onclick={() => (editing = null)}>Cancelar</button
-                      >
-                    </form>
-                  </section>{:else}<button
-                    class="secondary"
-                    disabled={busy ||
-                      (session.role === 'developer' &&
-                        r.owner_user_id !== session.user.id)}
-                    title={session.role === 'developer' &&
-                    r.owner_user_id !== session.user.id
-                      ? 'Somente o responsável atribuído pode atualizar'
-                      : undefined}
-                    onclick={() => edit(r)}>Atualizar solicitação</button
-                  >{/if}
-              </article>{/each}
-          </div>{/if}
-      </section>
-      {#if session.role !== 'developer'}
-        <section class="panel" id="registro" aria-label="Registrar contexto">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">ENTRADA MANUAL</p>
-              <h2>Registrar contexto</h2>
-            </div>
-            <span class="muted"
-              >Cliente → Projeto → Atendimento → Solicitação</span
-            >
-          </div>
-          <div class="forms">
-            <form
-              onsubmit={(e) => {
-                e.preventDefault();
-                void create(
-                  'clients',
-                  { name: clientName },
-                  () => (clientName = ''),
-                );
-              }}
-            >
-              <h3>01 · Cliente</h3>
-              <label
-                >Nome do cliente<input
-                  bind:value={clientName}
-                  required
-                  maxlength="200"
-                /></label
-              ><button disabled={busy}>Cadastrar cliente</button>
-            </form>
-            <form
-              onsubmit={(e) => {
-                e.preventDefault();
-                void create(
-                  'projects',
-                  { client_id: clientId, name: projectName },
-                  () => (projectName = ''),
-                );
-              }}
-            >
-              <h3>02 · Projeto</h3>
-              <label
-                >Cliente<select bind:value={clientId} required
-                  ><option value="">Selecione</option
-                  >{#each data.clients as c}<option value={c.id}
-                      >{c.name}</option
-                    >{/each}</select
-                ></label
-              ><label
-                >Nome do projeto<input
-                  bind:value={projectName}
-                  required
-                  maxlength="200"
-                /></label
-              ><button disabled={busy || !data.clients.length}
-                >Criar projeto</button
-              >
-            </form>
-            <form
-              onsubmit={(e) => {
-                e.preventDefault();
-                void create(
-                  'interactions',
-                  {
-                    project_id: projectId,
-                    kind,
-                    summary,
-                    occurred_at: new Date(occurred).toISOString(),
-                  },
-                  () => (summary = ''),
-                );
-              }}
-            >
-              <h3>03 · Atendimento</h3>
-              <label
-                >Projeto<select bind:value={projectId} required
-                  ><option value="">Selecione</option
-                  >{#each data.projects as p}<option value={p.id}
-                      >{data.clients.find((c) => c.id === p.client_id)?.name} / {p.name}</option
-                    >{/each}</select
-                ></label
-              ><label
-                >Tipo<select bind:value={kind}
-                  ><option value="meeting">Reunião</option><option
-                    value="service">Atendimento</option
-                  ></select
-                ></label
-              ><label
-                >Data e hora local<input
-                  type="datetime-local"
-                  bind:value={occurred}
-                  required
-                /></label
-              ><label
-                >Resumo e contexto<textarea
-                  bind:value={summary}
-                  required
-                  maxlength="10000"
-                ></textarea></label
-              ><button disabled={busy || !data.projects.length}
-                >Registrar atendimento</button
-              >
-            </form>
-            <form
-              onsubmit={(e) => {
-                e.preventDefault();
-                void create(
-                  'requests',
-                  {
-                    interaction_id: interactionId,
-                    title,
-                    description,
-                    owner_user_id: owner,
-                    next_action: nextAction,
-                  },
-                  () => {
-                    title = '';
-                    description = '';
-                    owner = '';
-                    nextAction = '';
-                  },
-                );
-              }}
-            >
-              <h3>04 · Solicitação</h3>
-              <label
-                >Atendimento de origem<select
-                  bind:value={interactionId}
-                  required
-                  ><option value="">Selecione</option
-                  >{#each data.interactions as i}<option value={i.id}
-                      >{data.projects.find((p) => p.id === i.project_id)?.name} ·
-                      {i.summary.slice(0, 60)}</option
-                    >{/each}</select
-                ></label
-              ><label
-                >Título<input
-                  bind:value={title}
-                  required
-                  maxlength="200"
-                /></label
-              ><label
-                >Descrição<textarea
-                  bind:value={description}
-                  required
-                  maxlength="10000"
-                ></textarea></label
-              ><label
-                >Responsável<select bind:value={owner} required
-                  ><option value="">Selecione um membro</option
-                  >{#each members as m}<option value={m.id}
-                      >{m.name} · {m.email}</option
-                    >{/each}</select
-                ></label
-              ><label
-                >Próxima ação<textarea
-                  bind:value={nextAction}
-                  required
-                  maxlength="2000"
-                ></textarea></label
-              ><button disabled={busy || !data.interactions.length}
-                >Criar solicitação</button
-              >
-            </form>
-          </div>
         </section>
       {/if}
-      <section class="panel" id="clientes" aria-label="Clientes e projetos">
-        <div class="section-heading">
+      {#if show('mission-control')}
+        <section class="stats" aria-label="Resumo operacional">
+          <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
           <div>
-            <p class="eyebrow">CONSULTA</p>
-            <h2>Clientes, projetos e atendimentos</h2>
+            <span>Projetos</span><strong>{data.projects.length}</strong>
           </div>
+          <div>
+            <span>Solicitações carregadas</span><strong
+              >{data.requests.length}</strong
+            >
+          </div>
+          <div><span>Em aberto</span><strong>{open}</strong></div>
+          <div>
+            <span>Atribuídas a mim (abertas)</span><strong>{mine}</strong>
+          </div>
+          <div>
+            <span>Bloqueadas</span><strong>{blocked.length}</strong>
+          </div>
+        </section>
+        <div class="overview">
+          <section class="panel" aria-labelledby="mc-mine">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">PRIORIDADES</p>
+                <h2 id="mc-mine">Minhas prioridades</h2>
+              </div>
+              {#if priorities.length}<a
+                  class="text-link"
+                  href={href('solicitacoes', { responsavel: 'me' })}
+                  >Abrir minhas solicitações</a
+                >{/if}
+            </div>
+            {#if priorities.length}<ol class="work-list">
+                {#each priorities.slice(0, 5) as r (r.id)}<li>
+                    <span class="status" data-status={r.status}
+                      >{labels[r.status]}</span
+                    >
+                    <div>
+                      <strong>{r.title}</strong>
+                      <p class="muted">{r.client_name} / {r.project_name}</p>
+                      <p>
+                        <span class="muted">Próxima ação:</span>
+                        {r.next_action}
+                      </p>
+                    </div>
+                  </li>{/each}
+              </ol>
+              {#if priorities.length > 5}<p class="muted">
+                  E mais {priorities.length - 5} em aberto.
+                </p>{/if}
+            {:else}<div class="empty compact">
+                <h3>Nada atribuído a você</h3>
+                {#if session.role === 'developer'}<p>
+                    O PO atribuirá as próximas solicitações a você.
+                  </p>{:else if !data.clients.length}<p>
+                    Comece cadastrando o primeiro cliente e registrando um
+                    atendimento.
+                  </p>
+                  <a class="button-link" href={href('clientes')}
+                    >Registrar atendimento</a
+                  >{:else}<p>
+                    Distribua o trabalho e acompanhe a equipe em Solicitações.
+                  </p>
+                  <a class="button-link secondary" href={href('solicitacoes')}
+                    >Ver solicitações</a
+                  >{/if}
+              </div>{/if}
+          </section>
+          <section class="panel" aria-labelledby="mc-attention">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">ATENÇÃO</p>
+                <h2 id="mc-attention">Bloqueios</h2>
+              </div>
+              {#if blocked.length}<a
+                  class="text-link"
+                  href={href('solicitacoes', { estado: 'blocked' })}
+                  >Ver bloqueadas</a
+                >{/if}
+            </div>
+            {#if blocked.length}<ol class="work-list">
+                {#each blocked.slice(0, 5) as r (r.id)}<li>
+                    <span class="status" data-status={r.status}
+                      >{labels[r.status]}</span
+                    >
+                    <div>
+                      <strong>{r.title}</strong>
+                      <p class="muted">{r.owner} · {r.project_name}</p>
+                      <p>
+                        <span class="muted">Próxima ação:</span>
+                        {r.next_action}
+                      </p>
+                    </div>
+                  </li>{/each}
+              </ol>{:else}<p class="muted">
+                Nenhuma solicitação bloqueada.
+              </p>{/if}
+            {#if uncovered && session.role !== 'developer'}<p class="attention">
+                <strong>{uncovered}</strong>
+                {uncovered === 1
+                  ? 'solicitação em aberto aguarda'
+                  : 'solicitações em aberto aguardam'} análise de cobertura comercial.
+                <a href={href('comercial')}>Revisar no Comercial</a>
+              </p>{/if}
+          </section>
         </div>
-        <p class="muted">
-          Atendimentos e reuniões mais recentes (até 500) por projeto, com a
-          quantidade de solicitações abertas.
-        </p>
-        {#if !data.clients.length}<div class="empty">
-            <h3>Nenhum cliente cadastrado</h3>
-            <p>
-              {session.role === 'developer'
-                ? 'O PO ou gestor cadastra clientes e projetos.'
-                : 'Use “Registrar contexto” para cadastrar o primeiro cliente.'}
-            </p>
-          </div>{:else}<ul class="directory">
-            {#each data.clients as c (c.id)}<li>
-                <strong>{c.name}</strong>
-                {#if !data.projects.some((p) => p.client_id === c.id)}<p
-                    class="muted"
+      {/if}
+      {#if show('solicitacoes')}
+        <section class="panel" id="solicitacoes" aria-label="Solicitações">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">ACOMPANHAMENTO</p>
+              <h2>Fila de solicitações</h2>
+            </div>
+            <div class="filters">
+              <label
+                >Filtrar responsável<select bind:value={ownerFilter}
+                  ><option value="">Todos os responsáveis</option><option
+                    value="me">Atribuídas a mim</option
+                  ><option value="unassigned">Sem vínculo de responsável</option
+                  >{#each members as m}<option value={m.id}>{m.name}</option
+                    >{/each}</select
+                ></label
+              ><label
+                >Filtrar estado<select bind:value={filter}
+                  ><option value="">Todos os estados</option
+                  >{#each statuses as s}<option value={s}>{labels[s]}</option
+                    >{/each}</select
+                ></label
+              >
+            </div>
+          </div>
+          <p class="muted">
+            Até 500 solicitações mais recentes. Novas solicitações entram em
+            “Nova”; estados seguintes exigem triagem. Cada cartão mostra o
+            responsável e a próxima ação.
+          </p>
+          {#if !visible.length}<div class="empty">
+              <h3>Nenhuma solicitação neste recorte</h3>
+              <p>
+                {#if data.requests.length}Ajuste os filtros para ver as demais
+                  solicitações.{:else if session.role === 'developer'}Nenhum
+                  trabalho registrado ainda; o PO atribuirá solicitações a você.{:else}Registre
+                  um atendimento e sua primeira solicitação para começar.{/if}
+              </p>
+              {#if !data.requests.length && session.role !== 'developer'}<a
+                  class="button-link"
+                  href={href('clientes')}>Registrar atendimento</a
+                >{/if}
+            </div>{:else}<div class="cards">
+              {#each visible as r (r.id)}<article
+                  class="request"
+                  class:editing={editing?.id === r.id}
+                >
+                  <div class="card-top">
+                    <span class="status" data-status={r.status}
+                      >{labels[r.status]}</span
+                    ><span class="muted">v{r.version}</span>
+                  </div>
+                  <p class="eyebrow">{r.client_name} / {r.project_name}</p>
+                  <h3>{r.title}</h3>
+                  <p
+                    class="commercial-coverage"
+                    data-coverage={r.commercial_coverage}
                   >
-                    Sem projetos.
-                  </p>{/if}
-                <ul>
-                  {#each data.projects.filter((p) => p.client_id === c.id) as p (p.id)}
-                    {@const meetings = data.interactions
-                      .filter((i) => i.project_id === p.id)
-                      .sort(
-                        (a, b) =>
-                          Date.parse(b.occurred_at) - Date.parse(a.occurred_at),
-                      )}
-                    {@const active = data.requests.filter(
-                      (r) => r.project_id === p.id && r.status !== 'done',
-                    ).length}
-                    <li>
-                      <details>
-                        <summary
-                          >{p.name}
-                          <span class="muted"
-                            >· {meetings.length} atendimento(s) · {active} solicitação(ões)
-                            aberta(s)</span
-                          ></summary
+                    {r.commercial_coverage === 'covered'
+                      ? 'Cobertura comercial aprovada'
+                      : 'Pendente de análise comercial'}{#if r.scope_item_id}
+                      · Escopo V{r.scope_number} · {r.contract_title}{/if}
+                  </p>
+                  <p class="description">{r.description}</p>
+                  {#if r.origin_proposal_id}<p class="muted">
+                      Origem IA revisada por humano · proposta {r.origin_proposal_id}
+                    </p>{/if}
+                  {#if r.suggested_acceptance_criteria?.length}<details>
+                      <summary>Critérios revisados</summary>
+                      <ul>
+                        {#each r.suggested_acceptance_criteria as c}<li>
+                            {c.text}
+                          </li>{/each}
+                      </ul>
+                    </details>{/if}
+                  <dl>
+                    <dt>Responsável</dt>
+                    <dd>
+                      {r.owner}{#if r.owner_user_id === session.user.id}<span
+                          class="mine-tag">· você</span
+                        >{/if}{#if !r.owner_user_id}<span class="muted">
+                          · legado, vinculação pendente</span
+                        >{/if}
+                    </dd>
+                    <dt>Próxima ação</dt>
+                    <dd>{r.next_action}</dd>
+                    <dt>Atendimento de origem</dt>
+                    <dd>
+                      {data.interactions.find((i) => i.id === r.interaction_id)
+                        ?.summary ?? r.interaction_id}
+                    </dd>
+                  </dl>
+                  {#if editing?.id === r.id}<section
+                      class="edit"
+                      aria-label="Editar solicitação"
+                      use:focusFirst
+                    >
+                      <form
+                        onsubmit={(e) => {
+                          e.preventDefault();
+                          void save();
+                        }}
+                      >
+                        <label
+                          >Estado<select bind:value={editStatus}
+                            ><option value={editing.status}
+                              >{labels[editing.status]}</option
+                            >{#each transitions[editing.status].filter((s) => session?.role !== 'developer' || ['in_progress', 'blocked', 'done'].includes(s)) as s}<option
+                                value={s}>{labels[s]}</option
+                              >{/each}</select
+                          ></label
+                        ><label
+                          >Responsável<select
+                            bind:value={editOwner}
+                            required
+                            disabled={session.role === 'developer'}
+                            ><option value="">Vincule um membro</option
+                            >{#each members as m}<option value={m.id}
+                                >{m.name} · {m.email}</option
+                              >{/each}</select
+                          ></label
+                        ><label
+                          >Próxima ação<textarea
+                            bind:value={editAction}
+                            required
+                            maxlength="2000"
+                          ></textarea></label
+                        ><button disabled={busy}>Salvar atualização</button
+                        ><button
+                          type="button"
+                          class="secondary"
+                          onclick={() => (editing = null)}>Cancelar</button
                         >
-                        {#if meetings.length}<ol class="timeline">
-                            {#each meetings as i (i.id)}<li>
-                                <span class="muted"
-                                  >{when(i.occurred_at)} · {kindLabels[
-                                    i.kind
-                                  ] ?? i.kind}</span
-                                >
-                                <p>{i.summary}</p>
-                              </li>{/each}
-                          </ol>{:else}<p class="muted">
-                            Nenhum atendimento registrado.
-                          </p>{/if}
-                      </details>
-                    </li>
-                  {/each}
-                </ul>
-              </li>{/each}
-          </ul>{/if}
-      </section>
-      <div id="comercial" class="anchor">
-        <CommercialControl
-          {api}
-          {data}
-          role={session.role}
-          userId={session.user.id}
-          {members}
-          onChanged={refresh}
-        />
-      </div>
-      <div id="economia" class="anchor">
-        <EconomicsControl
-          {api}
-          {data}
-          {members}
-          role={session.role}
-          userId={session.user.id}
-        />
-      </div>
-      {#if session.role !== 'developer'}<div id="ia" class="anchor">
-          <IntelligentIntake
-            {api}
-            interactions={data.interactions}
-            projects={data.projects}
-            {members}
-            role={session.role}
-            onCreated={refresh}
-          />
-        </div>{/if}
-      {#if session.role === 'administrator'}<div id="acesso" class="anchor">
-          <AccessAdmin
-            {members}
-            currentUserId={session.user.id}
-            {busy}
-            onProvision={(body) =>
-              execute(async () => {
-                await api('memberships', 'POST', body);
-                await refresh();
-                notice = 'Acesso atualizado.';
-              })}
-            onRevoke={(id) =>
-              execute(async () => {
-                await api(`memberships/${id}/revoke`, 'POST', {});
-                await refresh();
-                notice = 'Acesso revogado.';
-              })}
-          />
-        </div>{/if}
-      {#if ['administrator', 'manager'].includes(session.role)}<div
-          id="auditoria"
-          class="anchor"
-        >
-          <AuditLog {api} {members} />
-        </div>{/if}
-      <div id="entrega" class="anchor">
-        <DeliveryControl {api} {data} role={session.role} />
-      </div>
+                      </form>
+                    </section>{:else}<button
+                      class="secondary"
+                      disabled={busy ||
+                        (session.role === 'developer' &&
+                          r.owner_user_id !== session.user.id)}
+                      title={session.role === 'developer' &&
+                      r.owner_user_id !== session.user.id
+                        ? 'Somente o responsável atribuído pode atualizar'
+                        : undefined}
+                      onclick={() => edit(r)}>Atualizar solicitação</button
+                    >{/if}
+                </article>{/each}
+            </div>{/if}
+        </section>
+      {/if}
+      {#if show('clientes')}
+        {#if session.role !== 'developer'}
+          <section class="panel" id="registro" aria-label="Registrar contexto">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">ENTRADA MANUAL</p>
+                <h2>Registrar contexto</h2>
+              </div>
+              <span class="muted"
+                >Cliente → Projeto → Atendimento → Solicitação</span
+              >
+            </div>
+            <div class="forms">
+              <form
+                onsubmit={(e) => {
+                  e.preventDefault();
+                  void create(
+                    'clients',
+                    { name: clientName },
+                    () => (clientName = ''),
+                  );
+                }}
+              >
+                <h3>01 · Cliente</h3>
+                <label
+                  >Nome do cliente<input
+                    bind:value={clientName}
+                    required
+                    maxlength="200"
+                  /></label
+                ><button disabled={busy}>Cadastrar cliente</button>
+              </form>
+              <form
+                onsubmit={(e) => {
+                  e.preventDefault();
+                  void create(
+                    'projects',
+                    { client_id: clientId, name: projectName },
+                    () => (projectName = ''),
+                  );
+                }}
+              >
+                <h3>02 · Projeto</h3>
+                <label
+                  >Cliente<select bind:value={clientId} required
+                    ><option value="">Selecione</option
+                    >{#each data.clients as c}<option value={c.id}
+                        >{c.name}</option
+                      >{/each}</select
+                  ></label
+                ><label
+                  >Nome do projeto<input
+                    bind:value={projectName}
+                    required
+                    maxlength="200"
+                  /></label
+                ><button disabled={busy || !data.clients.length}
+                  >Criar projeto</button
+                >
+              </form>
+              <form
+                onsubmit={(e) => {
+                  e.preventDefault();
+                  void create(
+                    'interactions',
+                    {
+                      project_id: projectId,
+                      kind,
+                      summary,
+                      occurred_at: new Date(occurred).toISOString(),
+                    },
+                    () => (summary = ''),
+                  );
+                }}
+              >
+                <h3>03 · Atendimento</h3>
+                <label
+                  >Projeto<select bind:value={projectId} required
+                    ><option value="">Selecione</option
+                    >{#each data.projects as p}<option value={p.id}
+                        >{data.clients.find((c) => c.id === p.client_id)?.name} /
+                        {p.name}</option
+                      >{/each}</select
+                  ></label
+                ><label
+                  >Tipo<select bind:value={kind}
+                    ><option value="meeting">Reunião</option><option
+                      value="service">Atendimento</option
+                    ></select
+                  ></label
+                ><label
+                  >Data e hora local<input
+                    type="datetime-local"
+                    bind:value={occurred}
+                    required
+                  /></label
+                ><label
+                  >Resumo e contexto<textarea
+                    bind:value={summary}
+                    required
+                    maxlength="10000"
+                  ></textarea></label
+                ><button disabled={busy || !data.projects.length}
+                  >Registrar atendimento</button
+                >
+              </form>
+              <form
+                onsubmit={(e) => {
+                  e.preventDefault();
+                  void create(
+                    'requests',
+                    {
+                      interaction_id: interactionId,
+                      title,
+                      description,
+                      owner_user_id: owner,
+                      next_action: nextAction,
+                    },
+                    () => {
+                      title = '';
+                      description = '';
+                      owner = '';
+                      nextAction = '';
+                    },
+                  );
+                }}
+              >
+                <h3>04 · Solicitação</h3>
+                <label
+                  >Atendimento de origem<select
+                    bind:value={interactionId}
+                    required
+                    ><option value="">Selecione</option
+                    >{#each data.interactions as i}<option value={i.id}
+                        >{data.projects.find((p) => p.id === i.project_id)
+                          ?.name} ·
+                        {i.summary.slice(0, 60)}</option
+                      >{/each}</select
+                  ></label
+                ><label
+                  >Título<input
+                    bind:value={title}
+                    required
+                    maxlength="200"
+                  /></label
+                ><label
+                  >Descrição<textarea
+                    bind:value={description}
+                    required
+                    maxlength="10000"
+                  ></textarea></label
+                ><label
+                  >Responsável<select bind:value={owner} required
+                    ><option value="">Selecione um membro</option
+                    >{#each members as m}<option value={m.id}
+                        >{m.name} · {m.email}</option
+                      >{/each}</select
+                  ></label
+                ><label
+                  >Próxima ação<textarea
+                    bind:value={nextAction}
+                    required
+                    maxlength="2000"
+                  ></textarea></label
+                ><button disabled={busy || !data.interactions.length}
+                  >Criar solicitação</button
+                >
+              </form>
+            </div>
+          </section>
+        {/if}
+        <section class="panel" id="clientes" aria-label="Clientes e projetos">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">CONSULTA</p>
+              <h2>Clientes, projetos e atendimentos</h2>
+            </div>
+          </div>
+          <p class="muted">
+            Atendimentos e reuniões mais recentes (até 500) por projeto, com a
+            quantidade de solicitações abertas.
+          </p>
+          {#if !data.clients.length}<div class="empty">
+              <h3>Nenhum cliente cadastrado</h3>
+              <p>
+                {session.role === 'developer'
+                  ? 'O PO ou gestor cadastra clientes e projetos.'
+                  : 'Use “Registrar contexto” para cadastrar o primeiro cliente.'}
+              </p>
+            </div>{:else}<ul class="directory">
+              {#each data.clients as c (c.id)}<li>
+                  <strong>{c.name}</strong>
+                  {#if !data.projects.some((p) => p.client_id === c.id)}<p
+                      class="muted"
+                    >
+                      Sem projetos.
+                    </p>{/if}
+                  <ul>
+                    {#each data.projects.filter((p) => p.client_id === c.id) as p (p.id)}
+                      {@const meetings = data.interactions
+                        .filter((i) => i.project_id === p.id)
+                        .sort(
+                          (a, b) =>
+                            Date.parse(b.occurred_at) -
+                            Date.parse(a.occurred_at),
+                        )}
+                      {@const active = data.requests.filter(
+                        (r) => r.project_id === p.id && r.status !== 'done',
+                      ).length}
+                      <li>
+                        <details>
+                          <summary
+                            >{p.name}
+                            <span class="muted"
+                              >· {meetings.length} atendimento(s) · {active} solicitação(ões)
+                              aberta(s)</span
+                            ></summary
+                          >
+                          {#if meetings.length}<ol class="timeline">
+                              {#each meetings as i (i.id)}<li>
+                                  <span class="muted"
+                                    >{when(i.occurred_at)} · {kindLabels[
+                                      i.kind
+                                    ] ?? i.kind}</span
+                                  >
+                                  <p>{i.summary}</p>
+                                </li>{/each}
+                            </ol>{:else}<p class="muted">
+                              Nenhum atendimento registrado.
+                            </p>{/if}
+                        </details>
+                      </li>
+                    {/each}
+                  </ul>
+                </li>{/each}
+            </ul>{/if}
+        </section>
+      {/if}
+      {#each lazyIds as id (id)}{#if visited[id]}<div
+            class="route-view"
+            hidden={!show(id)}
+          >
+            {#await load(id)}<p class="loading" role="status">
+                Carregando módulo…
+              </p>{:then mod}{@const Screen =
+                mod.default as Component<any>}<Screen
+                {...moduleProps(id, session)}
+              />{:catch}{@render chunkFailed()}{/await}
+          </div>{/if}{/each}
     {/if}
     {#if error}<p class="feedback error" role="alert">
         {error}

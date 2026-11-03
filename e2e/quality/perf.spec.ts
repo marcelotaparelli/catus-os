@@ -1,6 +1,7 @@
 /**
  * Runtime baseline of the production build (vite preview, same /api proxy):
- * time until Mission Control is usable, LCP, CLS and latency of critical M3
+ * time until Mission Control is usable, LCP, CLS, API calls at start, first
+ * switch to a module (on-demand chunk + data) and latency of critical M3
  * interactions. Median of 3 runs against budgets in perf-budget.json.
  * Requires `npm run build` first (CI builds before this suite).
  */
@@ -43,7 +44,7 @@ test.afterAll(() => {
 const median = (xs: number[]) =>
   [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
 
-test('production build: load, LCP, CLS and M3 interaction latency', async ({
+test('production build: load, LCP, CLS, module switch and M3 interaction latency', async ({
   page,
 }) => {
   test.setTimeout(90000);
@@ -53,14 +54,20 @@ test('production build: load, LCP, CLS and M3 interaction latency', async ({
     ready: number;
     lcp: number;
     cls: number;
+    startApiCalls: number;
+    route: number;
     disclose: number;
     select: number;
   }[] = [];
+  let apiCalls = 0;
+  page.on('request', (r) => {
+    if (new URL(r.url()).pathname.startsWith('/api/')) apiCalls++;
+  });
   for (let run = 0; run < 3; run++) {
+    apiCalls = 0;
     await page.goto(PREVIEW + '/', { waitUntil: 'commit' });
-    const m3 = page.getByRole('region', { name: 'Controle comercial' });
     await expect(
-      m3.getByRole('heading', { name: 'Contrato Portal B2B 2026' }),
+      page.getByRole('region', { name: 'Minhas prioridades' }),
     ).toBeVisible();
     const vitals = await page.evaluate(
       () =>
@@ -83,6 +90,18 @@ test('production build: load, LCP, CLS and M3 interaction latency', async ({
           );
         }),
     );
+    await page.waitForLoadState('networkidle');
+    const startApiCalls = apiCalls;
+    const m3 = page.getByRole('region', { name: 'Controle comercial' });
+    const tr = Date.now();
+    await page
+      .getByRole('navigation', { name: 'Módulos', exact: true })
+      .getByRole('link', { name: 'Comercial', exact: true })
+      .click();
+    await expect(
+      m3.getByRole('heading', { name: 'Contrato Portal B2B 2026' }),
+    ).toBeVisible();
+    const route = Date.now() - tr;
     const t0 = Date.now();
     await m3.getByText('Cadastrar contrato', { exact: true }).click();
     await expect(m3.getByLabel('Título do contrato')).toBeVisible();
@@ -98,12 +117,20 @@ test('production build: load, LCP, CLS and M3 interaction latency', async ({
     const t1 = Date.now();
     await select.selectOption(value!);
     await expect(m3.getByLabel('Detalhe do escopo')).toBeVisible();
-    samples.push({ ...vitals, disclose, select: Date.now() - t1 });
+    samples.push({
+      ...vitals,
+      startApiCalls,
+      route,
+      disclose,
+      select: Date.now() - t1,
+    });
   }
   const result = {
     readyMs: median(samples.map((s) => s.ready)),
     lcpMs: median(samples.map((s) => s.lcp)),
     cls: median(samples.map((s) => s.cls)),
+    startApiCalls: Math.max(...samples.map((s) => s.startApiCalls)),
+    routeMs: median(samples.map((s) => s.route)),
     interactionMs: Math.max(
       median(samples.map((s) => s.disclose)),
       median(samples.map((s) => s.select)),
@@ -117,5 +144,7 @@ test('production build: load, LCP, CLS and M3 interaction latency', async ({
   expect(result.readyMs).toBeLessThanOrEqual(budget.readyMs);
   expect(result.lcpMs).toBeLessThanOrEqual(budget.lcpMs);
   expect(result.cls).toBeLessThanOrEqual(budget.cls);
+  expect(result.startApiCalls).toBeLessThanOrEqual(budget.startApiCalls);
+  expect(result.routeMs).toBeLessThanOrEqual(budget.routeMs);
   expect(result.interactionMs).toBeLessThanOrEqual(budget.interactionMs);
 });

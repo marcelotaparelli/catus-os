@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { login } from './login';
+import { open } from './nav';
 async function write(page: Page, path: string, body: unknown) {
   const session = await (await page.request.get('/api/session')).json();
   const response = await page.request.post('/api/' + path, {
@@ -107,6 +108,7 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
       version: 1,
       scope_item_id: scope.items[0].id,
     });
+    await open(page, 'Economia');
     const econ = page.getByRole('region', { name: 'Inteligência econômica' });
     await econ
       .getByText('Preparar premissas e estimativas', { exact: true })
@@ -139,6 +141,7 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
       .getByRole('button', { name: 'Preparar versão econômica' })
       .click();
     await expect(econ.getByRole('status')).toContainText('Versão preparada');
+    await open(admin, 'Economia');
     const ae = admin.getByRole('region', { name: 'Inteligência econômica' });
     await ae.getByRole('button', { name: 'Atualizar economia' }).click();
     await ae
@@ -211,6 +214,7 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
     await po
       .getByRole('button', { name: 'Atualizar dados', exact: true })
       .click();
+    await open(po, 'Economia');
     const pe = po.getByRole('region', { name: 'Inteligência econômica' });
     await pe.getByRole('button', { name: 'Atualizar economia' }).click();
     await pe
@@ -242,6 +246,7 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
     await forecast.getByRole('button', { name: /^Aprovar registro/ }).click();
     await expect(forecast).toContainText('Aprovado');
     await login(dev, 'dev@browser.test');
+    await open(dev, 'Economia');
     const de = dev.getByRole('region', { name: 'Inteligência econômica' });
     await de.getByText('Apontar horas próprias', { exact: true }).click();
     const df = de.getByRole('form', { name: 'Apontar horas próprias' });
@@ -315,6 +320,7 @@ test('M4 manager prepares explicit assumptions, PO estimates, developer logs hou
     await expect(
       econ.getByRole('article', { name: /^Relatório econômico/ }).first(),
     ).toContainText('BRL 3284,00');
+    await open(page, 'Solicitações');
     await expect(
       page.getByRole('heading', { name: 'M4 Demanda Sintética', exact: true }),
     ).toBeVisible();

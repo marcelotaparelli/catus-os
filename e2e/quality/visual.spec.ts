@@ -4,7 +4,7 @@
  * masked; data comes from seed.setup.ts. Never update baselines to make CI pass:
  * regenerate them deliberately and review the diff in the PR.
  */
-import { test, expect } from './fixtures';
+import { test, expect, visit } from './fixtures';
 import type { Page } from '@playwright/test';
 
 const m3 = (page: Page) =>
@@ -47,6 +47,7 @@ test('M3 administrator with commercial authority form (1440)', async ({
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await as('administrator');
+  await visit(page, 'Comercial');
   await m3(page)
     .getByText('Configurar alçadas comerciais', { exact: true })
     .click();
@@ -57,6 +58,7 @@ test('M3 administrator with commercial authority form (1440)', async ({
 test('M3 PO contract form and approved scope (1280)', async ({ page, as }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await as('po');
+  await visit(page, 'Comercial');
   await m3(page).getByText('Cadastrar contrato', { exact: true }).click();
   await selectApprovedScope(page);
   await expect(m3(page)).toHaveScreenshot('m3-po-1280.png', mask(page));
@@ -65,6 +67,7 @@ test('M3 PO contract form and approved scope (1280)', async ({ page, as }) => {
 test('M3 PO on mobile (390)', async ({ page, as }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await as('po');
+  await visit(page, 'Comercial');
   await m3(page).getByText('Cadastrar contrato', { exact: true }).click();
   await expect(m3(page)).toHaveScreenshot('m3-po-390.png', mask(page));
 });
@@ -72,6 +75,36 @@ test('M3 PO on mobile (390)', async ({ page, as }) => {
 test('M3 developer read-only view (768)', async ({ page, as }) => {
   await page.setViewportSize({ width: 768, height: 900 });
   await as('developer');
+  await visit(page, 'Comercial');
   await selectApprovedScope(page);
   await expect(m3(page)).toHaveScreenshot('m3-developer-768.png', mask(page));
+});
+
+test('Mission Control developer on mobile (390)', async ({ page, as }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await as('developer');
+  await expect(page).toHaveScreenshot('mission-control-developer-390.png', {
+    ...mask(page),
+    fullPage: true,
+  });
+});
+
+test('Solicitações PO (1280)', async ({ page, as }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await as('po');
+  await visit(page, 'Solicitações');
+  await expect(page).toHaveScreenshot('solicitacoes-po-1280.png', {
+    ...mask(page),
+    fullPage: true,
+  });
+});
+
+test('Restricted module for the developer (1280)', async ({ page, as }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await as('developer');
+  await page.goto('/#/auditoria');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Acesso restrito' }),
+  ).toBeVisible();
+  await expect(page).toHaveScreenshot('restricted-developer-1280.png');
 });
