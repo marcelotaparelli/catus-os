@@ -129,6 +129,8 @@ test('only Mission Control data loads at start; each module loads once, on first
   api.length = 0;
   await visit(page, 'Economia');
   expect(api).toContain('GET /api/economics');
+  // Economia also reads contracts and scopes; a late request must not count as a return.
+  await expect.poll(() => api).toContain('GET /api/commercial');
   api.length = 0;
   await visit(page, 'Comercial');
   expect(api, 'returning to a module reuses it').toEqual([]);

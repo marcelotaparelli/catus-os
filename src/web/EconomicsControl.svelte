@@ -222,9 +222,12 @@
     return res;
   }
   async function refresh() {
-    view = await api<EconomicsView>('economics');
-    if (role !== 'developer')
-      commercial = await api<CommercialSnapshot>('commercial');
+    const [economics, contracts] = await Promise.all([
+      api<EconomicsView>('economics'),
+      role === 'developer' ? null : api<CommercialSnapshot>('commercial'),
+    ]);
+    view = economics;
+    if (contracts) commercial = contracts;
     loaded = true;
   }
   async function run(fn: () => Promise<void>) {
