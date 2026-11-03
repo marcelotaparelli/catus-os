@@ -29,6 +29,14 @@
     onChanged: () => Promise<void>;
     members?: { id: string; name: string }[];
   } = $props();
+  // Fixed-length UTC timestamp (database values carry a variable number of
+  // fractional digits); the full value stays in the datetime attribute.
+  function when(iso: string) {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  }
   // Display-only names; identity and authority remain server-side.
   function who(id: string | null | undefined) {
     if (!id) return 'Sistema';
@@ -88,6 +96,39 @@
     (role === 'manager' || role === 'administrator') &&
       !!view.policy?.approval_roles.includes(role),
   );
+  // Orientation only, derived from data already loaded; the server still enforces every rule.
+  let nextStep = $derived.by(() => {
+    if (!view.policy)
+      return role === 'administrator'
+        ? 'Defina as alçadas comerciais para liberar decisões de escopo.'
+        : 'Aguardando o administrador definir as alçadas comerciais; decisões de escopo bloqueadas.';
+    if (!view.contracts.length)
+      return canPrepare
+        ? 'Cadastre o primeiro contrato do projeto.'
+        : 'Nenhum contrato registrado.';
+    if (!view.contracts.some((c) => c.state === 'active'))
+      return 'Gestor ou administrador deve registrar um contrato como ativo.';
+    if (!view.scopes.length)
+      return canPrepare
+        ? 'Prepare o escopo inicial do contrato ativo.'
+        : 'Aguardando a preparação do escopo inicial.';
+    const submitted = view.scopes.filter((s) => s.state === 'submitted').length;
+    if (submitted)
+      return `${submitted} ${submitted === 1 ? 'versão de escopo aguarda' : 'versões de escopo aguardam'} decisão de gestor/administrador com alçada.`;
+    const drafts = view.scopes.filter((s) => s.state === 'draft').length;
+    if (drafts)
+      return `${drafts} ${drafts === 1 ? 'rascunho de escopo a submeter' : 'rascunhos de escopo a submeter'}.`;
+    if (view.scopes.some((s) => s.state === 'approved'))
+      return canPrepare
+        ? 'Vincule as demandas aos itens aprovados em “Cobertura de demanda”.'
+        : 'Escopo aprovado; a cobertura das demandas é feita por PO, gestor ou administrador.';
+    return 'Sem pendências comerciais.';
+  });
+  const contractStates: Record<string, string> = {
+    draft: 'Rascunho',
+    active: 'Ativo',
+    closed: 'Encerrado',
+  };
   const labels: Record<string, string> = {
     draft: 'Rascunho',
     submitted: 'Submetido',
@@ -247,388 +288,423 @@
       >Atualizar comercial</button
     >
   </div>
-  <p class="muted">
+  <p class="muted lead">
     Aprovação operacional e estado “Pronta” não autorizam escopo ou contrato.
     Sem cobertura vigente, a demanda permanece pendente de análise comercial.
   </p>
+  <p class="next-step"><strong>Próximo passo:</strong> {nextStep}</p>
   {#if error}<p role="alert" class="error">{error}</p>{/if}{#if info}<p
       role="status"
     >
       {info}
     </p>{/if}
-  {#if role === 'administrator'}<details>
+  {#if role === 'administrator'}<details class="m3-policy">
       <summary>Configurar alçadas comerciais</summary>
-      <p>
+      <p class="muted">
         Política atual: {view.policy?.approval_roles.join(', ') ??
           'nenhuma; decisões bloqueadas'} · versão {view.policy?.version ?? 0}.
         O servidor impede autoaprovação de qualquer preparador.
       </p>
       <form
+        class="policy-form"
         onsubmit={(e) => {
           e.preventDefault();
           void run(policy);
         }}
       >
-        <label
-          ><input type="checkbox" bind:checked={policyManager} /> Gestor pode decidir</label
-        ><label
-          ><input type="checkbox" bind:checked={policyAdmin} /> Administrador pode
-          decidir</label
-        ><button disabled={busy || (!policyManager && !policyAdmin)}
+        <fieldset class="check-group">
+          <legend>Quem pode decidir escopos</legend>
+          <label class="check-option"
+            ><input type="checkbox" bind:checked={policyManager} /> Gestor pode decidir</label
+          ><label class="check-option"
+            ><input type="checkbox" bind:checked={policyAdmin} /> Administrador pode
+            decidir</label
+          >
+        </fieldset>
+        <button disabled={busy || (!policyManager && !policyAdmin)}
           >Salvar alçadas</button
         >
       </form>
     </details>{/if}
-  {#if canPrepare}<details>
-      <summary>Cadastrar contrato</summary>
-      <form
+  <div class="m3-block" role="group" aria-labelledby="m3-contracts">
+    <h3 id="m3-contracts">
+      Contratos <span class="count">{view.contracts.length}</span>
+    </h3>
+    {#if canPrepare}<details>
+        <summary>Cadastrar contrato</summary>
+        <form
+          class="commercial-form"
+          onsubmit={(e) => {
+            e.preventDefault();
+            void run(async () => {
+              const p = data.projects.find((p) => p.id === projectId);
+              if (!p) return;
+              await post('contracts', {
+                project_id: p.id,
+                client_id: p.client_id,
+                title: contractTitle,
+                kind,
+                currency,
+                valid_from: validFrom,
+                valid_until: validUntil,
+                document_reference: reference,
+              });
+              contractTitle = reference = '';
+              info =
+                'Contrato registrado como rascunho; ativação exige gestor/admin e documento externo.';
+            });
+          }}
+        >
+          <label
+            >Projeto contratual<select bind:value={projectId} required
+              ><option value="">Selecione</option
+              >{#each data.projects as p}<option value={p.id}>{p.name}</option
+                >{/each}</select
+            ></label
+          >
+          <label
+            >Título do contrato<input
+              bind:value={contractTitle}
+              maxlength="200"
+              required
+            /></label
+          >
+          <label
+            >Tipo contratual<select bind:value={kind}
+              ><option value="fixed_price">Projeto de preço fechado</option
+              ><option value="retainer">Retainer / banco de horas</option
+              ></select
+            ></label
+          >
+          <label
+            >Moeda<select bind:value={currency}
+              >{#each currencies as c}<option value={c}>{c}</option
+                >{/each}</select
+            ></label
+          >
+          <label
+            >Vigência inicial (UTC)<input
+              type="date"
+              bind:value={validFrom}
+              required
+            /></label
+          ><label
+            >Vigência final (UTC)<input
+              type="date"
+              bind:value={validUntil}
+              min={validFrom}
+              required
+            /></label
+          >
+          <label class="span"
+            >Referência documental<input
+              bind:value={reference}
+              maxlength="2000"
+              required
+              placeholder="Identificador do documento externo autorizado"
+            /></label
+          >
+          <p class="muted span">
+            Referência textual, sem upload ou consulta externa. Nenhum valor
+            financeiro é inferido.
+          </p>
+          <div class="actions">
+            <button disabled={busy}>Registrar contrato</button>
+          </div>
+        </form>
+      </details>{/if}
+    <div class="cards m3-cards">
+      {#each view.contracts as c}<article class="request">
+          <div class="card-top">
+            <h4>{c.title}</h4>
+            <span class="status" data-status={c.state}
+              >{contractStates[c.state] ?? c.state}</span
+            >
+          </div>
+          <p>
+            {data.projects.find((p) => p.id === c.project_id)?.name} · {c.kind ===
+            'fixed_price'
+              ? 'Preço fechado'
+              : 'Retainer / banco de horas'} · {c.currency}
+          </p>
+          <p>
+            Vigência {c.valid_from.slice(0, 10)} a {c.valid_until.slice(0, 10)} UTC
+            · revisão {c.version}
+          </p>
+          <p class="description">Documento: {c.document_reference}</p>
+          {#if ['manager', 'administrator'].includes(role) && c.state !== 'closed'}<button
+              class="secondary"
+              disabled={busy}
+              onclick={() =>
+                void run(async () => {
+                  await api<Contract>('contracts/' + c.id, 'PATCH', {
+                    version: c.version,
+                    state: c.state === 'draft' ? 'active' : 'closed',
+                  });
+                })}
+              >{c.state === 'draft'
+                ? 'Registrar contrato como ativo'
+                : 'Encerrar contrato'}</button
+            >{/if}
+        </article>{:else}<p class="empty-line">
+          Nenhum contrato registrado.
+        </p>{/each}
+    </div>
+  </div>
+  <div class="m3-block" role="group" aria-labelledby="m3-scopes">
+    <div class="block-head">
+      <h3 id="m3-scopes">
+        Escopos <span class="count">{view.scopes.length}</span>
+      </h3>
+      {#if canPrepare}<button
+          class="secondary"
+          disabled={busy}
+          onclick={newDraft}>Preparar escopo inicial</button
+        >{/if}
+    </div>
+    {#if draftItems.length && canPrepare}<form
+        aria-label="Preparar versão de escopo"
         class="commercial-form"
         onsubmit={(e) => {
           e.preventDefault();
-          void run(async () => {
-            const p = data.projects.find((p) => p.id === projectId);
-            if (!p) return;
-            await post('contracts', {
-              project_id: p.id,
-              client_id: p.client_id,
-              title: contractTitle,
-              kind,
-              currency,
-              valid_from: validFrom,
-              valid_until: validUntil,
-              document_reference: reference,
-            });
-            contractTitle = reference = '';
-            info =
-              'Contrato registrado como rascunho; ativação exige gestor/admin e documento externo.';
-          });
+          void run(saveScope);
         }}
       >
+        <h3>{editingId ? 'Editar rascunho' : 'Escopo inicial'}</h3>
         <label
-          >Projeto contratual<select bind:value={projectId} required
+          >Projeto do escopo<select
+            bind:value={scopeProject}
+            required
+            disabled={!!editingId}
+            onchange={() => (scopeContract = '')}
             ><option value="">Selecione</option
             >{#each data.projects as p}<option value={p.id}>{p.name}</option
               >{/each}</select
           ></label
         >
         <label
-          >Título do contrato<input
-            bind:value={contractTitle}
+          >Contrato do escopo<select bind:value={scopeContract} required
+            ><option value="">Selecione</option
+            >{#each view.contracts.filter((c) => c.project_id === scopeProject && c.state !== 'closed') as c}<option
+                value={c.id}>{c.title}</option
+              >{/each}</select
+          ></label
+        >
+        <label class="span"
+          >Título da versão<input
+            bind:value={scopeTitle}
             maxlength="200"
             required
           /></label
         >
-        <label
-          >Tipo contratual<select bind:value={kind}
-            ><option value="fixed_price">Projeto de preço fechado</option
-            ><option value="retainer">Retainer / banco de horas</option></select
-          ></label
-        >
-        <label
-          >Moeda<select bind:value={currency}
-            >{#each currencies as c}<option value={c}>{c}</option
-              >{/each}</select
-          ></label
-        >
-        <label
-          >Vigência inicial (UTC)<input
-            type="date"
-            bind:value={validFrom}
-            required
-          /></label
-        ><label
-          >Vigência final (UTC)<input
-            type="date"
-            bind:value={validUntil}
-            min={validFrom}
-            required
-          /></label
-        >
-        <label
-          >Referência documental<input
-            bind:value={reference}
-            maxlength="2000"
-            required
-            placeholder="Identificador do documento externo autorizado"
-          /></label
-        >
+        {#each draftItems as item, i}<fieldset>
+            <legend>Item {i + 1}</legend>
+            <label
+              >Descrição do item<textarea
+                bind:value={item.description}
+                maxlength="2000"
+                required
+              ></textarea></label
+            ><label
+              >Entregáveis<textarea
+                bind:value={item.deliverables}
+                maxlength="2000"
+                required
+              ></textarea></label
+            ><label
+              >Exclusões<textarea
+                bind:value={item.exclusions}
+                maxlength="2000"
+                required
+              ></textarea></label
+            ><label
+              >Critérios de aceite contratual<textarea
+                bind:value={item.acceptance_criteria}
+                maxlength="2000"
+                required
+              ></textarea></label
+            ><label
+              >Dependências<textarea
+                bind:value={item.dependencies}
+                maxlength="2000"
+                required
+              ></textarea></label
+            >
+            <label
+              >Atendimento de origem comercial<select
+                bind:value={item.origin_interaction_id}
+                ><option value={null}>Usar somente demanda</option
+                >{#each data.interactions.filter((x) => x.project_id === scopeProject) as a}<option
+                    value={a.id}>{a.summary.slice(0, 80)}</option
+                  >{/each}</select
+              ></label
+            >
+            <label
+              >Demanda de origem comercial<select
+                bind:value={item.origin_request_id}
+                ><option value={null}>Usar somente atendimento</option
+                >{#each data.requests.filter((r) => data.interactions.find((a) => a.id === r.interaction_id)?.project_id === scopeProject && (!item.origin_interaction_id || r.interaction_id === item.origin_interaction_id)) as r}<option
+                    value={r.id}>{r.title}</option
+                  >{/each}</select
+              ></label
+            >
+            <button
+              type="button"
+              class="secondary"
+              disabled={draftItems.length === 1 || busy}
+              onclick={() =>
+                (draftItems = draftItems.filter((_, j) => j !== i))}
+              >Remover item {i + 1}</button
+            >
+          </fieldset>{/each}
+        <div class="actions">
+          <button
+            type="button"
+            class="secondary"
+            disabled={busy || draftItems.length >= 20}
+            onclick={() => (draftItems = [...draftItems, blank()])}
+            >Adicionar item de escopo</button
+          ><button disabled={busy}>Salvar rascunho de escopo</button><button
+            type="button"
+            class="secondary"
+            onclick={() => {
+              draftItems = [];
+              editingId = '';
+            }}>Cancelar edição</button
+          >
+        </div>
+      </form>{/if}
+    <label class="field-narrow"
+      >Versão de escopo<select bind:value={selectedId}
+        ><option value="">Selecione</option>{#each view.scopes as s}<option
+            value={s.id}
+            >{data.projects.find((p) => p.id === s.project_id)?.name} · V{s.number}
+            · {s.title} · {labels[s.state]}</option
+          >{/each}</select
+      ></label
+    >
+    {#if selected}<div class="scope-detail" aria-label="Detalhe do escopo">
+        <h3>V{selected.number} · {selected.title}</h3>
+        <p>
+          Estado comercial: <span class="status" data-status={selected.state}
+            >{labels[selected.state]}</span
+          >
+          · revisão {selected.version}
+        </p>
         <p class="muted">
-          Referência textual, sem upload ou consulta externa. Nenhum valor
-          financeiro é inferido.
+          Preparador: {who(selected.created_by)} · origem da versão: {selected.previous_id ??
+            'inicial'}
         </p>
-        <button disabled={busy}>Registrar contrato</button>
-      </form>
-    </details>{/if}
-  <div class="cards">
-    {#each view.contracts as c}<article class="request">
-        <h3>{c.title}</h3>
-        <p>
-          {data.projects.find((p) => p.id === c.project_id)?.name} · {c.kind ===
-          'fixed_price'
-            ? 'Preço fechado'
-            : 'Retainer / banco de horas'} · {c.currency}
-        </p>
-        <p>
-          {c.valid_from.slice(0, 10)} a {c.valid_until.slice(0, 10)} UTC · {c.state ===
-          'active'
-            ? 'Ativo'
-            : c.state === 'closed'
-              ? 'Encerrado'
-              : 'Rascunho'} · v{c.version}
-        </p>
-        <p class="description">Documento: {c.document_reference}</p>
-        {#if ['manager', 'administrator'].includes(role) && c.state !== 'closed'}<button
+        {#each selected.items as item, i}<article class="request">
+            <h4>Item {i + 1} · {item.description}</h4>
+            <dl>
+              <dt>Entregáveis</dt>
+              <dd>{item.deliverables}</dd>
+              <dt>Exclusões</dt>
+              <dd>{item.exclusions}</dd>
+              <dt>Critérios</dt>
+              <dd>{item.acceptance_criteria}</dd>
+              <dt>Dependências</dt>
+              <dd>{item.dependencies}</dd>
+              <dt>Origem</dt>
+              <dd>{origin(item)}</dd>
+            </dl>
+          </article>{/each}
+        {#if selected.decision}<p>
+            Decisão: {labels[selected.decision.decision]} por {who(
+              selected.decision.actor_user_id,
+            )} ({selected.decision.actor_role}), política v{selected.decision
+              .policy_version}, revisão {selected.decision.scope_version}, em
+            <time datetime={selected.decision.decided_at}
+              >{when(selected.decision.decided_at)}</time
+            >. {selected.decision.reason}
+          </p>{/if}
+        {#if canPrepare && selected.state === 'draft'}<button
+            class="secondary"
+            disabled={busy}
+            onclick={() => selected && edit(selected)}
+            >Editar rascunho selecionado</button
+          ><button
+            disabled={busy}
+            onclick={() =>
+              void run(async () => {
+                if (selected)
+                  await post('scopes/' + selected.id + '/submit', {
+                    version: selected.version,
+                  });
+              })}>Submeter escopo</button
+          >{/if}
+        {#if canPrepare && selected.state === 'rejected' && !view.changes.some((c) => c.proposed_scope_id === selected?.id)}<button
             class="secondary"
             disabled={busy}
             onclick={() =>
               void run(async () => {
-                await api<Contract>('contracts/' + c.id, 'PATCH', {
-                  version: c.version,
-                  state: c.state === 'draft' ? 'active' : 'closed',
-                });
-              })}
-            >{c.state === 'draft'
-              ? 'Registrar contrato como ativo'
-              : 'Encerrar contrato'}</button
+                if (!selected) return;
+                const s = await post<ScopeVersion>(
+                  'scopes/' + selected.id + '/revisions',
+                  { version: selected.version },
+                );
+                selectedId = s.id;
+                edit(s);
+              })}>Preparar revisão da rejeitada</button
           >{/if}
-      </article>{:else}<p>Nenhum contrato registrado.</p>{/each}
+        {#if selected.state === 'submitted'}<p class="muted">
+            Somente gestor/admin com alçada explícita e sem participação na
+            preparação pode decidir.
+          </p>
+          {#if canDecide}<label
+              >Justificativa da decisão<textarea
+                bind:value={decisionReason}
+                maxlength="2000"
+                required
+              ></textarea></label
+            ><button
+              disabled={busy ||
+                !decisionReason.trim() ||
+                selected.created_by === userId ||
+                selected.submitted_by === userId}
+              onclick={() => void run(() => decide('approved'))}
+              >Aprovar escopo</button
+            ><button
+              class="secondary"
+              disabled={busy ||
+                !decisionReason.trim() ||
+                selected.created_by === userId ||
+                selected.submitted_by === userId}
+              onclick={() => void run(() => decide('rejected'))}
+              >Rejeitar escopo</button
+            >{/if}{/if}
+        {#if selected.state === 'rejected' && view.changes.some((c) => c.proposed_scope_id === selected?.id)}<p
+          >
+            Change request rejeitado. Selecione a versão atualmente aprovada
+            para preparar outro change request.
+          </p>{/if}
+        {#if canPrepare && selected.state === 'approved'}<form
+            aria-label="Preparar change request"
+            onsubmit={(e) => {
+              e.preventDefault();
+              void run(change);
+            }}
+          >
+            <h4>Change request → nova versão</h4>
+            <label
+              >Motivo da alteração<textarea
+                bind:value={changeReason}
+                required
+                maxlength="2000"
+              ></textarea></label
+            ><label
+              >Impacto descritivo<textarea
+                bind:value={changeImpact}
+                required
+                maxlength="4000"
+              ></textarea></label
+            ><button disabled={busy}>Criar change request</button>
+          </form>{/if}
+      </div>{/if}
   </div>
-  {#if canPrepare}<button class="secondary" disabled={busy} onclick={newDraft}
-      >Preparar escopo inicial</button
-    >{/if}
-  {#if draftItems.length && canPrepare}<form
-      aria-label="Preparar versão de escopo"
-      class="commercial-form"
-      onsubmit={(e) => {
-        e.preventDefault();
-        void run(saveScope);
-      }}
-    >
-      <h3>{editingId ? 'Editar rascunho' : 'Escopo inicial'}</h3>
-      <label
-        >Projeto do escopo<select
-          bind:value={scopeProject}
-          required
-          disabled={!!editingId}
-          onchange={() => (scopeContract = '')}
-          ><option value="">Selecione</option>{#each data.projects as p}<option
-              value={p.id}>{p.name}</option
-            >{/each}</select
-        ></label
-      >
-      <label
-        >Contrato do escopo<select bind:value={scopeContract} required
-          ><option value="">Selecione</option
-          >{#each view.contracts.filter((c) => c.project_id === scopeProject && c.state !== 'closed') as c}<option
-              value={c.id}>{c.title}</option
-            >{/each}</select
-        ></label
-      >
-      <label
-        >Título da versão<input
-          bind:value={scopeTitle}
-          maxlength="200"
-          required
-        /></label
-      >
-      {#each draftItems as item, i}<fieldset>
-          <legend>Item {i + 1}</legend>
-          <label
-            >Descrição do item<textarea
-              bind:value={item.description}
-              maxlength="2000"
-              required
-            ></textarea></label
-          ><label
-            >Entregáveis<textarea
-              bind:value={item.deliverables}
-              maxlength="2000"
-              required
-            ></textarea></label
-          ><label
-            >Exclusões<textarea
-              bind:value={item.exclusions}
-              maxlength="2000"
-              required
-            ></textarea></label
-          ><label
-            >Critérios de aceite contratual<textarea
-              bind:value={item.acceptance_criteria}
-              maxlength="2000"
-              required
-            ></textarea></label
-          ><label
-            >Dependências<textarea
-              bind:value={item.dependencies}
-              maxlength="2000"
-              required
-            ></textarea></label
-          >
-          <label
-            >Atendimento de origem comercial<select
-              bind:value={item.origin_interaction_id}
-              ><option value={null}>Usar somente demanda</option
-              >{#each data.interactions.filter((x) => x.project_id === scopeProject) as a}<option
-                  value={a.id}>{a.summary.slice(0, 80)}</option
-                >{/each}</select
-            ></label
-          >
-          <label
-            >Demanda de origem comercial<select
-              bind:value={item.origin_request_id}
-              ><option value={null}>Usar somente atendimento</option
-              >{#each data.requests.filter((r) => data.interactions.find((a) => a.id === r.interaction_id)?.project_id === scopeProject && (!item.origin_interaction_id || r.interaction_id === item.origin_interaction_id)) as r}<option
-                  value={r.id}>{r.title}</option
-                >{/each}</select
-            ></label
-          >
-          <button
-            type="button"
-            class="secondary"
-            disabled={draftItems.length === 1 || busy}
-            onclick={() => (draftItems = draftItems.filter((_, j) => j !== i))}
-            >Remover item {i + 1}</button
-          >
-        </fieldset>{/each}
-      <button
-        type="button"
-        class="secondary"
-        disabled={busy || draftItems.length >= 20}
-        onclick={() => (draftItems = [...draftItems, blank()])}
-        >Adicionar item de escopo</button
-      ><button disabled={busy}>Salvar rascunho de escopo</button><button
-        type="button"
-        class="secondary"
-        onclick={() => {
-          draftItems = [];
-          editingId = '';
-        }}>Cancelar edição</button
-      >
-    </form>{/if}
-  <label
-    >Versão de escopo<select bind:value={selectedId}
-      ><option value="">Selecione</option>{#each view.scopes as s}<option
-          value={s.id}
-          >{data.projects.find((p) => p.id === s.project_id)?.name} · V{s.number}
-          · {s.title} · {labels[s.state]}</option
-        >{/each}</select
-    ></label
-  >
-  {#if selected}<div class="scope-detail" aria-label="Detalhe do escopo">
-      <h3>V{selected.number} · {selected.title}</h3>
-      <p>
-        Estado comercial: <strong>{labels[selected.state]}</strong> · revisão {selected.version}
-      </p>
-      <p class="muted">
-        Preparador: {who(selected.created_by)} · origem da versão: {selected.previous_id ??
-          'inicial'}
-      </p>
-      {#each selected.items as item, i}<article class="request">
-          <h4>Item {i + 1} · {item.description}</h4>
-          <dl>
-            <dt>Entregáveis</dt>
-            <dd>{item.deliverables}</dd>
-            <dt>Exclusões</dt>
-            <dd>{item.exclusions}</dd>
-            <dt>Critérios</dt>
-            <dd>{item.acceptance_criteria}</dd>
-            <dt>Dependências</dt>
-            <dd>{item.dependencies}</dd>
-            <dt>Origem</dt>
-            <dd>{origin(item)}</dd>
-          </dl>
-        </article>{/each}
-      {#if selected.decision}<p>
-          Decisão: {labels[selected.decision.decision]} por {who(
-            selected.decision.actor_user_id,
-          )} ({selected.decision.actor_role}), política v{selected.decision
-            .policy_version}, revisão {selected.decision.scope_version}, em {selected
-            .decision.decided_at}. {selected.decision.reason}
-        </p>{/if}
-      {#if canPrepare && selected.state === 'draft'}<button
-          class="secondary"
-          disabled={busy}
-          onclick={() => selected && edit(selected)}
-          >Editar rascunho selecionado</button
-        ><button
-          disabled={busy}
-          onclick={() =>
-            void run(async () => {
-              if (selected)
-                await post('scopes/' + selected.id + '/submit', {
-                  version: selected.version,
-                });
-            })}>Submeter escopo</button
-        >{/if}
-      {#if canPrepare && selected.state === 'rejected' && !view.changes.some((c) => c.proposed_scope_id === selected?.id)}<button
-          class="secondary"
-          disabled={busy}
-          onclick={() =>
-            void run(async () => {
-              if (!selected) return;
-              const s = await post<ScopeVersion>(
-                'scopes/' + selected.id + '/revisions',
-                { version: selected.version },
-              );
-              selectedId = s.id;
-              edit(s);
-            })}>Preparar revisão da rejeitada</button
-        >{/if}
-      {#if selected.state === 'submitted'}<p class="muted">
-          Somente gestor/admin com alçada explícita e sem participação na
-          preparação pode decidir.
-        </p>
-        {#if canDecide}<label
-            >Justificativa da decisão<textarea
-              bind:value={decisionReason}
-              maxlength="2000"
-              required
-            ></textarea></label
-          ><button
-            disabled={busy ||
-              !decisionReason.trim() ||
-              selected.created_by === userId ||
-              selected.submitted_by === userId}
-            onclick={() => void run(() => decide('approved'))}
-            >Aprovar escopo</button
-          ><button
-            class="secondary"
-            disabled={busy ||
-              !decisionReason.trim() ||
-              selected.created_by === userId ||
-              selected.submitted_by === userId}
-            onclick={() => void run(() => decide('rejected'))}
-            >Rejeitar escopo</button
-          >{/if}{/if}
-      {#if selected.state === 'rejected' && view.changes.some((c) => c.proposed_scope_id === selected?.id)}<p
-        >
-          Change request rejeitado. Selecione a versão atualmente aprovada para
-          preparar outro change request.
-        </p>{/if}
-      {#if canPrepare && selected.state === 'approved'}<form
-          aria-label="Preparar change request"
-          onsubmit={(e) => {
-            e.preventDefault();
-            void run(change);
-          }}
-        >
-          <h4>Change request → nova versão</h4>
-          <label
-            >Motivo da alteração<textarea
-              bind:value={changeReason}
-              required
-              maxlength="2000"
-            ></textarea></label
-          ><label
-            >Impacto descritivo<textarea
-              bind:value={changeImpact}
-              required
-              maxlength="4000"
-            ></textarea></label
-          ><button disabled={busy}>Criar change request</button>
-        </form>{/if}
-    </div>{/if}
   {#if canPrepare}<form
+      class="m3-block coverage-form"
       aria-label="Revisar cobertura comercial"
       onsubmit={(e) => {
         e.preventDefault();
@@ -636,7 +712,7 @@
       }}
     >
       <h3>Cobertura de demanda</h3>
-      <label
+      <label class="field-narrow"
         >Demanda para cobertura<select
           bind:value={coverageRequest}
           onchange={() => (coverageItem = '')}
@@ -645,7 +721,7 @@
               value={r.id}>{r.title}</option
             >{/each}</select
         ></label
-      ><label
+      ><label class="field-narrow"
         >Item de escopo aprovado<select bind:value={coverageItem}
           ><option value="">Sem cobertura / remover vínculo</option
           >{#each view.scopes.filter((s) => s.state === 'approved' && s.project_id === data.interactions.find((i) => i.id === currentRequest()?.interaction_id)?.project_id) as s}{#each s.items as item}<option
@@ -654,7 +730,7 @@
         ></label
       ><button disabled={busy || !coverageRequest}>Confirmar cobertura</button>
     </form>{/if}
-  <details>
+  <details class="m3-block">
     <summary>Change requests e histórico comercial</summary
     >{#each view.changes as c}<p>
         {c.reason} · {c.impact} · {labels[c.state]} · base {c.base_scope_id} → versão
@@ -666,9 +742,10 @@
     {#each view.events as e}<details>
         <summary
           >{e.entity_type} · {e.action} · {who(e.actor_user_id)} ({e.actor_role})
-          · {e.created_at}</summary
+          · <time datetime={e.created_at}>{when(e.created_at)}</time></summary
         >
-        <pre>{JSON.stringify(
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable region must be keyboard reachable, WCAG 2.1.1) -->
+        <pre tabindex="0">{JSON.stringify(
             { antes: e.before_data, depois: e.after_data },
             null,
             2,

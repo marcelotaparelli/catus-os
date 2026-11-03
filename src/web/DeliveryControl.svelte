@@ -474,14 +474,16 @@
         <p>Arquivos: {job.result.files.join(', ')}</p>
         <details>
           <summary>Diff para revisão</summary>
-          <pre>{job.result.patch}</pre>
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable region must be keyboard reachable, WCAG 2.1.1) -->
+          <pre tabindex="0">{job.result.patch}</pre>
         </details>
         <details>
           <summary>Testes reais e códigos de saída</summary
           >{#each job.result.tests as t}<p>
               {t.argv.join(' ')} · saída {t.exit_code}
             </p>
-            <pre>{t.log}</pre>{/each}
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex (scrollable region must be keyboard reachable, WCAG 2.1.1) -->
+            <pre tabindex="0">{t.log}</pre>{/each}
         </details>
         <p class="muted">
           Patch preservado no sistema. Nenhum PR remoto, merge ou deploy foi
