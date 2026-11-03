@@ -111,7 +111,7 @@ Nada mudou no servidor além dos links das recomendações: payloads, regras e p
 
 1. ~~Página longa~~: resolvido com a navegação por módulo (rotas `#/…`, `src/web/routes.ts`).
 2. Estender a regressão visual e as capturas de UX a atendimento inteligente e M5. M4 tem capturas em `docs/quality/ux-comercial-economia/` e baselines dos formulários, sem dados de horas ou relatórios, porque o seed de qualidade não cria dados econômicos.
-3. Formato de data `mm/dd/yyyy` no renderizador do CI (locale do navegador sem dados pt-BR); avaliar campos de data com formato explícito.
+3. ~~Formato de data `mm/dd/yyyy` no renderizador do CI~~: resolvido com campos de data em DD/MM/AAAA, independentes do idioma do navegador.
 4. Espaço superior excessivo no cartão de item do escopo (padding do cartão + margem do título).
 5. Ordem de cabeçalhos (h3 → h4) dentro do detalhe do escopo (`heading-order`, prática recomendada, não WCAG).
 6. Jornada visual ponta a ponta cliente → projeto → atendimento → solicitação → triagem → escopo → execução → horas → rentabilidade. Hoje a jornada funcional é coberta por `e2e/pilot-journey.spec.ts`; o visual cobre Mission Control e M3.

@@ -84,7 +84,7 @@ const econ = (page: Page) =>
   page.getByRole('region', { name: 'Inteligência econômica' });
 // Today's date fills the hours form, so date fields are masked along with timestamps.
 const maskDates = (page: Page) => ({
-  mask: [page.locator('time'), page.locator('input[type=date]')],
+  mask: [page.locator('time'), page.locator('input[placeholder="DD/MM/AAAA"]')],
 });
 
 test('Economia administrator chooses what to prepare (1280)', async ({
