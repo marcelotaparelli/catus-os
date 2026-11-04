@@ -14,14 +14,12 @@ export type Module =
 
 /** Opens a module through the visible menu (sidebar, or the compact strip on narrow screens). */
 export async function open(page: Page, module: Module) {
-  const sidebar = page.getByRole('navigation', {
-    name: 'Módulos',
-    exact: true,
-  });
-  const menu = (await sidebar.isVisible())
-    ? sidebar
-    : page.getByRole('navigation', { name: 'Módulos (compacto)' });
-  await menu.getByRole('link', { name: module, exact: true }).click();
+  // The menu appears once the session is known, so this also waits for it.
+  await page
+    .getByRole('navigation', { name: /^Módulos/ })
+    .filter({ visible: true })
+    .getByRole('link', { name: module, exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { level: 1, name: module, exact: true }),
   ).toBeVisible();

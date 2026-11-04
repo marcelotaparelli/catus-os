@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { roles } from '../shared/identity';
+  import { roleLabels, roles } from '../shared/identity';
   import type { Member, Role } from '../shared/identity';
   let {
     members,
@@ -49,14 +49,16 @@
     >
     <label
       >Papel<select bind:value={role}
-        >{#each roles as r}<option value={r}>{r}</option>{/each}</select
+        >{#each roles as r}<option value={r}>{roleLabels[r] ?? r}</option
+          >{/each}</select
       ></label
     >
     <button disabled={busy}>Autorizar ou atualizar membro</button>
   </form>
   <ul>
     {#each members as member}<li>
-        {member.name} · {member.email} · {member.role}
+        {member.name} · {member.email} · {roleLabels[member.role] ??
+          member.role}
         <button
           class="secondary"
           disabled={busy || member.id === currentUserId}
