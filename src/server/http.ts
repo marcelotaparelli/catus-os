@@ -13,7 +13,7 @@ export function webHandler(
     const file =
       path === '/'
         ? 'index.html'
-        : /^\/assets\/[a-zA-Z0-9._-]+\.(js|css)$/.test(path)
+        : /^\/assets\/[a-zA-Z0-9._-]+\.(js|css|woff2)$/.test(path)
           ? path.slice(1)
           : undefined;
     if (!file) return new Response(null, { status: 404 });
@@ -26,7 +26,9 @@ export function webHandler(
           ? 'text/javascript'
           : file.endsWith('.css')
             ? 'text/css'
-            : 'text/html; charset=utf-8',
+            : file.endsWith('.woff2')
+              ? 'font/woff2'
+              : 'text/html; charset=utf-8',
         'Cache-Control':
           path === '/' ? 'no-store' : 'public, max-age=86400, immutable',
         'Content-Security-Policy':
