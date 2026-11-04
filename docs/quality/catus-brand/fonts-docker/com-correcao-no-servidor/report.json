@@ -1,8 +1,6 @@
 {
   "csp": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-  "css": [
-    "/assets/index-BJlrWEeM.css"
-  ],
+  "css": ["/assets/index-BJlrWEeM.css"],
   "fonts": [
     {
       "url": "/assets/inter-var-Dx4kXJAl.woff2",
@@ -32,17 +30,10 @@
       "version": "145.0.7632.6",
       "ok": true,
       "loaded": {
-        "400 16px Inter": [
-          "loaded"
-        ],
-        "400 16px Lexend": [
-          "loaded"
-        ]
+        "400 16px Inter": ["loaded"],
+        "400 16px Lexend": ["loaded"]
       },
-      "faces": [
-        "Inter 100 900 loaded",
-        "Lexend 400 loaded"
-      ],
+      "faces": ["Inter 100 900 loaded", "Lexend 400 loaded"],
       "used": "Inter, ui-sans-serif, system-ui, sans-serif",
       "heading": "Inter, ui-sans-serif, system-ui, sans-serif",
       "csp": [],
@@ -66,17 +57,10 @@
       "version": "146.0.1",
       "ok": true,
       "loaded": {
-        "400 16px Inter": [
-          "loaded"
-        ],
-        "400 16px Lexend": [
-          "loaded"
-        ]
+        "400 16px Inter": ["loaded"],
+        "400 16px Lexend": ["loaded"]
       },
-      "faces": [
-        "Inter 100 900 loaded",
-        "Lexend 400 loaded"
-      ],
+      "faces": ["Inter 100 900 loaded", "Lexend 400 loaded"],
       "used": "Inter, ui-sans-serif, system-ui, sans-serif",
       "heading": "Inter, ui-sans-serif, system-ui, sans-serif",
       "csp": [],
@@ -100,17 +84,10 @@
       "version": "26.0",
       "ok": true,
       "loaded": {
-        "400 16px Inter": [
-          "loaded"
-        ],
-        "400 16px Lexend": [
-          "loaded"
-        ]
+        "400 16px Inter": ["loaded"],
+        "400 16px Lexend": ["loaded"]
       },
-      "faces": [
-        "Inter 100 900 loaded",
-        "Lexend 400 loaded"
-      ],
+      "faces": ["Inter 100 900 loaded", "Lexend 400 loaded"],
       "used": "Inter, ui-sans-serif, system-ui, sans-serif",
       "heading": "Inter, ui-sans-serif, system-ui, sans-serif",
       "csp": [],
