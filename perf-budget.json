@@ -1,12 +1,13 @@
 {
-  "note": "Budgets with ~15% headroom over measured values. Initial JS (entry + modulepreloads in index.html) was 76.5 kB raw / 28.6 kB gzip on 2026-11-03 after splitting module screens into on-demand chunks (single bundle before: 153.3 kB / 51.1 kB). Totals sum every chunk compressed separately, so splitting adds per-file gzip overhead; total JS gzip was raised from 60 kB to 70 kB for that reason and for the navigation shell (+~5 kB gzip). Raise only with justification in the PR. Value-first MVP (2026-11-03): total JS raised to 215 kB / 80 kB for the role reading of Mission Control (separate chunk, about 11 kB gzip); initial JS budget unchanged. UX Comercial e Economia (2026-11-03): CSS raw raised from 16 kB to 18.5 kB (measured 17.8 kB) because Economia had almost no layout of its own (tabs, decision queue, type picker); CSS gzip and every JS budget unchanged, total JS gzip is now close to its limit at 79.7 kB.",
+  "note": "Budgets with ~15% headroom over measured values. Initial JS (entry + modulepreloads in index.html) was 76.5 kB raw / 28.6 kB gzip on 2026-11-03 after splitting module screens into on-demand chunks (single bundle before: 153.3 kB / 51.1 kB). Totals sum every chunk compressed separately, so splitting adds per-file gzip overhead; total JS gzip was raised from 60 kB to 70 kB for that reason and for the navigation shell (+~5 kB gzip). Raise only with justification in the PR. Value-first MVP (2026-11-03): total JS raised to 215 kB / 80 kB for the role reading of Mission Control (separate chunk, about 11 kB gzip); initial JS budget unchanged. UX Comercial e Economia (2026-11-03): CSS raw raised from 16 kB to 18.5 kB (measured 17.8 kB) because Economia had almost no layout of its own (tabs, decision queue, type picker); CSS gzip and every JS budget unchanged, total JS gzip is now close to its limit at 79.7 kB. Catus brand (2026-11-04): CSS raw raised to 20.5 kB for the token layer and the login, figure and legend components; CSS gzip and every JS budget unchanged. fontBytes is a new budget for the two self-hosted WOFF2 files, already compressed, excluded from the CSS totals (docs/DESIGN_SYSTEM.md).",
   "bundle": {
     "initialJsRawBytes": 90000,
     "initialJsGzipBytes": 33000,
     "jsRawBytes": 215000,
     "jsGzipBytes": 80000,
-    "cssRawBytes": 18500,
-    "cssGzipBytes": 5000
+    "cssRawBytes": 20500,
+    "cssGzipBytes": 5000,
+    "fontBytes": 80000
   },
   "runtime": {
     "note": "Production build (vite preview) in the pinned Playwright container, median of 3 runs. CI 41629444027/41629496779: Mission Control ready 240-243 ms, LCP 72-96 ms, CLS 0.004, 4 API calls at start, first switch to Comercial 143-149 ms, M3 interaction 38 ms. Budgets allow ~3-4x for runner variance; startApiCalls is exact (5 since the value-first MVP: GET /api/overview, role-filtered, cannot join mission-control because that response carries no M4 values by contract).",

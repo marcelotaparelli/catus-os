@@ -10,6 +10,7 @@
     transitions,
   } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
+  import './ui/tokens.css';
   import './style.css';
   import {
     allowed,
@@ -272,6 +273,14 @@
   $effect(() => {
     document.title = `Catus OS · ${connected ? page.title : 'Mission Control'}`;
   });
+  // The compact menu scrolls sideways: the current module must not be out of view.
+  $effect(() => {
+    void route.id;
+    const current = document.querySelector<HTMLElement>(
+      '.mobile-nav [aria-current]',
+    );
+    if (current) current.parentElement!.scrollLeft = current.offsetLeft - 12;
+  });
   const when = timeLabel;
   function focusFirst(node: HTMLElement) {
     node.scrollIntoView({ block: 'nearest' });
@@ -499,45 +508,27 @@
     content="Operação da agência: clientes, projetos, atendimentos e solicitações."
   /></svelte:head
 >
-<div class="shell">
-  <aside>
-    <a class="brand" href="#/">CATUS<span>OS</span></a>
-    <p class="eyebrow">WORKSPACE DA AGÊNCIA</p>
-    <nav aria-label="Módulos">
-      {#if connected && nav.length}
-        {#each nav as r (r.id)}<a
-            class="nav"
-            href={href(r.id)}
-            aria-current={route.id === r.id ? 'page' : undefined}
-            onpointerenter={() => prefetch(r.id)}
-            onfocus={() => prefetch(r.id)}>{r.label}</a
-          >{/each}
-      {:else}<span class="nav active">Mission Control</span>{/if}
-    </nav>
-    <p class="aside-note">Operação conectada.<br />Decisões rastreáveis.</p>
-    <div class="local">● Ambiente local</div>
-  </aside>
-  <main>
-    <header>
-      <div>
-        {#if connected}
-          <p class="eyebrow">{page.eyebrow}</p>
-          <h1 tabindex="-1" bind:this={heading}>{page.title}</h1>
-          <p class="muted">{page.description}</p>
-        {:else}
-          <p class="eyebrow">OPERAÇÃO / VISÃO GERAL</p>
-          <h1>Mission Control</h1>
-          <p class="muted">
-            Da conversa à próxima ação, com contexto e responsabilidade.
-          </p>
-        {/if}
-      </div>
-      <span class="badge">IA assistida · revisão humana obrigatória</span>
-    </header>
-    {#if !connected}
+{#snippet logo()}<a class="brand" href="#/" aria-label="Catus OS"
+    ><svg class="logo" viewBox="0 0 191 61" aria-hidden="true"
+      ><use href="#catus-logo" /></svg
+    ><span aria-hidden="true">OS</span></a
+  >{/snippet}
+{#snippet feedback()}{#if error}<p class="feedback error" role="alert">
+      {error}
+    </p>{/if}{#if notice}<p class="feedback" role="status">
+      {notice}
+    </p>{/if}{/snippet}
+{#if !connected}
+  <main class="access-page">
+    {@render logo()}
+    {#if loaded}
+      <header>
+        <p class="eyebrow">Catus OS</p>
+        <h1>Operação conectada. <span>Decisões rastreáveis.</span></h1>
+      </header>
       <section class="panel access">
         <h2>Entre no Catus OS</h2>
-        {#if !loaded}<p>Verificando sessão…</p>{:else if configured}
+        {#if configured}
           <p>
             Use sua conta corporativa previamente autorizada. O acesso depende
             dos vínculos da sua organização.
@@ -553,10 +544,30 @@
             no ambiente.
           </p>{/if}
       </section>
-    {:else if session}
+    {:else}<p class="loading" role="status">Verificando sessão…</p>{/if}
+    {@render feedback()}
+  </main>
+{:else if session}
+  <div class="shell">
+    <aside>
+      <div class="side">
+        {@render logo()}
+        <nav aria-label="Módulos">
+          {#each nav as r (r.id)}<a
+              class="nav"
+              href={href(r.id)}
+              aria-current={route.id === r.id ? 'page' : undefined}
+              onpointerenter={() => prefetch(r.id)}
+              onfocus={() => prefetch(r.id)}>{r.label}</a
+            >{/each}
+        </nav>
+      </div>
+    </aside>
+    <main>
       <div class="toolbar">
-        <span class="muted"
-          >{session.user.name} · {session.user.email} · {roleLabels[
+        {@render logo()}
+        <span class="who"
+          ><strong>{session.user.name}</strong> · {session.user.email} · {roleLabels[
             session.role
           ] ?? session.role}<br />{session.organization.name}</span
         >
@@ -577,7 +588,7 @@
         <button class="secondary" disabled={busy} onclick={() => logout()}
           >Sair</button
         >
-        <button class="secondary" disabled={busy} onclick={() => logout(true)}
+        <button class="quiet" disabled={busy} onclick={() => logout(true)}
           >Encerrar todas as sessões</button
         >
       </div>
@@ -587,6 +598,11 @@
             aria-current={route.id === r.id ? 'page' : undefined}>{r.label}</a
           >{/each}
       </nav>
+      <header>
+        <p class="eyebrow">{page.eyebrow}</p>
+        <h1 tabindex="-1" bind:this={heading}>{page.title}</h1>
+        <p class="muted">{page.description}</p>
+      </header>
       {#if !route.id || !permitted}
         <section class="panel route-message" aria-label={page.title}>
           <h2>
@@ -612,24 +628,7 @@
             requests={data.requests}
             userId={session.user.id}
           />{:else if readingFailed}{@render chunkFailed()}{/if}
-        <section class="stats" aria-label="Resumo operacional">
-          <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
-          <div>
-            <span>Projetos</span><strong>{data.projects.length}</strong>
-          </div>
-          <div>
-            <span>Solicitações carregadas</span><strong
-              >{data.requests.length}</strong
-            >
-          </div>
-          <div><span>Em aberto</span><strong>{open}</strong></div>
-          <div>
-            <span>Atribuídas a mim (abertas)</span><strong>{mine}</strong>
-          </div>
-          <div>
-            <span>Bloqueadas</span><strong>{blocked.length}</strong>
-          </div>
-        </section>
+
         <div class="overview">
           <section class="panel" aria-labelledby="mc-mine">
             <div class="section-heading">
@@ -725,6 +724,24 @@
               </p>{/if}
           </section>
         </div>
+        <section class="stats" aria-label="Resumo operacional">
+          <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
+          <div>
+            <span>Projetos</span><strong>{data.projects.length}</strong>
+          </div>
+          <div>
+            <span>Solicitações carregadas</span><strong
+              >{data.requests.length}</strong
+            >
+          </div>
+          <div><span>Em aberto</span><strong>{open}</strong></div>
+          <div>
+            <span>Atribuídas a mim (abertas)</span><strong>{mine}</strong>
+          </div>
+          <div>
+            <span>Bloqueadas</span><strong>{blocked.length}</strong>
+          </div>
+        </section>
       {/if}
       {#if show('solicitacoes')}
         <section class="panel" id="solicitacoes" aria-label="Solicitações">
@@ -751,11 +768,7 @@
               >
             </div>
           </div>
-          <p class="muted">
-            Até 500 solicitações mais recentes. Novas solicitações entram em
-            “Nova”; estados seguintes exigem triagem. Cada cartão mostra o
-            responsável e a próxima ação.
-          </p>
+          <p class="muted">Até 500 solicitações mais recentes.</p>
           {#if !visible.length}<div class="empty">
               <h3>Nenhuma solicitação neste recorte</h3>
               <p>
@@ -1082,10 +1095,7 @@
               <h2>Clientes, projetos e atendimentos</h2>
             </div>
           </div>
-          <p class="muted">
-            Atendimentos e reuniões mais recentes (até 500) por projeto, com a
-            quantidade de solicitações abertas.
-          </p>
+          <p class="muted">Até 500 atendimentos mais recentes por projeto.</p>
           {#if !data.clients.length}<div class="empty">
               <h3>Nenhum cliente cadastrado</h3>
               <p>
@@ -1153,9 +1163,7 @@
                 {...moduleProps(id, session)}
               />{:catch}{@render chunkFailed()}{/await}
           </div>{/if}{/each}
-    {/if}
-    {#if error}<p class="feedback error" role="alert">
-        {error}
-      </p>{/if}{#if notice}<p class="feedback" role="status">{notice}</p>{/if}
-  </main>
-</div>
+      {@render feedback()}
+    </main>
+  </div>
+{/if}

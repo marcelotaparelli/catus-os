@@ -4,9 +4,12 @@ import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 const budget = JSON.parse(readFileSync('perf-budget.json', 'utf8')).bundle;
 const files = readdirSync('dist/assets');
+// Fonts carry a .css name only because the server allows just .js and .css in
+// /assets (docs/DESIGN_SYSTEM.md); they are budgeted on their own, not as style.
+const isFont = (f) => f.endsWith('.woff2.css');
 const sum = (ext, gzip) =>
   files
-    .filter((f) => f.endsWith(ext))
+    .filter((f) => f.endsWith(ext) && !isFont(f))
     .reduce((n, f) => {
       const b = readFileSync(`dist/assets/${f}`);
       return n + (gzip ? gzipSync(b, { level: 9 }).length : b.length);
@@ -29,6 +32,9 @@ const measured = {
   jsGzipBytes: sum('.js', true),
   cssRawBytes: sum('.css', false),
   cssGzipBytes: sum('.css', true),
+  fontBytes: files
+    .filter(isFont)
+    .reduce((n, f) => n + readFileSync(`dist/assets/${f}`).length, 0),
 };
 if (!measured.jsRawBytes)
   throw new Error('dist/assets has no JS: run npm run build first');

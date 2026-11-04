@@ -744,12 +744,6 @@
       known = (v: number | null, absent: string) =>
         v == null ? absent : hoursLabel(v);
     return [
-      ['Receita contratada', money(r.contracted_revenue)],
-      ['Receita reconhecida', money(r.recognized_revenue)],
-      ['Orçamento de custo', money(r.budget_cost)],
-      ['Custo incorrido, sem deduções sobre receita', money(r.cost_incurred)],
-      ['Custo para concluir (ETC)', money(r.estimate_to_complete)],
-      ['Custo previsto na conclusão (EAC)', money(r.eac)],
       [
         'Margem projetada na conclusão',
         `${money(r.projected_margin)} · ${percent(r.projected_margin_bps)}`,
@@ -758,6 +752,12 @@
         'Margem realizada sobre receita reconhecida',
         `${money(r.realized_margin)} · ${percent(r.realized_margin_bps)}`,
       ],
+      ['Receita contratada', money(r.contracted_revenue)],
+      ['Receita reconhecida', money(r.recognized_revenue)],
+      ['Orçamento de custo', money(r.budget_cost)],
+      ['Custo incorrido, sem deduções sobre receita', money(r.cost_incurred)],
+      ['Custo para concluir (ETC)', money(r.estimate_to_complete)],
+      ['Custo previsto na conclusão (EAC)', money(r.eac)],
       [
         'Horas previstas / aprovadas / pendentes / restantes',
         [
@@ -771,15 +771,19 @@
         'Capacidade alocada declarada',
         known(r.capacity_minutes, 'Desconhecida'),
       ],
-      [
-        'Retainer: incluídas / entrada / saldo / excedente',
-        [
-          known(r.included_minutes, 'Não aplicável'),
-          hoursLabel(r.carry_in_minutes),
-          known(r.balance_minutes, 'Não aplicável'),
-          known(r.overage_minutes, 'Não aplicável'),
-        ].join(' / '),
-      ],
+      ...(r.included_minutes == null
+        ? []
+        : ([
+            [
+              'Retainer: incluídas / entrada / saldo / excedente',
+              [
+                known(r.included_minutes, 'Não aplicável'),
+                hoursLabel(r.carry_in_minutes),
+                known(r.balance_minutes, 'Não aplicável'),
+                known(r.overage_minutes, 'Não aplicável'),
+              ].join(' / '),
+            ],
+          ] as [string, string][])),
     ];
   }
   // Messages from the engine name projects by id; people read names.
