@@ -324,9 +324,9 @@
 
 {#snippet portfolio()}
   <p class="muted">
-    Corte {dayLabel(overview?.as_of)}. Calculado agora pelo motor econômico, a
-    partir de registros aprovados. Dado ausente fica indisponível, nunca zero.
-    Valores de competências e moedas diferentes não são somados.
+    Corte {dayLabel(overview?.as_of)}, a partir de registros aprovados. Dado
+    ausente fica indisponível, nunca zero. Moedas e competências diferentes não
+    são somadas.
   </p>
   <ul class="health-legend" aria-label="Projetos por situação">
     {#each healthOrder as h}

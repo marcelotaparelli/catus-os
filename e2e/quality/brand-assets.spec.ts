@@ -32,7 +32,7 @@ test('production server delivers brand fonts and logo under its CSP', async ({
 }) => {
   await page.addInitScript(() => {
     (window as unknown as { csp: string[] }).csp = [];
-    addEventListener('securitypolicyviolation', (e) =>
+    document.addEventListener('securitypolicyviolation', (e) =>
       (window as unknown as { csp: string[] }).csp.push(
         `${e.violatedDirective} ${e.blockedURI}`,
       ),

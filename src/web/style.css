@@ -289,7 +289,6 @@ header .muted {
   margin-top: 0;
 }
 .card-top {
-  flex-wrap: nowrap;
   margin-bottom: 8px;
 }
 .cards {
@@ -536,10 +535,15 @@ button:disabled {
   font-size: 13px;
   font-weight: 600;
 }
-.actions {
+.actions,
+.row-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 8px 12px;
+}
+.row-actions {
+  margin-top: 8px;
 }
 .edit button {
   margin-right: 8px;
@@ -603,9 +607,6 @@ summary {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-}
-summary:hover {
-  color: var(--blue);
 }
 details {
   margin: 8px 0;
@@ -769,12 +770,10 @@ dd {
 }
 .description {
   white-space: pre-wrap;
-  font-size: 13px;
 }
 .mine-tag {
   margin-left: 4px;
   color: var(--blue);
-  font-weight: 600;
 }
 .stats {
   display: grid;
@@ -858,12 +857,10 @@ dd {
 .timeline p {
   margin: 2px 0 8px;
   white-space: pre-wrap;
-  font-size: 13px;
 }
 .audit-line {
   margin: 4px 0;
   overflow-wrap: anywhere;
-  font-size: 13px;
 }
 
 /* Mission Control */
@@ -1058,7 +1055,6 @@ dd {
 }
 .sources li {
   margin-bottom: 4px;
-  font-size: 13px;
 }
 .gov-checks li {
   display: grid;
@@ -1083,8 +1079,6 @@ dd {
 }
 .plain li {
   margin: 0;
-  padding: 3px 0;
-  font-size: 13px;
 }
 
 /* Comercial and Economia */
@@ -1121,7 +1115,6 @@ dd {
   border-radius: var(--radius) var(--radius) 0 0;
 }
 .econ-tabs button:hover:not(:disabled) {
-  color: var(--navy);
   background: var(--blue-tint);
 }
 .econ-tabs button[aria-selected='true'] {
@@ -1131,9 +1124,6 @@ dd {
 }
 .econ-tabs button:focus-visible {
   outline-offset: -2px;
-}
-.econ-group {
-  margin: 18px 0 8px;
 }
 .econ-decision-bar {
   position: sticky;
@@ -1204,6 +1194,9 @@ dd {
 .econ-facts dd {
   margin: 0;
   font-weight: 600;
+}
+.econ-group {
+  margin-top: 18px;
 }
 .economic-report {
   margin: 8px 0;

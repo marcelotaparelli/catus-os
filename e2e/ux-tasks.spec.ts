@@ -287,10 +287,8 @@ test('common Comercial and Economia tasks stay within their measured effort', as
       name: 'Demanda das horas',
       exact: true,
     });
-    await m.select(
-      demand,
-      (await demand.locator('option').nth(1).getAttribute('value'))!,
-    );
+    // The demand of the last entry is already selected and can still be changed.
+    await expect(demand).not.toHaveValue('');
     await m.fill(form.getByLabel('Duração (horas)'), '1,5');
     await expect(form.getByText('= 1h30 (90 min)')).toBeVisible();
     await m.fill(
@@ -311,7 +309,7 @@ test('common Comercial and Economia tasks stay within their measured effort', as
       clicks: m.clicks,
       fields: m.fields,
     };
-    expect(m.clicks).toBeLessThanOrEqual(3);
+    expect(m.clicks).toBeLessThanOrEqual(1);
   }
 
   // Gestor: decide a submitted scope, entering by the menu.
@@ -405,7 +403,11 @@ test('common Comercial and Economia tasks stay within their measured effort', as
       'Reunião de refinamento',
     );
     await m.fill(form.getByLabel('Horas previstas'), '10');
-    await m.fill(form.getByLabel('Horas para concluir'), '8');
+    // Nothing done yet: left empty, it means all of the planned hours. Never zero.
+    await expect(form.getByLabel('Horas para concluir')).toHaveAttribute(
+      'placeholder',
+      '10h',
+    );
     await m.fill(
       form.getByLabel('Data prevista de conclusão'),
       new Date(Date.now() + 864e6).toLocaleDateString('pt-BR', {
@@ -414,12 +416,120 @@ test('common Comercial and Economia tasks stay within their measured effort', as
     );
     await shot(po, 'after-po-estimativa-1280');
     await atMobile(po, 'after-po-estimativa');
+    const sent = po.waitForRequest(
+      (r) => r.method() === 'POST' && r.url().endsWith('/economics/records'),
+    );
     await m.click(
       form.getByRole('button', { name: 'Preparar versão econômica' }),
     );
+    const payload = (await sent).postDataJSON().payload;
+    expect(payload.planned_minutes).toBe(600);
+    expect(payload.remaining_minutes).toBe(600);
     await expect(econ.getByRole('status')).toContainText('Versão preparada');
     results['po-estimar-demanda'] = { clicks: m.clicks, fields: m.fields };
     expect(m.clicks).toBeLessThanOrEqual(3);
+    expect(m.fields).toBeLessThanOrEqual(3);
+  }
+
+  // Gestor: refresh the profitability of every project at once.
+  {
+    await manager.reload();
+    await open(manager, 'Economia');
+    await manager.waitForLoadState('networkidle');
+    const m = new Meter(),
+      econ = econOf(manager);
+    await m.click(econ.getByRole('tab', { name: 'Rentabilidade' }));
+    const projects = await econ.locator('.calc-row').count();
+    const reports = econ.getByRole('article', { name: /^Relatório econômico/ });
+    await m.click(
+      econ.getByRole('button', {
+        name: `Calcular todos os ${projects} projetos`,
+      }),
+    );
+    await expect(econ.getByRole('status')).toContainText(
+      `${projects} observações preservadas`,
+    );
+    await expect(reports).toHaveCount(projects);
+    results['gestor-recalcular-todos'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+      projects,
+    };
+    expect(m.clicks).toBeLessThanOrEqual(2);
+  }
+
+  // Gestor: from a contract to its scope, with the state already on the card.
+  {
+    await open(manager, 'Comercial');
+    await manager.waitForLoadState('networkidle');
+    const m = new Meter(),
+      c = manager.getByRole('region', { name: 'Controle comercial' });
+    const card = c
+      .locator('article')
+      .filter({ hasText: 'Contrato Integração ERP' });
+    await expect(card).toContainText('Escopo V1: Aprovado');
+    await m.click(
+      card.getByRole('button', {
+        name: 'Ver escopo de Contrato Integração ERP',
+      }),
+    );
+    await expect(c.getByLabel('Detalhe do escopo')).toBeFocused();
+    await expect(c.getByLabel('Detalhe do escopo')).toContainText(
+      'Integração ERP',
+    );
+    results['gestor-ver-escopo-do-contrato'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+    };
+    expect(m.clicks).toBeLessThanOrEqual(1);
+  }
+
+  // Developer: advance a demand from the Mission Control, then from the queue.
+  {
+    await dev.reload();
+    await open(dev, 'Mission Control');
+    let m = new Meter();
+    const priorities = dev.getByRole('region', { name: 'Minhas prioridades' });
+    await m.click(
+      priorities.getByRole('button', {
+        name: /^Avançar Sincronização de pedidos para/,
+      }),
+    );
+    await expect(dev.getByRole('status')).toContainText(
+      'Solicitação atualizada',
+    );
+    await expect(priorities).not.toContainText('Sincronização de pedidos');
+    results['desenvolvedor-avancar-no-mission-control'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+    };
+    expect(m.clicks).toBeLessThanOrEqual(1);
+    await shot(dev, 'after-desenvolvedor-avancar-1280');
+
+    await open(dev, 'Solicitações');
+    m = new Meter();
+    const card = dev
+      .locator('article')
+      .filter({ has: dev.getByRole('heading', { name: 'Checkout com Pix' }) });
+    await m.click(
+      card.getByRole('button', { name: /^Avançar Checkout com Pix para/ }),
+    );
+    await expect(dev.getByRole('status')).toContainText(
+      'Solicitação atualizada',
+    );
+    await expect(card.locator('.status')).toHaveText('Concluída');
+    results['desenvolvedor-avancar-na-fila'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+    };
+    expect(m.clicks).toBeLessThanOrEqual(1);
+    // Someone else's demand offers no shortcut; the server would refuse it.
+    await expect(
+      dev
+        .locator('article')
+        .filter({ hasText: 'Bia Dev' })
+        .getByRole('button', { name: /^Avançar/ }),
+    ).toHaveCount(0);
   }
 
   // Tabs follow the ARIA pattern: one Tab stop, arrows move between them.

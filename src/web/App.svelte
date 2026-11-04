@@ -461,15 +461,37 @@
     editOwner = r.owner_user_id ?? '';
     editAction = r.next_action;
   }
-  async function save() {
-    if (!editing) return;
-    const r = editing;
+  // The usual way forward, one click from the card. Blocking is left out on purpose:
+  // it needs a new next action, so it stays in the form.
+  const forward: Partial<Record<Status, Status>> = {
+    new: 'triage',
+    triage: 'ready',
+    ready: 'in_progress',
+    in_progress: 'done',
+    blocked: 'in_progress',
+  };
+  function nextState(r: WorkRequest) {
+    const to = forward[r.status];
+    if (!to || !r.owner_user_id) return;
+    if (session?.role === 'developer') {
+      if (r.owner_user_id !== session.user.id) return;
+      if (to !== 'in_progress' && to !== 'done') return;
+    }
+    return to;
+  }
+  async function save(
+    r = editing,
+    status = editStatus,
+    owner = editOwner,
+    action = editAction,
+  ) {
+    if (!r) return;
     await execute(async () => {
       try {
         await api(`requests/${r.id}`, 'PATCH', {
-          status: editStatus,
-          owner_user_id: editOwner,
-          next_action: editAction,
+          status,
+          owner_user_id: owner,
+          next_action: action,
           version: r.version,
         });
       } catch (e) {
@@ -502,12 +524,13 @@
       >Recarregar página</button
     >
   </div>{/snippet}
-<svelte:head
-  ><meta
-    name="description"
-    content="Operação da agência: clientes, projetos, atendimentos e solicitações."
-  /></svelte:head
->
+{#snippet advance(r: WorkRequest)}{@const to = nextState(r)}{#if to}<button
+      class="secondary"
+      disabled={busy}
+      aria-label={`Avançar ${r.title} para ${labels[to]}`}
+      onclick={() => save(r, to, r.owner_user_id!, r.next_action)}
+      >Avançar: {labels[to]}</button
+    >{/if}{/snippet}
 {#snippet logo()}<a class="brand" href="#/" aria-label="Catus OS"
     ><svg class="logo" viewBox="0 0 191 61" aria-hidden="true"
       ><use href="#catus-logo" /></svg
@@ -612,8 +635,8 @@
           </h2>
           <p class="muted">
             {route.id
-              ? 'O menu mostra apenas os módulos do seu papel, e o servidor recusa operações fora dele. Peça acesso a um administrador, se necessário.'
-              : 'Ele pode ter sido digitado incorretamente ou ser de uma versão anterior.'}
+              ? 'Peça acesso a um administrador, se necessário.'
+              : 'Confira o endereço digitado.'}
           </p>
           <a class="button-link" href={href('mission-control')}
             >Ir para o Mission Control</a
@@ -654,14 +677,16 @@
                         <span class="muted">Próxima ação:</span>
                         {r.next_action}
                       </p>
-                      <a
-                        class="text-link"
-                        href={href('economia', {
-                          painel: 'apontar',
-                          projeto: r.project_id ?? '',
-                          demanda: r.id,
-                        })}>Apontar horas nesta demanda</a
-                      >
+                      <p class="row-actions">
+                        {@render advance(r)}<a
+                          class="text-link"
+                          href={href('economia', {
+                            painel: 'apontar',
+                            projeto: r.project_id ?? '',
+                            demanda: r.id,
+                          })}>Apontar horas nesta demanda</a
+                        >
+                      </p>
                     </div>
                   </li>{/each}
               </ol>
@@ -873,7 +898,7 @@
                           onclick={() => (editing = null)}>Cancelar</button
                         >
                       </form>
-                    </section>{:else}<button
+                    </section>{:else}{@render advance(r)}<button
                       class="secondary"
                       disabled={busy ||
                         (session.role === 'developer' &&

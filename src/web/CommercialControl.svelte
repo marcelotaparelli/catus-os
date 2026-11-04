@@ -375,7 +375,6 @@
   </div>
   <p class="muted lead">
     Aprovação operacional e estado “Pronta” não autorizam escopo ou contrato.
-    Sem cobertura vigente, a demanda permanece pendente de análise comercial.
   </p>
   <p class="next-step"><strong>Próximo passo:</strong> {nextStep}</p>
   {#if error}<p role="alert" class="error">{error}</p>{/if}{#if info}<p
@@ -563,17 +562,16 @@
                 placeholder="Identificador do documento externo autorizado"
               /></label
             >
-            <p class="muted span">
-              Referência textual, sem upload ou consulta externa. Nenhum valor
-              financeiro é inferido.
-            </p>
             <div class="actions">
               <button disabled={busy}>Registrar contrato</button>
             </div>
           </form>
         </details>{/if}
       <div class="cards m3-cards">
-        {#each view.contracts as c}<article class="request">
+        {#each view.contracts as c}{@const scope = view.scopes
+            .filter((x) => x.contract_id === c.id)
+            .sort((a, b) => b.number - a.number)[0]}
+          <article class="request">
             <div class="card-top">
               <h4>{c.title}</h4>
               <span class="status" data-status={c.state}
@@ -591,6 +589,15 @@
               {c.version}
             </p>
             <p class="description">Documento: {c.document_reference}</p>
+            {#if scope}<p>
+                Escopo V{scope.number}:
+                <strong>{labels[scope.state]}</strong>
+              </p>
+              <button
+                class="secondary"
+                aria-label={`Ver escopo de ${c.title}`}
+                onclick={() => openScope(scope.id)}>Ver escopo</button
+              >{/if}
             {#if ['manager', 'administrator'].includes(role) && c.state !== 'closed'}<button
                 class="secondary"
                 disabled={busy}
