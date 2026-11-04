@@ -305,15 +305,42 @@ test('reading the overview writes nothing', async () => {
     await call(who, 'overview');
   expect(await counts()).toEqual(before);
 });
+/**
+ * Financial field names and money in text. Compares whole field names, never a substring of
+ * the serialized body: random UUIDs are hex and can contain "eac", which failed this test by chance.
+ */
+function moneyLeaks(value: unknown, path = '$'): string[] {
+  if (typeof value === 'string')
+    return /\b(BRL|USD|EUR)\b|R\$/.test(value) ? [path] : [];
+  if (Array.isArray(value))
+    return value.flatMap((v, i) => moneyLeaks(v, `${path}[${i}]`));
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([k, v]) => [
+    ...(/_minor$|^minor_per_hour$|^cost_incurred$|^eac$|margin|revenue|^budget_cost$|^cost_variance$|^result$|^estimate_to_complete$/.test(
+      k,
+    )
+      ? [`${path}.${k}`]
+      : []),
+    ...moneyLeaks(v, `${path}.${k}`),
+  ]);
+}
+test('confidentiality check: finds financial fields and money, ignores hex in ids', () => {
+  expect(
+    moneyLeaks({ id: '6f0c1c1e-0837-4a63-a0ee-944b8882eac9', title: 'Pacote' }),
+  ).toEqual([]);
+  expect(moneyLeaks({ a: [{ eac: '1' }] })).toEqual(['$.a[0].eac']);
+  expect(moneyLeaks({ result: null })).toEqual(['$.result']);
+  expect(moneyLeaks({ projected_margin: '1' })).toEqual(['$.projected_margin']);
+  expect(moneyLeaks({ amount_minor: '1' })).toEqual(['$.amount_minor']);
+  expect(moneyLeaks({ reason: 'custo de BRL 10,00' })).toEqual(['$.reason']);
+});
 test('roles keep their existing boundaries: money only for manager and administrator', async () => {
-  const money =
-    /amount_minor|_minor|minor_per_hour|cost_incurred|eac|margin|revenue|budget_cost|cost_variance|BRL|"result"|"estimate_to_complete"/;
   const po = await call<OperationalOverview>('po', 'overview');
   expect(po.kind).toBe('operational');
-  expect(JSON.stringify(po)).not.toMatch(money);
+  expect(moneyLeaks(po)).toEqual([]);
   const dev = await call<PersonalOverview>('dev', 'overview');
   expect(dev.kind).toBe('personal');
-  expect(JSON.stringify(dev)).not.toMatch(money);
+  expect(moneyLeaks(dev)).toEqual([]);
   expect(JSON.stringify(dev)).not.toMatch(/planned_minutes|remaining_minutes/);
   // Developer sees only their own minutes, never a colleague's.
   expect(Object.keys(dev.logged_by_request).sort()).toEqual(
