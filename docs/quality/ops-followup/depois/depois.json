@@ -2,7 +2,7 @@
   "registrar": {
     "clicks": 3,
     "fields": 1,
-    "ms": 491,
+    "ms": 466,
     "prazo_registrado": true
   },
   "reatribuir": {
@@ -12,25 +12,25 @@
   "ciclo_completo": {
     "clicks": 7,
     "fields": 2,
-    "ms": 1867,
+    "ms": 1149,
     "etapas_manuais": 3
   },
   "atribuir": {
     "clicks": 1,
     "fields": 0,
-    "ms": 141
+    "ms": 164
   },
   "bloquear": {
     "clicks": 5,
     "fields": 1,
-    "ms": 1878,
+    "ms": 1021,
     "motivo_estruturado": true,
     "retorno_estruturado": true
   },
   "localizar": {
     "clicks": 1,
     "fields": 0,
-    "ms": 295,
+    "ms": 321,
     "cartoes_para_ler": 5,
     "sinais_na_tela": {
       "sem_responsavel": true,

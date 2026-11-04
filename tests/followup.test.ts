@@ -865,6 +865,32 @@ test('migration 010 keeps existing demands untouched and writes no event for the
     await dropDisposableDatabase(admin, legacy);
   }
 });
+test('rollback: the previous application version works on this schema as the runtime role', async () => {
+  // The exact statements of src/server/modules/requests.ts at 75a9c14.
+  const id = crypto.randomUUID();
+  const created = await runtime.query(
+    "INSERT INTO requests(id,organization_id,interaction_id,title,description,status,owner,owner_user_id,next_action) VALUES($1,$2,$3,$4,$5,'new',$6,$7,$8) RETURNING *",
+    [id, org, interaction, 'Versão anterior', 'D', 'Pessoa dev', ids.dev, 'A'],
+  );
+  expect(created.rows[0].template).toBeNull();
+  const updated = await runtime.query(
+    'UPDATE requests SET status=$3,owner_user_id=$4,next_action=$5,version=version+1,updated_at=now() WHERE id=$1 AND organization_id=$2 RETURNING *',
+    [id, org, 'triage', ids.dev, 'B'],
+  );
+  expect(updated.rows[0].version).toBe(2);
+  // Without a worker, the change is still on record and its job just waits.
+  const events = await db.query(
+    'SELECT to_status FROM request_events WHERE request_id=$1 ORDER BY occurred_at,version',
+    [id],
+  );
+  expect(events.rows.map((e) => e.to_status)).toEqual(['new', 'triage']);
+  const jobs = await db.query(
+    "SELECT count(*)::int n FROM automation_jobs WHERE request_id=$1 AND state='queued'",
+    [id],
+  );
+  expect(jobs.rows[0].n).toBe(2);
+  await drain();
+});
 test('more than 500 open demands: every one is covered and no open alert is resolved', async () => {
   await drain();
   const total = 650,

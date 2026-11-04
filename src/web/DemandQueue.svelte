@@ -111,7 +111,7 @@
     <p class="eyebrow">{i.client_name} / {i.project_name}</p>
     <p><strong>{i.title}</strong></p>
     {#each i.signals as s (s.kind)}<p class="attention">
-        <strong>⚠ {s.label}{s.is_new ? ' · novo' : ''}</strong>
+        <strong>⚠ {s.label}{s.is_new ? ' · novo' : ''}</strong><br />
         {s.reason}
       </p>{/each}
     <dl>

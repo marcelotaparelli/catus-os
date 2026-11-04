@@ -91,7 +91,7 @@ Decisões comerciais, contratuais e de publicação permanecem humanas. O servid
 
 ### O que mudou
 
-- **Fila de ações em Solicitações:** "Com você" e "Da equipe", calculada a cada leitura.
+- **Fila de ações em Solicitações:** "Com você" e "Da equipe", calculada a cada leitura sobre todas as demandas abertas.
 - **Registro único e curto:** só o título é obrigatório. O modelo define a próxima ação e o compromisso, a sessão define o responsável, e o atendimento mais recente é a origem. O formulário 04 de "Clientes e projetos" saiu.
 - **Um formulário de atualização:** o mesmo para a fila e para os cartões, com compromisso, motivo e dependência.
 - **Mudança de etapa revendo a próxima ação:** nada é gravado até salvar. Concluir é um clique, porque não há próxima ação.
@@ -128,7 +128,7 @@ Compromissos contam dias úteis, sem feriados, e usam o dia em UTC, como o resta
 
 ### Implantação futura
 
-Exige backup e autorização. A migration `010` só acrescenta colunas anuláveis, sem reescrever a tabela, e tabelas novas. A versão anterior da aplicação continua funcionando com esse esquema, o que permite voltar o código sem voltar os dados. As demandas existentes ficam sem compromisso até a primeira mudança de etapa, e a fila as sinaliza.
+Exige backup e autorização. A migration `010` só acrescenta colunas anuláveis, sem reescrever a tabela, e tabelas novas. A versão anterior da aplicação continua funcionando com esse esquema, o que permite voltar o código sem voltar os dados. As demandas existentes ficam sem compromisso até a primeira mudança de etapa, e a fila as sinaliza como "Sem compromisso". Nada é preenchido na migration.
 
 ### Antes e depois
 
@@ -139,7 +139,7 @@ Mesma regra de contagem (`Meter`), mesmas pessoas e mesmos dados sintéticos. Cl
 | Registrar demanda                  | 6 + 3                 | **3 + 1**                | Agora nasce com compromisso                             |
 | Localizar o que precisa de ação    | 9 + 0, 3 de 6 sinais  | **1 + 0, 6 de 6 sinais** | Parada, vencida e atraso de cliente passam a existir    |
 | Bloquear por causa do cliente      | 8 + 1, em texto livre | **5 + 1, estruturado**   | Motivo, dependência e data de cobrança                  |
-| Dar dono a demanda sem responsável | 4 + 0                 | **1 + 0**                |                                                         |
+| Dar dono a demanda sem responsável | 4 + 0                 | **1 + 0**                | 212 → 164 ms                                            |
 | Levar uma demanda até o fim        | 24 + 4                | **7 + 2**                | 4 passagens manuais viram 3, com a próxima ação revista |
 
 Resultados em `docs/quality/ops-followup/antes/as-is.json` e `depois/depois.json`.
@@ -160,7 +160,7 @@ Resultados em `docs/quality/ops-followup/antes/as-is.json` e `depois/depois.json
    | Dar dono a demanda sem responsável               | 4 + 0                 | **1 + 0**                | 212 → 141 ms     |                                                         |
    | Levar uma demanda até o fim                      | 24 + 4                | **7 + 2**                | 5.798 → 1.867 ms | 4 passagens manuais viram 3, com a próxima ação revista |
 
-Dois tempos pioraram. Registrar e bloquear têm menos passos, mas agora recarregam a fila e os dados depois de salvar, e bloquear passa também pela liberação e pela sessão de outra pessoa.
+Três tempos pioraram (registrar, localizar e bloquear). Têm menos passos, mas agora recarregam os dados, e bloquear passa também pela liberação e pela sessão de outra pessoa. As medições são de uma máquina e variam entre execuções.
 
 Resultados em `docs/quality/ops-followup/antes/as-is.json` e `depois/depois.json`.
 
@@ -176,7 +176,14 @@ Resultados em `docs/quality/ops-followup/antes/as-is.json` e `depois/depois.json
 
 ## 6. Efeito na homologação e nos gates
 
-A automação roda sozinha, então `automation_jobs` e `demand_alerts` mudam com o sistema parado. São dados operacionais derivados das demandas: voltam a ser calculados na varredura seguinte.
+A automação roda sozinha, então `automation_jobs` e `demand_alerts` mudam com o sistema parado. São dados operacionais derivados das demandas.
 
-- **G4:** a impressão digital do estágio C passa a ignorar essas duas tabelas, como já fazia com `rate_limits` e `oidc_transactions`. As tabelas de negócio, inclusive `requests` e `request_events`, continuam comparadas.
-- **Próximo rollout:** o script de atualização da homologação também precisa ignorar essas duas tabelas ao comparar os dados, ou vai parar sem motivo real.
+- **G4, comparação exata:** a impressão digital do estágio C passa a ignorar essas duas tabelas, como já fazia com `rate_limits` e `oidc_transactions`. As tabelas de negócio, inclusive `requests` e `request_events`, continuam comparadas.
+- **G4, verificações complementares:** cada tabela recebe uma linha sintética, e o G4 compara as colunas imutáveis das linhas existentes no instante do backup, na restauração, ao recriar os contêineres e após down/up. Também confere as invariantes: um alerta aberto por demanda e condição, datas coerentes, trabalhos sem estado impossível e índices únicos válidos.
+- **Rollout:** veja `docs/ROLLOUT_FOLLOWUP.md`.
+
+## 7. Limites conhecidos
+
+- A fila cobre todas as demandas abertas, sem limite. A lista completa de Solicitações mostra as 500 mais recentes e avisa quando chega a esse número.
+- A fila mostra 60 cartões por grupo de cada vez, com a contagem total e "Mostrar mais".
+- A varredura de 650 demandas levou cerca de 100 ms em teste, com dados simples. Não foi medida com volume real de horas e estimativas.
