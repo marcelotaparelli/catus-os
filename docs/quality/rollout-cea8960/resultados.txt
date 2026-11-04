@@ -1,0 +1,90 @@
+## autorização e sucesso
+ok    sucesso                    run      rc=0 head=after m010=1 backup=1 update=1 g4=1 | 
+ok    check-so-leitura           check    rc=0 head=before m010=0 backup=0 update=0 g4=0 | 
+ok    run-sem-autorizacao        run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | run exige a autorização explícita. Nada foi alterado.
+ok    run-token-errado           run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | run exige a autorização explícita. Nada foi alterado.
+ok    rollback-sem-autorizacao   rollback rc=2 head=after m010=1 backup=0 update=0 g4=1 | rollback exige a autorização explícita. Nada foi alterado.
+## preflight: nada pode mudar
+ok    svc-outro-projeto          run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | app pertence ao projeto 'outro', não a catus
+ok    db-outro-projeto           run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | db pertence ao projeto 'outro', não a catus
+ok    volume-outro               run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | o banco ativo usa 'volume:outro', não o volume catus_pgdata
+ok    volume-sem-projeto         run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | catus_pgdata não pertence ao projeto catus
+ok    outro-no-volume            run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | há outro container usando catus_pgdata
+ok    dois-containers            run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | mais de um container para app
+ok    db-origem-estranha         run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | origem do PostgreSQL inesperada: /outro/deploy (aceitos: este checkout ou catus-os-g2 ao lado de catus
+ok    app-de-g2                  run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | app veio de /outro/deploy, não deste checkout (<cenário>/catus-os-m5/depl
+ok    compose-outro              run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | edge usa outro arquivo Compose
+ok    segredo-db-fora            run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | db usa o segredo /outro/segredos/x, fora de <cenário>/catus-os-g2/.local/c
+ok    segredo-app-fora           run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | app usa o segredo /outro/segredos/x, fora de <cenário>/catus-os-g2/.local/
+ok    unhealthy                  run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | instalação atual não está saudável; investigue antes
+ok    env-difere                 run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | deploy/.env difere entre <cenário>/catus-os-g2 e este checkout
+ok    porta-publica              run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | edge publicado fora do loopback: 3443/tcp -> 0.0.0.0:3443 3443/tcp -> 127.0.0.1:3443 
+ok    config-outro-projeto       run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | o Compose deste checkout não resolve para o projeto catus
+ok    config-outro-volume        run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | o Compose deste checkout não resolve para catus_pgdata
+ok    config-segredo-fora        run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | o Compose deste checkout usa segredos fora da instalação: /x/a
+ok    sem-backup-key             run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | chave de backup ausente
+ok    origin-errado              run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | origin inesperado
+ok    sem-projetos               run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | o banco ativo não tem registros em projects: não parece a homologação existente
+ok    sem-usuarios               run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | o banco ativo não tem registros em users: não parece a homologação existente
+ok    sem-organizacoes           run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | o banco ativo não tem registros em organizations: não parece a homologação existente
+ok    migrations-faltam          run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | migrations do banco (001_initial.sql,002_identity.sql,003_hardening.sql,004_intelligent_intake.sql,005
+ok    migrations-sobram          run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | migrations do banco (001_initial.sql,002_identity.sql,003_hardening.sql,004_intelligent_intake.sql,005
+ok    ja-tem-objetos-010         run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | o banco já tem objetos da migration 010
+ok    m2-ligado                  run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | política M2 habilitada: a homologação aprovada tem M2 desligado
+ok    alteracao-versionada       run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | há alterações locais no checkout; preserve-as antes de continuar
+ok    arquivo-nao-versionado     run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | há alterações locais no checkout; preserve-as antes de continuar
+ok    checkout-em-outro-sha      run      rc=2 head=after m010=0 backup=0 update=0 g4=0 | o checkout não está em 75a9c14 (está em 12ca3ab)
+ok    sha-outro-conteudo         run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | cea8960 ausente ou com conteúdo diferente do aprovado; rode git fetch origin feat/pilot-oidc
+ok    prev-outro-conteudo        run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | 75a9c14 ausente ou com conteúdo diferente do esperado
+ok    infra-muda-mais            run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | a infraestrutura muda mais do que o aprovado (só g4.sh e a migration 010)
+ok    script-dentro-do-checkout  run      rc=2 head=before m010=0 backup=0 update=0 g4=0 | copie o script para fora do checkout antes de executar
+## backup e restauração: checkout e banco intocados
+ok    backup-nao-gera            run      rc=2 head=before m010=0 backup=1 update=0 g4=0 | o backup não gerou arquivo novo
+ok    backup-em-claro            run      rc=2 head=before m010=0 backup=1 update=0 g4=0 | o backup contém um arquivo pg_dump em claro
+ok    restore-falha              run      rc=2 head=before m010=0 backup=1 update=0 g4=0 | comando falhou na linha 382
+ok    restore-sem-nome           run      rc=2 head=before m010=0 backup=1 update=0 g4=0 | a restauração não informou o banco descartável
+ok    restore-difere             run      rc=2 head=before m010=0 backup=1 update=0 g4=0 | o banco restaurado difere do original
+ok    dados-mudam-antes-da-copia run      rc=2 head=before m010=0 backup=1 update=0 g4=0 | o banco restaurado difere do original
+ok    dados-mudam-depois-da-copia run      rc=2 head=before m010=0 backup=1 update=0 g4=0 | o conteúdo de tabelas de negócio mudou (restore)
+## depois do update: para antes do G4
+ok    update-falha               run      rc=2 head=after m010=0 backup=1 update=1 g4=0 | comando falhou na linha 404
+ok    app-doente-depois          run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | containers não ficaram saudáveis em 5 minutos
+ok    requests-alterada          run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | o conteúdo de tabelas de negócio mudou (update)
+ok    outra-tabela-alterada      run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | o conteúdo de tabelas de negócio mudou (update)
+ok    linha-apagada              run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | o conteúdo de tabelas de negócio mudou (update)
+ok    cluster-mudou              run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (update)
+ok    historico-reescrito        run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (update)
+ok    banco-paralelo             run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (update)
+ok    segredo-mudou              run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (update)
+ok    env-mudou                  run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (update)
+ok    config-mudou               run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (update)
+ok    porta-mudou                run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (update)
+ok    volume-paralelo            run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (update)
+ok    migration-extra            run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (update)
+ok    gatilho-desligado          run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | gatilho de eventos ausente ou desativado
+ok    campos-preenchidos         run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | 1 demanda(s) com campos novos preenchidos; a migration não preenche nada, e ninguém devia usar o sis
+ok    evento-durante             run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | há eventos de demanda: alguém usou o sistema durante a atualização
+ok    automacao-parada           run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | a automação não concluiu a primeira varredura
+ok    alertas-instaveis          run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | os alertas mudaram sem mudança nas
+ok    trabalho-com-falha         run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | há trabalhos de automação com falha
+ok    alerta-invalido            run      rc=2 head=after m010=1 backup=1 update=1 g4=0 | automação e alertas com violação de integridade
+Para voltar a aplicação, sem tocar no banco: bash <cenário>/script.sh rollback AUTORIZO-ROLLBACK-cea8960
+## depois do G4 e verificação final
+ok    g4-sem-go                  run      rc=2 head=after m010=1 backup=1 update=1 g4=1 | G4 não deu GO
+ok    g4-altera-dados            run      rc=2 head=after m010=1 backup=1 update=1 g4=1 | o conteúdo de tabelas de negócio mudou (g4)
+ok    g4-cria-banco              run      rc=2 head=after m010=1 backup=1 update=1 g4=1 | a identidade, os segredos, a configuração ou os recursos da instalação mudaram (g4)
+ok    g4-quebra-alerta           run      rc=2 head=after m010=1 backup=1 update=1 g4=1 | automação e alertas com violação de integridade após o G4
+ok    https-500                  run      rc=2 head=after m010=1 backup=1 update=1 g4=1 | https://localhost:3443/ respondeu 500
+ok    fonte-mime-errado          run      rc=2 head=after m010=1 backup=1 update=1 g4=1 | fonte servida sem font/woff2
+ok    fonte-sem-nosniff          run      rc=2 head=after m010=1 backup=1 update=1 g4=1 | fonte servida sem nosniff
+ok    build-sem-fonte            run      rc=2 head=after m010=1 backup=1 update=1 g4=1 | build sem fonte WOFF2: não é a versão esperada
+## rollback
+ok    rollback                   rollback rc=0 head=before m010=1 backup=0 update=1 g4=1 | 
+ok    rollback-em-outro-commit   rollback rc=2 head=before m010=1 backup=0 update=0 g4=1 | rollback só vale a partir de cea8960; o checkout está em a5b530f
+ok    rollback-sem-migration     rollback rc=2 head=before m010=0 backup=0 update=0 g4=0 | o checkout já está em 75a9c14 e a migration 010 não foi aplicada: não há o que voltar
+ok    rollback-retomado          rollback rc=0 head=before m010=1 backup=0 update=1 g4=1 | 
+ok    rollback-migration-extra   rollback rc=2 head=after m010=1 backup=0 update=0 g4=1 | migrations inesperadas: 001_initial.sql,002_identity.sql,003_hardening.sql,004_intelligent_intake.sql,
+ok    rollback-update-falha      rollback rc=2 head=before m010=1 backup=0 update=1 g4=1 | comando falhou na linha 479
+ok    rollback-doente            rollback rc=2 head=before m010=1 backup=0 update=1 g4=1 | containers não ficaram saudáveis em 5 minutos
+ok    rollback-altera-dados      rollback rc=2 head=before m010=1 backup=0 update=1 g4=1 | o conteúdo de tabelas de negócio mudou (rollback)
+ok    rollback-g4-sem-go         rollback rc=2 head=before m010=1 backup=0 update=1 g4=1 | G4 não deu GO

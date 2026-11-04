@@ -1,0 +1,3 @@
+#!/bin/bash
+# fixture
+. "$SIM/scenario.env"; Q="bun $H/q.ts $SIMDB"; o="$2/x"; mkdir -p "$o"; eval "${AFTER_G4:-true}"; [ -z "${NO_GO:-}" ] || { echo '# relatório G4: **NO-GO**' > "$o/REPORT.md"; exit 1; }; echo '# relatório G4: **GO**' > "$o/REPORT.md"

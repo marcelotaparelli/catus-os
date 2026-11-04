@@ -1,0 +1,7 @@
+// The real automation of cea8960 against the scenario database, as the API process runs it.
+process.env.DATABASE_URL = process.env.RUNTIME_DATABASE_URL = `postgres://catus:catus_local_only@127.0.0.1:5432/${process.argv[2]}`;
+const pg = (await import('/var/tmp/catus-ops/node_modules/pg/lib/index.js')).default;
+const { startFollowupAutomation } = await import('/var/tmp/catus-rollout/src/server/followup/automation.ts');
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+startFollowupAutomation(pool, { intervalMs: 300, sweepSeconds: Number(process.env.SWEEP_S ?? 2), backoffSeconds: 1 });
+setInterval(() => {}, 1000);

@@ -1,0 +1,95 @@
+#!/bin/bash
+cd /var/tmp/catus-rollout-sim
+r() { bash one.sh "$@" 2>&1 | grep -v "^warning: unable"; }
+Q='bun $H/q.ts $SIMDB'
+AP="INSERT INTO ai_policies(organization_id,enabled,policy_reference,data_scope,daily_budget_micro_usd,per_job_budget_micro_usd,daily_job_limit,updated_by) VALUES('00000000-0000-4000-8000-0000000000a1',true,'x','synthetic',1,1,1,'00000000-0000-4000-8000-0000000000b1')"
+echo "## autorização e sucesso"
+r sucesso run OK
+r check-so-leitura check OK
+r run-sem-autorizacao run 'run exige' TOKEN_OVERRIDE=
+r run-token-errado run 'run exige' TOKEN_OVERRIDE=sim
+r rollback-sem-autorizacao rollback 'rollback exige' TOKEN_OVERRIDE=
+echo "## preflight: nada pode mudar"
+r svc-outro-projeto run 'pertence ao projeto' OTHERPROJ_SVC=app
+r db-outro-projeto run 'pertence ao projeto' OTHERPROJ_SVC=db
+r volume-outro run 'o banco ativo usa' VOL=outro
+r volume-sem-projeto run 'não pertence ao projeto' VOLPROJ=x
+r outro-no-volume run 'outro container' EXTRA_ON_VOL=1
+r dois-containers run 'mais de um container' DUP=app
+r db-origem-estranha run 'origem do PostgreSQL' DBDIR=/outro/deploy
+r app-de-g2 run 'veio de' APPDIR_SVC=app APPDIR=/outro/deploy
+r compose-outro run 'outro arquivo Compose' CFGFILES=/x/compose.yaml
+r segredo-db-fora run 'fora de' SEC_SVC=db
+r segredo-app-fora run 'fora de' SEC_SVC=app
+r unhealthy run 'não está saudável' BAD=app
+r env-difere run 'difere entre' 'PRE=echo x >> $SIM/catus-os-g2/deploy/.env'
+r porta-publica run 'fora do loopback' 'PRE=echo "3443/tcp -> 0.0.0.0:3443" >> $HOME/port'
+r config-outro-projeto run 'projeto catus' 'PRE=sed -i "s/^name: catus$/name: outro/" $HOME/config'
+r config-outro-volume run 'catus_pgdata' 'PRE=sed -i "s/name: catus_pgdata/name: outro/" $HOME/config'
+r config-segredo-fora run 'segredos fora' 'PRE=echo "    file: /x/a" >> $HOME/config'
+r sem-backup-key run 'chave de backup' 'PRE=: > $SIM/catus-os-g2/.local/compose/backup.key'
+r origin-errado run 'origin inesperado' 'PRE=git remote set-url origin https://x.invalid/y.git'
+r sem-projetos run 'registros em projects' "PRE=bun \$H/q.ts \$SIMDB 'TRUNCATE projects CASCADE'"
+r sem-usuarios run 'registros em users' "PRE=bun \$H/q.ts \$SIMDB 'TRUNCATE users CASCADE'"
+r sem-organizacoes run 'registros em' "PRE=bun \$H/q.ts \$SIMDB 'TRUNCATE organizations CASCADE'"
+r migrations-faltam run 'migrations do banco' "PRE=bun \$H/q.ts \$SIMDB \"DELETE FROM schema_migrations WHERE name LIKE '009%'\""
+r migrations-sobram run 'migrations do banco' "PRE=bun \$H/q.ts \$SIMDB \"INSERT INTO schema_migrations(name) VALUES('011_x.sql')\""
+r ja-tem-objetos-010 run 'objetos da migration' "PRE=bun \$H/q.ts \$SIMDB 'CREATE TABLE demand_alerts(id int)'"
+r m2-ligado run 'política M2' "PRE=bun \$H/q.ts \$SIMDB \"$AP\""
+r alteracao-versionada run 'alterações locais' 'PRE=echo x >> deploy/compose.yaml'
+r arquivo-nao-versionado run 'alterações locais' 'PRE=touch solto.txt'
+r checkout-em-outro-sha run 'não está em 75a9c14' 'PRE=git switch -q --detach $NEW'
+r sha-outro-conteudo run 'conteúdo diferente' 'PRE=sed -i "s/^TREE=.*/TREE=abc/" $SIM/script.sh'
+r prev-outro-conteudo run 'conteúdo diferente' 'PRE=sed -i "s/^PREV_TREE=.*/PREV_TREE=abc/" $SIM/script.sh'
+r infra-muda-mais run 'infraestrutura muda mais' 'PRE=git switch -q $(git rev-parse --abbrev-ref origin/feat/pilot-oidc 2>/dev/null | sed s,origin/,,) 2>/dev/null; git switch -q --detach $NEW; echo y >> deploy/compose.yaml; git add .; git commit -qm z; N=$(git rev-parse HEAD); T=$(git rev-parse HEAD^{tree}); git push -qf origin HEAD:refs/heads/feat/pilot-oidc; git switch -q --detach $PREV; sed -i "s/^SHA=.*/SHA=$N/;s/^TREE=.*/TREE=$T/" $SIM/script.sh'
+r script-dentro-do-checkout run 'fora do checkout' 'PRE=mkdir -p $M5/.x; git -C $M5 config core.excludesFile /dev/null; cp $SIM/script.sh $M5/.x/; printf "exec bash $M5/.x/script.sh \"\$@\"\n" > $SIM/script.sh'
+echo "## backup e restauração: checkout e banco intocados"
+r backup-nao-gera run 'não gerou arquivo' NO_BACKUP=1
+r backup-em-claro run 'em claro' CLEAR_BACKUP=1
+r restore-falha run 'comando falhou' FAIL_RESTORE=1
+r restore-sem-nome run 'não informou' NO_RESTORE_NAME=1
+r restore-difere run 'difere do original' REST_DIFF=1
+r dados-mudam-antes-da-copia run 'difere do original' "RESTORE_BEFORE=\$Q \"UPDATE users SET display_name='x'\""
+r dados-mudam-depois-da-copia run 'conteúdo de tabelas' "RESTORE_AFTER=\$Q \"UPDATE users SET display_name='x'\""
+echo "## depois do update: para antes do G4"
+r update-falha run 'comando falhou' FAIL_UPDATE=1
+r app-doente-depois run 'não ficaram saudáveis' 'AFTER_UPDATE=echo app > $SIM/bad-after'
+r requests-alterada run 'conteúdo de tabelas' "AFTER_UPDATE=\$Q \"UPDATE requests SET title='x' WHERE title='T1'\""
+r outra-tabela-alterada run 'conteúdo de tabelas' "AFTER_UPDATE=\$Q \"UPDATE users SET display_name='x'\""
+r linha-apagada run 'conteúdo de tabelas' "AFTER_UPDATE=\$Q \"DELETE FROM requests WHERE title='T1'\""
+r cluster-mudou run 'identidade' 'AFTER_UPDATE=touch $SIM/cluster-swapped'
+r historico-reescrito run 'identidade' "AFTER_UPDATE=\$Q \"UPDATE schema_migrations SET applied_at=now() WHERE name LIKE '001%'\""
+r banco-paralelo run 'identidade' 'AFTER_UPDATE=bun $H/q.ts postgres "CREATE DATABASE par_$$_x"'
+r segredo-mudou run 'identidade' 'AFTER_UPDATE=echo y >> $SIM/catus-os-g2/.local/compose/backup.key'
+r env-mudou run 'identidade' 'AFTER_UPDATE=echo "# y" >> deploy/.env'
+r config-mudou run 'identidade' 'AFTER_UPDATE=echo "# y" >> $HOME/config'
+r porta-mudou run 'identidade' 'AFTER_UPDATE=echo "3443/tcp -> 127.0.0.1:9" >> $HOME/port'
+r volume-paralelo run 'identidade' 'AFTER_UPDATE=echo outro >> $HOME/vols'
+r migration-extra run 'identidade' "AFTER_UPDATE=\$Q \"INSERT INTO schema_migrations(name) VALUES('011_x.sql')\""
+r gatilho-desligado run 'gatilho' "AFTER_UPDATE=\$Q 'ALTER TABLE requests DISABLE TRIGGER request_change_events'"
+r campos-preenchidos run 'campos novos' "AFTER_UPDATE=\$Q \"UPDATE requests SET template='manutencao' WHERE title='T1'\""
+r evento-durante run 'eventos de demanda' "AFTER_UPDATE=\$Q \"INSERT INTO request_events(organization_id,request_id,changes,to_status,version) SELECT organization_id,id,'{created}','new',1 FROM requests LIMIT 1\""
+r automacao-parada run 'primeira varredura' NO_AUTOMATION=1 SWEEP_WAIT=4
+r trabalho-com-falha run 'com falha' "AFTER_UPDATE=\$Q \"INSERT INTO automation_jobs(organization_id,kind,dedupe_key,state) VALUES('00000000-0000-4000-8000-0000000000a1','sweep','x','failed')\""
+r alerta-invalido run 'violação' "AFTER_UPDATE=\$Q \"INSERT INTO demand_alerts(organization_id,request_id,kind,opened_at,resolved_at) SELECT organization_id,id,'stalled',now(),now()-interval '1 day' FROM requests LIMIT 1\""
+r alertas-instaveis run 'alertas mudaram' 'AFTER_UPDATE=(until ls $HOME/catus-rollout-*/alerts-first.txt >/dev/null 2>&1; do sleep 0.1; done; bun $H/q.ts $SIMDB "UPDATE demand_alerts SET resolved_at=now() WHERE id=(SELECT id FROM demand_alerts WHERE resolved_at IS NULL LIMIT 1)") >/dev/null 2>&1 &'
+echo "## depois do G4 e verificação final"
+r g4-sem-go run 'G4 não deu GO' NO_GO=1
+r g4-altera-dados run 'conteúdo de tabelas' "AFTER_G4=\$Q \"UPDATE users SET display_name='x'\""
+r g4-cria-banco run 'identidade' 'AFTER_G4=bun $H/q.ts postgres "CREATE DATABASE parg_$$_x"'
+r g4-quebra-alerta run 'violação' "AFTER_G4=\$Q \"INSERT INTO demand_alerts(organization_id,request_id,kind,opened_at,resolved_at) SELECT organization_id,id,'stalled',now(),now()-interval '1 day' FROM requests LIMIT 1\""
+r https-500 run 'respondeu' HTTP=500
+r fonte-mime-errado run 'font/woff2' FONT_TYPE=text/css
+r fonte-sem-nosniff run 'nosniff' FONT_NOSNIFF=x
+r build-sem-fonte run 'sem fonte' NO_FONT=1
+echo "## rollback"
+r rollback rollback OK
+r rollback-em-outro-commit rollback 'só vale' 'PRE_ROLLBACK=git commit -q --allow-empty -m outro'
+r rollback-sem-migration rollback 'não há o que voltar' SKIP_FIXTURE_RUN=1
+r rollback-retomado rollback OK 'PRE_ROLLBACK=git switch -q --detach $PREV'
+r rollback-migration-extra rollback 'migrations inesperadas' "PRE_ROLLBACK=bun \$H/q.ts \$SIMDB \"INSERT INTO schema_migrations(name) VALUES('011_x.sql')\""
+r rollback-update-falha rollback 'comando falhou' 'PRE_ROLLBACK=echo "export FAIL_UPDATE=1" >> $SIM/scenario.env'
+r rollback-doente rollback 'não ficaram saudáveis' 'PRE_ROLLBACK=echo "export BADLATER=1" >> $SIM/scenario.env; echo app > $SIM/bad-later' 'AFTER_UPDATE=[ -f $SIM/bad-later ] && cp $SIM/bad-later $SIM/bad-after || true'
+r rollback-altera-dados rollback 'conteúdo de tabelas' 'PRE_ROLLBACK=touch $SIM/roll' "AFTER_UPDATE=[ -f \$SIM/roll ] && \$Q \"UPDATE users SET display_name='x'\" || true"
+r rollback-g4-sem-go rollback 'G4 não deu GO' 'PRE_ROLLBACK=echo "export NO_GO=1" >> $SIM/scenario.env'
+echo FIM

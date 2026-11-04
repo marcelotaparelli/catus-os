@@ -1,0 +1,52 @@
+#!/bin/bash
+# One scenario, as a normal user: fixture repo, real database, simulated Docker.
+# args: name, mode (run|check|rollback), expected stop text or OK
+set -e
+name="$1"; mode="$2"; expect="$3"; shift 3
+export H=/var/tmp/catus-rollout-sim
+cd "$H"
+SIM="$(mktemp -d "$H/run.XXXXXX")"; [ -n "$SIM" ] && [ -d "$SIM" ] || exit 9
+export SIM PATH=/workspace/node_modules/.bin:$PATH HOME=$SIM/home; mkdir -p $HOME
+export SIMDB="s_$(echo "$name" | tr -c 'a-z0-9\n' '_')_$$_test"
+: > $SIM/scenario.env; for kv in "$@"; do printf '%s\n' "export ${kv%%=*}=$(printf '%q' "${kv#*=}")" >> $SIM/scenario.env; done
+echo "export H=$H SIM=$SIM SIMDB=$SIMDB" >> $SIM/scenario.env
+export M5=$SIM/catus-os-m5; G2=$SIM/catus-os-g2; mkdir -p $G2/deploy $G2/.local/compose/tls $G2/.local/compose-backups
+echo k > $G2/.local/compose/backup.key; echo c > $G2/.local/compose/tls/ca.crt
+git config --global user.email s@s; git config --global user.name s; git config --global init.defaultBranch main; git config --global advice.detachedHead false
+git init -q $M5; cd $M5; mkdir -p deploy db/migrations; printf 'deploy/.env\n' > .gitignore; echo svc > deploy/compose.yaml
+cp $H/catus.sh deploy/catus.sh; cp $H/g4.sh deploy/g4.sh; chmod +x deploy/*.sh
+for f in /var/tmp/catus-rollout/db/migrations/00*.sql; do cp "$f" db/migrations/; done
+git add .; git commit -qm antes; export PREV=$(git rev-parse HEAD); PT=$(git rev-parse HEAD^{tree}); echo $PREV > $SIM/prev
+cp /var/tmp/catus-rollout/db/migrations/010_demand_followup.sql db/migrations/; echo '# nova' >> deploy/g4.sh; [ -z "${EXTRA_DEPLOY:-}" ] || true
+git add .; git commit -qm depois; export NEW=$(git rev-parse HEAD); NT=$(git rev-parse HEAD^{tree})
+git init -q --bare $SIM/o.git; git remote add origin $SIM/o.git; git push -q origin HEAD:refs/heads/feat/pilot-oidc; git switch -q --detach $PREV; git fetch -q origin
+printf 'CATUS_SECRETS_DIR=%s\nCATUS_BACKUP_DIR=%s\nCATUS_HOST_PORT=3443\n' $G2/.local/compose $G2/.local/compose-backups > deploy/.env; cp deploy/.env $G2/deploy/.env
+sed "s/^SHA=.*/SHA=$NEW/;s/^TREE=.*/TREE=$NT/;s/^PREV=.*/PREV=$PREV/;s/^PREV_TREE=.*/PREV_TREE=$PT/;s/^NEED_KB=.*/NEED_KB=0/;s/^SWEEP_WAIT_S=.*/SWEEP_WAIT_S=${SWEEP_WAIT:-25}/;s#^ORIGIN=.*#ORIGIN=$SIM/o.git#" /var/tmp/catus-rollout/deploy/rollout-cea8960.sh > $SIM/script.sh
+echo catus_pgdata > $HOME/vols; echo '3443/tcp -> 127.0.0.1:3443' > $HOME/port
+printf 'name: catus\nvolumes:\n  pgdata:\n    name: catus_pgdata\nsecrets:\n  a:\n    file: %s/a\n' $G2/.local/compose > $HOME/config
+mkdir -p $SIM/bin; cp $H/docker $H/curl $SIM/bin/; chmod +x $SIM/bin/*
+export Q="bun $H/q.ts"; $Q postgres "CREATE DATABASE $SIMDB" ; $Q $SIMDB "CREATE TABLE schema_migrations(name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now())"
+for f in db/migrations/00*.sql; do $Q $SIMDB "$(cat $f)"; $Q $SIMDB "INSERT INTO schema_migrations(name) VALUES('$(basename $f)')"; done
+$Q $SIMDB "$(cat $H/seed.sql)"
+. $SIM/scenario.env; export CATUS_REPO=$M5 HEALTH_WAIT_S=1 PATH=$SIM/bin:$PATH
+export SWEEP_S=2
+eval "${PRE:-true}"
+set +e
+token=""; [ "$mode" = run ] && token=AUTORIZO-cea8960; [ "$mode" = rollback ] && token=AUTORIZO-ROLLBACK-cea8960; [ -z "${TOKEN_OVERRIDE+x}" ] || token="$TOKEN_OVERRIDE"
+if [ "$mode" = rollback ] && [ -z "${SKIP_FIXTURE_RUN:-}" ]; then
+  bash $SIM/script.sh run AUTORIZO-cea8960 >$SIM/out-run 2>&1 || echo "rollback fixture run failed" >&2
+  eval "${PRE_ROLLBACK:-true}"
+fi
+bash $SIM/script.sh $mode $token >$SIM/out 2>&1; rc=$?
+[ ! -f "$SIM/auto.pid" ] || kill "$(cat "$SIM/auto.pid")" 2>/dev/null
+at=before; [ "$(git rev-parse HEAD)" = "$NEW" ] && at=after
+migr=$($Q $SIMDB "SELECT count(*) FROM schema_migrations WHERE name LIKE '010%'")
+msg="$(grep -E '^PARADO' $SIM/out | head -1 | cut -c9-110)"
+res=FALHOU; if [ "$expect" = OK ]; then [ $rc = 0 ] && res=ok; else [ $rc != 0 ] && echo "$msg" | grep -qF "$expect" && res=ok; fi
+printf '%-5s %-26s %-8s rc=%s head=%s m010=%s backup=%s update=%s g4=%s | %s\n' "$res" "$name" "$mode" "$rc" "$at" "$migr" "$(grep -c '^catus backup' $SIM/out)" "$(grep -c '^catus update' $SIM/out)" "$(ls $HOME/catus-g4 2>/dev/null | wc -l)" "$msg"
+[ "$res" = ok ] || tail -6 $SIM/out | cut -c1-150
+echo "$SIM" >> $H/dirs.txt
+# Keep the disk: this scenario's databases and files go when it ends (only what it created).
+bun $H/q.ts postgres "DROP DATABASE IF EXISTS $SIMDB" >/dev/null 2>&1
+cd "$H"; for d in $(bun $H/q.ts postgres "SELECT datname FROM pg_database WHERE datname ~ '^(catus_r[0-9]+_restore_test|par_.*|parg_.*)$'"); do bun $H/q.ts postgres "DROP DATABASE IF EXISTS $d" >/dev/null 2>&1; done
+[ "$res" != ok ] || find "$SIM" -mindepth 0 -maxdepth 0 -exec rm -r {} +

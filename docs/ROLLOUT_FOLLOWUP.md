@@ -31,7 +31,7 @@ Todos precisam estar cumpridos. Cada um tem como ser conferido.
 | --- | ------------------------------------------------------ | --------------------------------------------------------------------------- | ------------ |
 | 1   | `cea8960` aprovado, com checks verdes                  | `validate`, `quality` (41885979701) e `g4` (41885981145)                    | Registrado   |
 | 2   | Script revisado no PR, sem merge pendente que o altere | PR aprovado por você                                                        | Você         |
-| 3   | O script copiado é o revisado                          | `sha256sum -c` no comando abaixo, com o hash publicado no PR                | Comando      |
+| 3   | O script copiado é o revisado                          | `sha256sum -c` no comando abaixo                | Comando      |
 | 4   | `check` termina com `CHECK OK` no Arch                 | Saída do comando, enviada para revisão                                      | Você executa |
 | 5   | Migration pendente é só a `010`                        | Linha `pendente: só a migration`                                            | `check`      |
 | 6   | Cluster identificado                                   | Linha `Cluster:`, igual à identidade registrada no G4 de `75a9c14`          | Você compara |
@@ -45,7 +45,7 @@ Todos precisam estar cumpridos. Cada um tem como ser conferido.
 Comando do `check`, que não altera nada na instalação; o `git fetch` só atualiza referências do repositório:
 
 ```sh
-cd ~/sandboxes/agent/projects/catus-os-m5 && git fetch origin chore/rollout-cea8960 feat/pilot-oidc && git show FETCH_HEAD:deploy/rollout-cea8960.sh > ~/catus-rollout-cea8960.sh && echo "HASH_DO_PR  $HOME/catus-rollout-cea8960.sh" | sha256sum -c && bash ~/catus-rollout-cea8960.sh check
+cd ~/sandboxes/agent/projects/catus-os-m5 && git fetch origin chore/rollout-cea8960 feat/pilot-oidc && git show FETCH_HEAD:deploy/rollout-cea8960.sh > ~/catus-rollout-cea8960.sh && echo "1b5430f57677dd4838f5539d461510a0c70c4c0519b8d6aa3eaf4a7a67e1a483  $HOME/catus-rollout-cea8960.sh" | sha256sum -c && bash ~/catus-rollout-cea8960.sh check
 ```
 
 ## O que foi provado e o que não foi

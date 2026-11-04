@@ -1,0 +1,32 @@
+#!/bin/bash
+. "$SIM/scenario.env"; export PATH=/workspace/node_modules/.bin:$PATH
+M5=$SIM/catus-os-m5; G2=$SIM/catus-os-g2
+args="$*"
+case "$args" in
+ *"exec -T db"*) sql="${@: -2:1}"; db="${@: -1}"; [ "$db" = catus ] && db="$SIMDB"
+   out="$(bun "$H/q.ts" "$db" "$sql")" || { echo "$out" >&2; exit 1; }
+   case "$sql" in *system_identifier*) [ -f "$SIM/cluster-swapped" ] && out="$(echo "$out" | sed 's/^[0-9]*/999/')";; esac
+   [ -n "$out" ] && echo "$out"; exit 0;;
+ *"config --hash db"*) echo "db h1"; exit 0;;
+ *" config"*) cat "$HOME/config"; exit 0;;
+ *"ps -q "*) echo "${@: -1}"; [ "${DUP:-}" = "${@: -1}" ] && echo "${@: -1}2"; exit 0;;
+ "info --format"*) echo "$HOME"; exit 0;;
+ info|"compose version") exit 0;;
+ "volume inspect catus_pgdata") exit 0;;
+ "volume inspect --format"*) echo "${VOLPROJ:-catus}"; exit 0;;
+ "volume ls"*) cat "$HOME/vols"; exit 0;;
+ "network ls"*) echo catus_backend; echo catus_frontend; exit 0;;
+ "port "*) cat "$HOME/port"; exit 0;;
+ "ps -a --filter volume"*"{{.ID}}"*) echo id1; [ -n "${EXTRA_ON_VOL:-}" ] && echo id2; exit 0;;
+ "ps -a --filter volume"*) echo catus/db; exit 0;;
+ *" ps"*) echo ps; exit 0;;
+ inspect*) svc="${@: -1}"; f="$3"; case "$f" in
+   *State.Status*) if [ "${BAD:-}" = "$svc" ] || [ "$svc" = "$(cat "$SIM/bad-after" 2>/dev/null)" ]; then echo running/unhealthy; else echo running/healthy; fi;;
+   *project.working_dir*) d=$M5/deploy; [ "$svc" = db ] && d="${DBDIR:-$G2/deploy}"; [ "${APPDIR_SVC:-}" = "$svc" ] && d="$APPDIR"; echo "$d";;
+   *project.config_files*) echo "${CFGFILES:-$M5/deploy/compose.yaml}";;
+   *config-hash*) echo h1;;
+   *'project\"'*|*'project"'*) [ "${OTHERPROJ_SVC:-}" = "$svc" ] && echo outro || echo catus;;
+   *"/var/lib/postgresql"*) echo "volume:${VOL:-catus_pgdata}";;
+   *Destination*) src="${SECROOT:-$G2}/.local/compose"; [ "${SEC_SVC:-}" = "$svc" ] && src=/outro/segredos; echo "/run/secrets/x=$src/x";;
+ esac; exit 0;;
+esac; exit 0

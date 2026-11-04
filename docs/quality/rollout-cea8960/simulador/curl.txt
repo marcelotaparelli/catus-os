@@ -1,0 +1,10 @@
+#!/bin/bash
+. "$SIM/scenario.env"
+out=/dev/null; head=""; want=""; url="${@: -1}"
+while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift;; -D) head="$2"; shift;; -w) want=1; shift;; --cacert) shift;; esac; shift; done
+case "$url" in
+ */assets/*.woff2) printf 'wOF2xxxx' > "$out"; [ "$head" = - ] && printf 'HTTP/1.1 200 OK\r\ncontent-type: %s\r\nx-content-type-options: %s\r\n\r\n' "${FONT_TYPE:-font/woff2}" "${FONT_NOSNIFF:-nosniff}";;
+ */assets/*.css) [ -n "${NO_FONT:-}" ] && echo 'x{}' || echo 'x{src:url(/assets/inter.woff2)}';;
+ *) if [ "$(git -C "$SIM/catus-os-m5" rev-parse HEAD)" = "$(cat "$SIM/prev")" ] || [ -n "${NO_FONT:-}" ]; then echo '<link href="/assets/a.css">' > "$out"; else echo '<link href="/assets/a.css"><link href="/assets/inter.woff2">' > "$out"; fi; [ -n "$want" ] && printf '%s' "${HTTP:-200}";;
+esac
+exit 0

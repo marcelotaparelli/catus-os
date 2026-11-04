@@ -1,0 +1,15 @@
+// Stands in for psql inside the simulated db container: real SQL on a real PostgreSQL.
+import pg from '/var/tmp/catus-ops/node_modules/pg/lib/index.js';
+const [db, sql] = [process.argv[2]!, process.argv[3]!];
+const c = new pg.Client({
+  connectionString: `postgres://catus:catus_local_only@127.0.0.1:5432/${db}`,
+  types: { getTypeParser: () => (v: string) => v },
+});
+await c.connect();
+try {
+  const r: any = await c.query({ text: sql, rowMode: 'array' });
+  const last = Array.isArray(r) ? r[r.length - 1] : r;
+  for (const row of last.rows ?? []) console.log(row.map((v: unknown) => v ?? '').join('|'));
+} finally {
+  await c.end();
+}

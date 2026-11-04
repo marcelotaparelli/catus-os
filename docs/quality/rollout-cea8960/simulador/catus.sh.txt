@@ -1,0 +1,13 @@
+#!/bin/bash
+. "$SIM/scenario.env"; echo "catus $*"; Q="bun $H/q.ts $SIMDB"; export NEW_HEAD=1
+case "$1" in
+ backup) [ -n "${NO_BACKUP:-}" ] || { [ -n "${CLEAR_BACKUP:-}" ] && printf 'PGDMP' || printf 'cifrado'; } > "$CATUS_BACKUP_DIR/b$(date +%s%N).catus";;
+ restore-test) [ "${FAIL_RESTORE:-0}" = 0 ] || exit 1; n=catus_r$(date +%s%N)_restore_test; [ -z "${RESTORE_BEFORE:-}" ] || eval "$RESTORE_BEFORE"; bun $H/q.ts postgres "CREATE DATABASE $n TEMPLATE $SIMDB"; [ -z "${REST_DIFF:-}" ] || bun $H/q.ts $n "UPDATE users SET display_name='x'"; [ -z "${RESTORE_AFTER:-}" ] || eval "$RESTORE_AFTER"; [ -n "${NO_RESTORE_NAME:-}" ] || echo "restored into disposable database $n (never dropped automatically)";;
+ update) [ -z "${FAIL_UPDATE:-}" ] || exit 1
+   [ ! -f "$SIM/auto.pid" ] || kill "$(cat "$SIM/auto.pid")" 2>/dev/null
+   f=db/migrations/010_demand_followup.sql
+   if [ -f "$f" ] && [ -z "$($Q "SELECT 1 FROM schema_migrations WHERE name='010_demand_followup.sql'")" ]; then $Q "$(cat $f)"; $Q "INSERT INTO schema_migrations(name) VALUES('010_demand_followup.sql')"; fi
+   eval "${AFTER_UPDATE:-true}"
+   if [ -f "$f" ] && [ -z "${NO_AUTOMATION:-}" ]; then DATABASE_URL=x nohup bun $H/auto.ts $SIMDB >"$SIM/auto.log" 2>&1 & echo $! > "$SIM/auto.pid"; fi;;
+ google-check) echo Summary ok;;
+esac
