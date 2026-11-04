@@ -80,15 +80,11 @@ As tabelas `name` dos arquivos servidos indicam SIL Open Font License: `Copyrigh
 - `inter-var.woff2`: os bytes exatos do site, 48.256 bytes.
 - `lexend-400.woff2`: conversão sem alterações de `lexend-400.ttf` do site, de 70.700 para 25.908 bytes.
 
-### Por que a fonte se chama `.woff2.css` no build
+### Como as fontes são servidas
 
-`src/server/http.ts` só serve `/assets/*.js` e `/assets/*.css`. Um `.woff2` passaria nos testes, que usam `vite dev`, e daria 404 em produção. A CSP também recusa fonte `data:`. Sem mexer no servidor, a única saída é entregar os bytes da fonte sob um nome aceito: `vite.config.ts` emite `assets/inter-var-HASH.woff2.css`. O navegador não considera o MIME ao carregar fonte, e `nosniff` só bloqueia script e estilo.
+`src/server/http.ts` entrega `/assets/*.woff2` com `Content-Type: font/woff2`, recebido do PR #14. A CSP cobre fontes por `default-src 'self'` e recusa `data:`, por isso `assetsInlineLimit` é zero no `vite.config.ts`.
 
-**Verificação na pilha real.** Em `deploy/catus.sh install`, pela borda HTTPS e sob a CSP do servidor, as duas fontes carregam em Chromium 145, Firefox 146 e WebKit 26, com os mesmos bytes de `src/web/fonts` e sem violação de CSP (execução 41816497792; relatórios em `docs/quality/catus-brand/fonts-docker/`).
-
-**O MIME continua errado.** A resposta declara `text/css` para bytes de fonte. Funciona nos três motores porque eles não consideram o MIME de fonte, mas isso é um contorno. A correção mínima é uma alteração de backend, proposta à parte: aceitar `woff2` em `http.ts`, com `Content-Type: font/woff2` (execução 41816527254, nos mesmos três navegadores). Depois dela, basta apagar `assetFileNames` do `vite.config.ts`, o filtro `isFont` de `scripts/perf-budget.mjs` e ajustar `tests/web-assets.test.ts`.
-
-Dois testes provam isso contra o handler real: `tests/web-assets.test.ts` confere os bytes `wOF2`, e `e2e/quality/brand-assets.spec.ts` abre o build de produção no navegador, com a CSP do servidor, e exige as duas fontes carregadas e nenhuma violação. Só foi testado em Chromium: Firefox e Safari não foram observados.
+Na pilha real (`deploy/catus.sh install`, borda HTTPS e CSP do servidor), as duas fontes carregam em Chromium 145, Firefox 146 e WebKit 26, com os mesmos bytes de `src/web/fonts` e sem violação de CSP (relatórios em `docs/quality/catus-brand/fonts-docker/`). `e2e/quality/brand-assets.spec.ts` confere o MIME em cada execução da suíte.
 
 ## Logo
 

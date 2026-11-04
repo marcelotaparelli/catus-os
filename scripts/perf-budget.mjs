@@ -4,15 +4,17 @@ import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 const budget = JSON.parse(readFileSync('perf-budget.json', 'utf8')).bundle;
 const files = readdirSync('dist/assets');
-// Fonts carry a .css name only because the server allows just .js and .css in
-// /assets (docs/DESIGN_SYSTEM.md); they are budgeted on their own, not as style.
-// Decided by the bytes too, so a stylesheet cannot leave the CSS totals through its name.
-const isFont = (f) =>
-  f.endsWith('.woff2.css') &&
-  readFileSync(`dist/assets/${f}`).subarray(0, 4).toString('latin1') === 'wOF2';
+const fonts = files.filter((f) => f.endsWith('.woff2'));
+// A font budget only means something if these bytes really are WOFF2.
+for (const f of fonts)
+  if (
+    readFileSync(`dist/assets/${f}`).subarray(0, 4).toString('latin1') !==
+    'wOF2'
+  )
+    throw new Error(`${f} is not WOFF2`);
 const sum = (ext, gzip) =>
   files
-    .filter((f) => f.endsWith(ext) && !isFont(f))
+    .filter((f) => f.endsWith(ext))
     .reduce((n, f) => {
       const b = readFileSync(`dist/assets/${f}`);
       return n + (gzip ? gzipSync(b, { level: 9 }).length : b.length);
@@ -35,9 +37,10 @@ const measured = {
   jsGzipBytes: sum('.js', true),
   cssRawBytes: sum('.css', false),
   cssGzipBytes: sum('.css', true),
-  fontBytes: files
-    .filter(isFont)
-    .reduce((n, f) => n + readFileSync(`dist/assets/${f}`).length, 0),
+  fontBytes: fonts.reduce(
+    (n, f) => n + readFileSync(`dist/assets/${f}`).length,
+    0,
+  ),
 };
 if (!measured.jsRawBytes)
   throw new Error('dist/assets has no JS: run npm run build first');

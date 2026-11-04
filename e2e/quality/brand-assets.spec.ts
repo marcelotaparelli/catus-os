@@ -38,6 +38,11 @@ test('production server delivers brand fonts and logo under its CSP', async ({
       ),
     );
   });
+  const fontTypes: string[] = [];
+  page.on('response', (r) => {
+    if (r.url().endsWith('.woff2'))
+      fontTypes.push(r.headers()['content-type'] ?? '');
+  });
   const response = await page.goto(ORIGIN + '/');
   expect(response!.headers()['content-security-policy']).toContain(
     "style-src 'self'",
@@ -62,4 +67,5 @@ test('production server delivers brand fonts and logo under its CSP', async ({
   expect(report.button).toMatch(/^Inter/);
   expect(report.text).toMatch(/^Lexend/);
   expect(report.csp).toEqual([]);
+  expect(fontTypes).toEqual(['font/woff2', 'font/woff2']);
 });

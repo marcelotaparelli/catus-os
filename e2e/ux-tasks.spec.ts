@@ -503,7 +503,8 @@ test('common Comercial and Economia tasks stay within their measured effort', as
       clicks: m.clicks,
       fields: m.fields,
     };
-    expect(m.clicks).toBeLessThanOrEqual(1);
+    expect(m.clicks).toBeLessThanOrEqual(2);
+    expect(m.fields).toBeLessThanOrEqual(1);
     await shot(dev, 'after-desenvolvedor-avancar-1280');
 
     await open(dev, 'Solicitações');
@@ -518,11 +519,85 @@ test('common Comercial and Economia tasks stay within their measured effort', as
       'Solicitação atualizada',
     );
     await expect(card.locator('.status')).toHaveText('Concluída');
+    // A closed demand has no next action to show.
+    await expect(card).not.toContainText('Próxima ação');
     results['desenvolvedor-avancar-na-fila'] = {
       clicks: m.clicks,
       fields: m.fields,
     };
     expect(m.clicks).toBeLessThanOrEqual(1);
+    // Starting work shows the action of the previous stage first: it is never kept unseen.
+    const snapshot = await api<{
+      requests: { title: string; interaction_id: string }[];
+    }>(dev, 'mission-control');
+    const created = await api<{ id: string; version: number }>(
+      po,
+      'requests',
+      'POST',
+      {
+        interaction_id: snapshot.requests[0]!.interaction_id,
+        title: 'Ajustar vitrine',
+        description: 'Demanda sintética: Ajustar vitrine',
+        owner_user_id: people.dev,
+        next_action: 'Combinar o layout com o cliente',
+      },
+    );
+    let version = created.version;
+    for (const status of ['triage', 'ready'])
+      version = (
+        await api<{ version: number }>(
+          po,
+          `requests/${created.id}`,
+          'PATCH',
+          {
+            status,
+            owner_user_id: people.dev,
+            next_action: 'Combinar o layout com o cliente',
+            version,
+          },
+        )
+      ).version;
+    await dev.reload();
+    await open(dev, 'Mission Control');
+    m = new Meter();
+    await m.click(
+      priorities.getByRole('button', {
+        name: 'Avançar: Em execução · Ajustar vitrine',
+      }),
+    );
+    const review = priorities.getByRole('region', {
+      name: 'Editar solicitação',
+    });
+    await expect(review.getByRole('combobox', { name: 'Estado' })).toHaveValue(
+      'in_progress',
+    );
+    const action = review.getByLabel('Próxima ação', { exact: true });
+    await expect(action).toHaveValue('Combinar o layout com o cliente');
+    // Nothing was saved yet: leaving the form keeps the demand as it was.
+    expect(
+      (
+        await api<{ requests: { id: string; status: string }[] }>(
+          dev,
+          'mission-control',
+        )
+      ).requests.find((r) => r.id === created.id)!.status,
+    ).toBe('ready');
+    await m.fill(action, 'Publicar a vitrine em homologação');
+    await m.click(review.getByRole('button', { name: 'Salvar atualização' }));
+    await expect(dev.getByRole('status')).toContainText(
+      'Solicitação atualizada',
+    );
+    await expect(priorities).toContainText('Publicar a vitrine em homologação');
+    await expect(priorities).not.toContainText(
+      'Combinar o layout com o cliente',
+    );
+    results['desenvolvedor-iniciar-revendo-proxima-acao'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+    };
+    expect(m.clicks).toBeLessThanOrEqual(2);
+    expect(m.fields).toBeLessThanOrEqual(1);
+    await open(dev, 'Solicitações');
     // Someone else's demand offers no shortcut; the server would refuse it.
     await expect(
       dev

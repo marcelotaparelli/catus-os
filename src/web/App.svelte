@@ -516,21 +516,62 @@
 
 {#snippet chunkFailed()}<div class="panel route-message" role="alert">
     <h2>Não foi possível carregar este módulo</h2>
-    <p class="muted">
-      A conexão falhou ou o Catus OS foi atualizado. Recarregue a página para
-      continuar.
-    </p>
+    <p class="muted">A conexão falhou ou o Catus OS foi atualizado.</p>
     <button type="button" onclick={() => location.reload()}
       >Recarregar página</button
     >
   </div>{/snippet}
-{#snippet advance(r: WorkRequest)}{@const to = nextState(r)}{#if to}<button
+{#snippet advance(r: WorkRequest)}{@const to =
+    nextState(r)}{#if to && editing?.id !== r.id}<button
       class="secondary"
       disabled={busy}
       aria-label={`Avançar: ${labels[to]} · ${r.title}`}
-      onclick={() => save(r, to, r.owner_user_id!, r.next_action)}
-      >Avançar: {labels[to]}</button
+      onclick={() => {
+        if (to === 'done') void save(r, to, r.owner_user_id!, r.next_action);
+        else {
+          // The action of the old stage may no longer apply: it is shown before saving.
+          edit(r);
+          editStatus = to;
+        }
+      }}>Avançar: {labels[to]}</button
     >{/if}{/snippet}
+{#snippet editForm(current: WorkRequest)}<section
+    class="edit"
+    aria-label="Editar solicitação"
+    use:focusFirst
+  >
+    <form
+      onsubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <label
+        >Estado<select bind:value={editStatus}
+          ><option value={current.status}>{labels[current.status]}</option
+          >{#each transitions[current.status].filter((s) => session?.role !== 'developer' || ['in_progress', 'blocked', 'done'].includes(s)) as s}<option
+              value={s}>{labels[s]}</option
+            >{/each}</select
+        ></label
+      ><label
+        >Responsável<select
+          bind:value={editOwner}
+          required
+          disabled={session?.role === 'developer'}
+          ><option value="">Vincule um membro</option
+          >{#each members as m}<option value={m.id}>{m.name} · {m.email}</option
+            >{/each}</select
+        ></label
+      ><label
+        >Próxima ação<textarea bind:value={editAction} required maxlength="2000"
+        ></textarea></label
+      ><button disabled={busy}>Salvar atualização</button><button
+        type="button"
+        class="secondary"
+        onclick={() => (editing = null)}>Cancelar</button
+      >
+    </form>
+  </section>{/snippet}
 {#snippet logo()}<a class="brand" href="#/" aria-label="Catus OS"
     ><svg class="logo" viewBox="0 0 191 61" aria-hidden="true"
       ><use href="#catus-logo" /></svg
@@ -687,6 +728,7 @@
                           })}>Apontar horas nesta demanda</a
                         >
                       </p>
+                      {#if editing?.id === r.id}{@render editForm(editing)}{/if}
                     </div>
                   </li>{/each}
               </ol>
@@ -848,57 +890,17 @@
                           · legado, vinculação pendente</span
                         >{/if}
                     </dd>
-                    <dt>Próxima ação</dt>
-                    <dd>{r.next_action}</dd>
+                    {#if r.status !== 'done'}<dt>Próxima ação</dt>
+                      <dd>{r.next_action}</dd>{/if}
                     <dt>Atendimento de origem</dt>
                     <dd>
                       {data.interactions.find((i) => i.id === r.interaction_id)
                         ?.summary ?? r.interaction_id}
                     </dd>
                   </dl>
-                  {#if editing?.id === r.id}<section
-                      class="edit"
-                      aria-label="Editar solicitação"
-                      use:focusFirst
-                    >
-                      <form
-                        onsubmit={(e) => {
-                          e.preventDefault();
-                          void save();
-                        }}
-                      >
-                        <label
-                          >Estado<select bind:value={editStatus}
-                            ><option value={editing.status}
-                              >{labels[editing.status]}</option
-                            >{#each transitions[editing.status].filter((s) => session?.role !== 'developer' || ['in_progress', 'blocked', 'done'].includes(s)) as s}<option
-                                value={s}>{labels[s]}</option
-                              >{/each}</select
-                          ></label
-                        ><label
-                          >Responsável<select
-                            bind:value={editOwner}
-                            required
-                            disabled={session.role === 'developer'}
-                            ><option value="">Vincule um membro</option
-                            >{#each members as m}<option value={m.id}
-                                >{m.name} · {m.email}</option
-                              >{/each}</select
-                          ></label
-                        ><label
-                          >Próxima ação<textarea
-                            bind:value={editAction}
-                            required
-                            maxlength="2000"
-                          ></textarea></label
-                        ><button disabled={busy}>Salvar atualização</button
-                        ><button
-                          type="button"
-                          class="secondary"
-                          onclick={() => (editing = null)}>Cancelar</button
-                        >
-                      </form>
-                    </section>{:else}{@render advance(r)}<button
+                  {#if editing?.id === r.id}{@render editForm(
+                      editing,
+                    )}{:else}{@render advance(r)}<button
                       class="secondary"
                       disabled={busy ||
                         (session.role === 'developer' &&
@@ -930,9 +932,8 @@
               {#if !data.clients.length}cadastre o cliente em 01.{:else if !data.projects.length}crie
                 o projeto em 02.{:else if !data.interactions.length}registre o
                 atendimento em 03.{:else if !data.requests.length}crie a
-                solicitação em 04.{:else}para nova demanda de um atendimento
-                registrado, use 04; só preencha 01–03 se o cliente, o projeto ou
-                o atendimento forem novos.{/if}
+                solicitação em 04.{:else}para nova demanda, use 04; preencha
+                01–03 só se algo for novo.{/if}
             </p>
             <div class="forms">
               <form
