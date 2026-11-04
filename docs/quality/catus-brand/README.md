@@ -17,3 +17,18 @@ Mesmo cenário sintético (`e2e/support-ux/meter.ts`) e mesmo Chromium local nas
 3. O "antes" das quatro tarefas novas é `measure-before.spec.ts.txt`, rodado em um checkout de `75a9c14`.
 
 As imagens de `before/` e `after/` são de página inteira. Em telas estreitas, a faixa fixa de módulos pode aparecer no meio da captura quando a página foi rolada até um elemento: é efeito da captura, não da tela.
+
+## Capturas finais
+
+`after/` e `after-tasks/` foram refeitas em `7c10f9e`, o último estado de tela, com o mesmo Chromium local de `before/`.
+
+## Fontes na pilha Docker real
+
+`fonts-docker/` guarda os relatórios e as capturas das duas verificações, feitas no runner do GitHub com `deploy/catus.sh install`, pela borda HTTPS, sob a CSP do servidor, em Chromium, Firefox e WebKit.
+
+| Pasta                       | Build                                                | Execução    |
+| --------------------------- | ---------------------------------------------------- | ----------- |
+| `como-esta/`                | Este PR, com `*.woff2.css`                           | 41816497792 |
+| `com-correcao-no-servidor/` | Este PR, com a correção do servidor e sem o contorno | 41816527254 |
+
+O WebKit registra uma recusa de `style-src` só depois da captura de tela: é o `<style>` que o próprio Playwright injeta para fotografar. Antes dela, a página não gera nenhuma mensagem nos três navegadores.
