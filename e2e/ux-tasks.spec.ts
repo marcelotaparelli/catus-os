@@ -492,7 +492,7 @@ test('common Comercial and Economia tasks stay within their measured effort', as
     const priorities = dev.getByRole('region', { name: 'Minhas prioridades' });
     await m.click(
       priorities.getByRole('button', {
-        name: /^Avançar Sincronização de pedidos para/,
+        name: /^Avançar: .* · Sincronização de pedidos$/,
       }),
     );
     await expect(dev.getByRole('status')).toContainText(
@@ -512,7 +512,7 @@ test('common Comercial and Economia tasks stay within their measured effort', as
       .locator('article')
       .filter({ has: dev.getByRole('heading', { name: 'Checkout com Pix' }) });
     await m.click(
-      card.getByRole('button', { name: /^Avançar Checkout com Pix para/ }),
+      card.getByRole('button', { name: /^Avançar: .* · Checkout com Pix$/ }),
     );
     await expect(dev.getByRole('status')).toContainText(
       'Solicitação atualizada',
@@ -528,7 +528,7 @@ test('common Comercial and Economia tasks stay within their measured effort', as
       dev
         .locator('article')
         .filter({ hasText: 'Bia Dev' })
-        .getByRole('button', { name: /^Avançar/ }),
+        .getByRole('button', { name: /^Avançar:/ }),
     ).toHaveCount(0);
   }
 

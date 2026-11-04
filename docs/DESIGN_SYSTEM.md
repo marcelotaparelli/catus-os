@@ -86,7 +86,7 @@ As tabelas `name` dos arquivos servidos indicam SIL Open Font License: `Copyrigh
 
 Isso é um contorno, não o estado desejado. A correção certa é uma alteração de backend, que está fora deste trabalho: aceitar `woff2` em `http.ts`, com `Content-Type: font/woff2`. Depois dela, basta apagar `assetFileNames` do `vite.config.ts` e o filtro `isFont` de `scripts/perf-budget.mjs`.
 
-Dois testes protegem isso, ambos contra o handler real: `tests/web-assets.test.ts` e `e2e/quality/brand-assets.spec.ts`. Só foi possível testar em Chromium: o comportamento em Firefox e Safari é o esperado, mas não foi observado.
+Dois testes provam isso contra o handler real: `tests/web-assets.test.ts` confere os bytes `wOF2`, e `e2e/quality/brand-assets.spec.ts` abre o build de produção no navegador, com a CSP do servidor, e exige as duas fontes carregadas e nenhuma violação. Só foi testado em Chromium: Firefox e Safari não foram observados.
 
 ## Logo
 

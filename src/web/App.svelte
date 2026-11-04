@@ -527,7 +527,7 @@
 {#snippet advance(r: WorkRequest)}{@const to = nextState(r)}{#if to}<button
       class="secondary"
       disabled={busy}
-      aria-label={`Avançar ${r.title} para ${labels[to]}`}
+      aria-label={`Avançar: ${labels[to]} · ${r.title}`}
       onclick={() => save(r, to, r.owner_user_id!, r.next_action)}
       >Avançar: {labels[to]}</button
     >{/if}{/snippet}
