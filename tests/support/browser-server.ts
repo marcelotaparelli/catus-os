@@ -15,9 +15,11 @@ const org = crypto.randomUUID(),
   // cannot collide with the other journeys that share this disposable database.
   orgDemo = crypto.randomUUID(),
   // Same agency and people for e2e/ux-tasks.spec.ts, which builds the scenario again.
-  orgUx = crypto.randomUUID();
+  orgUx = crypto.randomUUID(),
+  // Own tenant for the operational follow-up journeys.
+  orgOps = crypto.randomUUID();
 await pool.query(
-  'INSERT INTO organizations(id,name) VALUES($1,$2),($3,$4),($5,$6),($7,$8)',
+  'INSERT INTO organizations(id,name) VALUES($1,$2),($3,$4),($5,$6),($7,$8),($9,$10)',
   [
     org,
     'Browser Catus',
@@ -27,6 +29,8 @@ await pool.query(
     'Agência Demo E-commerce (sintético)',
     orgUx,
     'Agência Demo E-commerce (sintético)',
+    orgOps,
+    'Agência Operação (sintético)',
   ],
 );
 for (const [email, name, role, organization] of [
@@ -45,6 +49,12 @@ for (const [email, name, role, organization] of [
   ['ux.po@browser.test', 'Paulo PO', 'po', orgUx],
   ['ux.dev@browser.test', 'Davi Dev', 'developer', orgUx],
   ['ux.dev2@browser.test', 'Bia Dev', 'developer', orgUx],
+  ['ops.admin@browser.test', 'Ana Admin', 'administrator', orgOps],
+  ['ops.gestor@browser.test', 'Gil Head', 'manager', orgOps],
+  ['ops.comercial@browser.test', 'Cora Comercial', 'po', orgOps],
+  ['ops.po@browser.test', 'Pia PO', 'po', orgOps],
+  ['ops.dev@browser.test', 'Dan Dev', 'developer', orgOps],
+  ['ops.dev2@browser.test', 'Eva Dev', 'developer', orgOps],
 ]) {
   const id = crypto.randomUUID();
   await pool.query(

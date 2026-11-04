@@ -79,6 +79,10 @@ export interface WorkRequest {
   origin_proposal_id?: string | null;
   suggested_acceptance_criteria?: import('./extraction').Grounded[] | null;
   next_action: string;
+  template?: import('./followup').TemplateId | null;
+  follow_up_on?: string | null;
+  blocked_reason?: string | null;
+  waiting_on?: import('./followup').WaitingOn | null;
   version: number;
   client_name: string;
   project_name: string;

@@ -23,7 +23,7 @@
   import type { Location, RouteId } from './routes';
   import { roleLabels } from '../shared/identity';
   import type { SessionView, Member } from '../shared/identity';
-  import type { Overview as OverviewData } from '../shared/overview';
+  import type { OverviewWithFollowup as OverviewData } from '../shared/overview';
   // Module screens load on first visit (separate chunks), then stay mounted while
   // hidden so drafts, selections and scroll survive switching between modules.
   const loaders = {
@@ -37,6 +37,7 @@
   // Role reading of the Mission Control. Awaited with the first data load so the page
   // does not shift when it appears; separate chunk to keep the initial bundle small.
   const loadOverview = () => import('./Overview.svelte');
+  let Queue = $state.raw<Component<any> | null>(null);
   let Reading = $state.raw<Component<any> | null>(null);
   let readingFailed = $state(false);
   async function ensureReading() {
@@ -156,6 +157,8 @@
   let editStatus = $state<Status>('new');
   let editOwner = $state('');
   let editAction = $state('');
+  let editReason = $state('');
+  let editWaiting = $state('client');
   const labels = statusLabels;
   const kindLabels: Record<string, string> = {
     meeting: 'Reunião',
@@ -243,6 +246,10 @@
     if (next.id && session && allowed(next.id, session.role))
       visited[next.id] = true;
     if (next.id === 'mission-control' && session) void ensureReading();
+    if (next.id === 'solicitacoes' && session && !Queue)
+      void import('./DemandQueue.svelte').then(
+        (m) => (Queue = m.default as Component<any>),
+      );
   }
   async function navigated() {
     if (route.id) scrollTops.set(route.id, window.scrollY);
@@ -451,6 +458,8 @@
     editStatus = r.status;
     editOwner = r.owner_user_id ?? '';
     editAction = r.next_action;
+    editReason = r.blocked_reason ?? '';
+    editWaiting = r.waiting_on ?? 'client';
   }
   async function save() {
     if (!editing) return;
@@ -461,6 +470,9 @@
           status: editStatus,
           owner_user_id: editOwner,
           next_action: editAction,
+          ...(editStatus === 'blocked'
+            ? { blocked_reason: editReason, waiting_on: editWaiting }
+            : {}),
           version: r.version,
         });
       } catch (e) {
@@ -612,6 +624,13 @@
             requests={data.requests}
             userId={session.user.id}
           />{:else if readingFailed}{@render chunkFailed()}{/if}
+        {#if overview?.followup?.for_me}<p class="attention">
+            <strong>{overview.followup.for_me}</strong>
+            {overview.followup.for_me === 1
+              ? 'demanda precisa'
+              : 'demandas precisam'} de você.
+            <a href={href('solicitacoes')}>Abrir a fila de ações</a>
+          </p>{/if}
         <section class="stats" aria-label="Resumo operacional">
           <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
           <div>
@@ -727,6 +746,14 @@
         </div>
       {/if}
       {#if show('solicitacoes')}
+        {#if Queue}<Queue
+            {api}
+            {session}
+            {members}
+            interactions={data.interactions}
+            projects={data.projects}
+            onchange={refresh}
+          />{/if}
         <section class="panel" id="solicitacoes" aria-label="Solicitações">
           <div class="section-heading">
             <div>
@@ -853,7 +880,20 @@
                             required
                             maxlength="2000"
                           ></textarea></label
-                        ><button disabled={busy}>Salvar atualização</button
+                        >{#if editStatus === 'blocked'}<label
+                            >Motivo do bloqueio<input
+                              bind:value={editReason}
+                              required
+                              maxlength="2000"
+                            /></label
+                          ><label
+                            >Depende de<select bind:value={editWaiting}
+                              ><option value="client">Cliente</option><option
+                                value="internal">Equipe interna</option
+                              ><option value="third_party">Terceiro</option
+                              ></select
+                            ></label
+                          >{/if}<button disabled={busy}>Salvar atualização</button
                         ><button
                           type="button"
                           class="secondary"

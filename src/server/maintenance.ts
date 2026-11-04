@@ -12,7 +12,7 @@ export async function cleanup(db: Pool, batch = 500) {
         .rows[0].locked
     ) {
       await c.query('COMMIT');
-      return { sessions: 0, states: 0, limits: 0, keys: 0 };
+      return { sessions: 0, states: 0, limits: 0, keys: 0, jobs: 0 };
     }
     const sessions = await c.query(
       `DELETE FROM sessions WHERE id IN (SELECT id FROM sessions WHERE expires_at<=now() OR last_seen_at<=now()-interval '30 minutes' OR revoked_at IS NOT NULL ORDER BY expires_at LIMIT $1)`,
@@ -30,12 +30,18 @@ export async function cleanup(db: Pool, batch = 500) {
       'DELETE FROM idempotency_keys WHERE (organization_id,user_id,route,key) IN (SELECT organization_id,user_id,route,key FROM idempotency_keys WHERE expires_at<=now() LIMIT $1)',
       [batch],
     );
+    // Finished automation jobs are operational residue; alerts and events are history.
+    const jobs = await c.query(
+      "DELETE FROM automation_jobs WHERE id IN (SELECT id FROM automation_jobs WHERE state='done' AND finished_at<now()-interval '30 days' LIMIT $1)",
+      [batch],
+    );
     await c.query('COMMIT');
     return {
       sessions: sessions.rowCount,
       states: states.rowCount,
       limits: limits.rowCount,
       keys: keys.rowCount,
+      jobs: jobs.rowCount,
     };
   } catch (e) {
     await c.query('ROLLBACK');

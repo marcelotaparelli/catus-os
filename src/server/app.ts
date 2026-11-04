@@ -47,6 +47,7 @@ import {
   getAudit,
 } from './modules/mission-control';
 import { overview } from './economics/overview';
+import { followupRoute, followupSummary } from './followup/service';
 import { createClient } from './modules/clients';
 import { createProject } from './modules/projects';
 import { createInteraction } from './modules/interactions';
@@ -201,6 +202,10 @@ export function createApp(
           );
         const ctx = await authenticate(db, request, config);
         authorize(ctx, 'read');
+        // Read by the request_events trigger; lives only in this transaction.
+        await db.query("SELECT set_config('catus.actor_user_id',$1,true)", [
+          ctx.userId,
+        ]);
         if (path.startsWith('/api/delivery'))
           deliveryIdentity = {
             org: ctx.organizationId,
@@ -223,7 +228,10 @@ export function createApp(
           method === 'GET'
             ? await commercialRoute(ctx, path, method, undefined, null)
             : undefined;
-        if (deliveryRead) result = deliveryRead;
+        const followupRead =
+          method === 'GET' ? await followupRoute(ctx, path, method) : undefined;
+        if (followupRead !== undefined) result = response(followupRead);
+        else if (deliveryRead) result = deliveryRead;
         else if (economicRead) result = economicRead;
         else if (commercialRead) result = commercialRead;
         else if (method === 'GET') {
@@ -242,7 +250,10 @@ export function createApp(
               result = response(await getAudit(ctx));
               break;
             case '/api/overview':
-              result = response(await overview(ctx));
+              result = response({
+                ...(await overview(ctx)),
+                followup: await followupSummary(ctx),
+              });
               break;
             case '/api/mission-control':
               result = response(await getMissionControl(ctx));
@@ -316,7 +327,9 @@ export function createApp(
             body,
             creationKey,
           );
-          if (deliveryWrite) result = deliveryWrite;
+          const followupWrite = await followupRoute(ctx, path, method);
+          if (followupWrite !== undefined) result = response(followupWrite);
+          else if (deliveryWrite) result = deliveryWrite;
           else if (economicWrite) result = economicWrite;
           else if (commercialWrite) result = commercialWrite;
           else if (method === 'POST') {

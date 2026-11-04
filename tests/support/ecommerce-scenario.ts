@@ -174,6 +174,9 @@ export async function buildEcommerceScenario(
           owner_user_id: owner,
           next_action: nextAction,
           version,
+          ...(status === 'blocked'
+            ? { blocked_reason: nextAction, waiting_on: 'client' }
+            : {}),
         })
       ).version;
     return created.id as string;
