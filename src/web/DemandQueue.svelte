@@ -232,7 +232,7 @@
       <label
         >Responsável<select bind:value={owner}
           ><option value="">Eu</option>{#each members as m (m.id)}<option
-              value={m.id}>{m.name}</option
+              value={m.id}>{m.name} · {m.email}</option
             >{/each}</select
         ></label
       >
