@@ -516,8 +516,7 @@
             })}>Cancelar job</button
         >{/if}
     </article>{:else}<p>
-      Nenhum job enfileirado. Execução permanece negada até satisfazer todos os
-      requisitos.
+      Nenhum job. Execução negada até cumprir os requisitos.
     </p>{/each}
   <details>
     <summary>Eventos de execução</summary>{#each view.events as e}<p>

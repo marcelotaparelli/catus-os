@@ -3,7 +3,6 @@
 import type { PoolClient } from 'pg';
 import { InputError, uuid } from '../../shared/domain';
 import type { Status } from '../../shared/domain';
-import { WIP_LIMIT } from '../../shared/followup';
 import type {
   FollowupQueue,
   FollowupSummary,
@@ -13,7 +12,7 @@ import { audit, authorize } from '../auth/policy';
 import type { Context } from '../auth/policy';
 import { allRecords, current, times } from '../economics/service';
 import { HttpError } from '../errors';
-import { assess, concerns, visibleTo } from './rules';
+import { assess, concerns, visibleTo, WIP_LIMIT } from './rules';
 import type { DemandFacts } from './rules';
 
 const utcToday = () => new Date().toISOString().slice(0, 10);
@@ -92,8 +91,14 @@ function buildItems(
         ...s,
         is_new: alerts.get(`${r.id}:${s.kind}`)?.acknowledged === false,
       }));
+    // Only the PO or the manager can release a new demand, whoever owns it: it waits for them.
+    const awaitsRelease =
+      ['new', 'triage'].includes(r.status) &&
+      ['po', 'manager'].includes(ctx.role);
     const forMe =
-      isOwner || signals.some((s) => concerns(s.kind, ctx.role, isOwner));
+      isOwner ||
+      awaitsRelease ||
+      signals.some((s) => concerns(s.kind, ctx.role, isOwner));
     if (!forMe && !signals.length) continue;
     items.push({
       id: r.id,

@@ -6,27 +6,16 @@ export const templateIds = ['manutencao', 'implantacao'] as const;
 export type TemplateId = (typeof templateIds)[number];
 export const templates: Record<
   TemplateId,
-  {
-    label: string;
-    followUpDays: number;
-    stallDays: number;
-    coverageFrom: readonly Status[];
-    nextAction: string;
-  }
+  { label: string; followUpDays: number; nextAction: string }
 > = {
   manutencao: {
     label: 'Manutenção',
     followUpDays: 2,
-    stallDays: 3,
-    // Maintenance goes straight to execution: coverage only matters once work starts.
-    coverageFrom: ['in_progress'],
     nextAction: 'Reproduzir o pedido e confirmar o que fazer',
   },
   implantacao: {
     label: 'Implantação',
     followUpDays: 5,
-    stallDays: 7,
-    coverageFrom: ['ready', 'in_progress'],
     nextAction: 'Fazer a descoberta e o briefing com o cliente',
   },
 };
@@ -92,8 +81,6 @@ export interface FollowupSummary {
   for_me: number;
   new_alerts: number;
 }
-
-export const WIP_LIMIT = 5;
 
 /** ISO day plus business days; weekends are skipped, holidays are not known. */
 export function addBusinessDays(day: string, count: number): string {

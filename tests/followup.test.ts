@@ -111,8 +111,7 @@ const patchOf = (r: any, changes = {}) => ({
   ...changes,
 });
 const queue = (who: Who) => call<FollowupQueue>(who, 'followup');
-const item = (q: FollowupQueue, id: string) =>
-  q.items.find((i) => i.id === id);
+const item = (q: FollowupQueue, id: string) => q.items.find((i) => i.id === id);
 const kinds = (q: FollowupQueue, id: string) =>
   item(q, id)?.signals.map((s) => s.kind);
 const drain = async (evaluator?: Evaluate) => {
@@ -121,7 +120,10 @@ const drain = async (evaluator?: Evaluate) => {
 
 beforeAll(async () => {
   await admin.query(`CREATE DATABASE ${ident(name)}`);
-  const roles = await provisionRoles(target.href, `.local/followup-${name}.env`);
+  const roles = await provisionRoles(
+    target.href,
+    `.local/followup-${name}.env`,
+  );
   const p = Bun.spawn(['node_modules/.bin/bun', 'scripts/migrate.ts'], {
     env: { ...process.env, ...roles },
     stdout: 'ignore',
@@ -359,7 +361,7 @@ test('blocking needs a reason and a dependency; leaving clears them', async () =
 test('moving a demand renews a lapsed commitment; closing clears it', async () => {
   const r = await demand('Vencida ao mover');
   await db.query(
-    "UPDATE requests SET follow_up_on=current_date-3 WHERE id=$1",
+    'UPDATE requests SET follow_up_on=current_date-3 WHERE id=$1',
     [r.id],
   );
   const t = await call(
@@ -412,9 +414,7 @@ test('RBAC: each role reads only what it may; tenants never mix', async () => {
   expect(manager.stage_times).toBeDefined();
   // The other tenant has nothing and cannot read a foreign history.
   expect((await queue('foreign')).items).toEqual([]);
-  expect(
-    (await raw('foreign', `followup/${own.id}/events`)).status,
-  ).toBe(404);
+  expect((await raw('foreign', `followup/${own.id}/events`)).status).toBe(404);
   // A developer reads only the history of their own work.
   expect((await raw('dev', `followup/${other.id}/events`)).status).toBe(403);
   expect((await raw('dev', `followup/${own.id}/events`)).status).toBe(200);
@@ -433,6 +433,13 @@ test('RBAC: each role reads only what it may; tenants never mix', async () => {
     'followup-tests',
   );
   expect(noCsrf.status).toBe(403);
+});
+test('a new demand owned by a developer waits for the PO, who alone can release it', async () => {
+  const r = await demand('Aguarda liberação');
+  expect(item(await queue('po'), r.id)!.for_me).toBe(true);
+  expect(item(await queue('manager'), r.id)!.for_me).toBe(true);
+  expect(item(await queue('dev'), r.id)!.for_me).toBe(true);
+  expect(item(await queue('admin'), r.id)).toBeUndefined();
 });
 test('over-hours is visible to manager only, and uses approved or pending hours', async () => {
   const r = await demand('Estourada');
@@ -523,9 +530,9 @@ test('alerts: opened once, never repeated, resolved, and a new episode alerts ag
   expect(await open()).toBe(1);
   expect(await total()).toBe(1);
   const devQ = await queue('dev');
-  expect(item(devQ, r.id)!.signals.find((s) => s.kind === 'overdue')!.is_new).toBe(
-    true,
-  );
+  expect(
+    item(devQ, r.id)!.signals.find((s) => s.kind === 'overdue')!.is_new,
+  ).toBe(true);
   expect(devQ.new_alerts).toBeGreaterThan(0);
   // Acknowledged: stops being new, stays in the queue, does not come back on the next sweep.
   await call('dev', 'followup/alerts/ack', 'POST', {});
@@ -537,7 +544,10 @@ test('alerts: opened once, never repeated, resolved, and a new episode alerts ag
   expect(seen.is_new).toBe(false);
   // Solved: resolved by the job the change itself enqueued.
   const current = (
-    await db.query('SELECT status,owner_user_id,next_action,version FROM requests WHERE id=$1', [r.id])
+    await db.query(
+      'SELECT status,owner_user_id,next_action,version FROM requests WHERE id=$1',
+      [r.id],
+    )
   ).rows[0];
   await call(
     'dev',
@@ -591,12 +601,17 @@ test('failure: the automation failing blocks nothing, loses nothing and recovers
     [r.id],
   );
   await enqueueSweeps(runtime, new Date(Date.now() + 30 * 60000));
-  expect(await runDueJobs(runtime, { evaluator: faulty, backoffSeconds: 0 })).toBeGreaterThan(0);
+  expect(
+    await runDueJobs(runtime, { evaluator: faulty, backoffSeconds: 0 }),
+  ).toBeGreaterThan(0);
   // Critical transaction still commits while the automation fails.
   const live = await call('dev', 'followup');
   expect(kinds(live, r.id)).toContain('overdue');
   const current = (
-    await db.query('SELECT status,owner_user_id,next_action,version FROM requests WHERE id=$1', [r.id])
+    await db.query(
+      'SELECT status,owner_user_id,next_action,version FROM requests WHERE id=$1',
+      [r.id],
+    )
   ).rows[0];
   const moved = await call(
     'po',
@@ -706,7 +721,9 @@ test('concurrency: parallel workers run a job once and create one alert', async 
     [1, 2, 3, 4].map(() => runDueJobs(runtime, { evaluator: counting })),
   );
   // One sweep per organization: this bucket was enqueued only once despite three callers.
-  const organizations = (await db.query('SELECT count(*)::int n FROM organizations')).rows[0].n;
+  const organizations = (
+    await db.query('SELECT count(*)::int n FROM organizations')
+  ).rows[0].n;
   expect(new Set(runs).size).toBe(runs.length);
   expect(runs.length).toBe(organizations);
   expect(
@@ -722,12 +739,7 @@ test('concurrency: two people acting on one demand, the second gets 409 and no e
   const r = await demand('Disputada');
   const results = await Promise.all(
     ['po', 'manager'].map((who) =>
-      raw(
-        who,
-        `requests/${r.id}`,
-        'PATCH',
-        patchOf(r, { status: 'ready' }),
-      ),
+      raw(who, `requests/${r.id}`, 'PATCH', patchOf(r, { status: 'ready' })),
     ),
   );
   expect(results.map((x) => x.status).sort()).toEqual([200, 409]);

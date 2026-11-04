@@ -6,6 +6,14 @@ export default defineConfig({
   server: { proxy: { '/api': 'http://127.0.0.1:3000' } },
   build: {
     outDir: 'dist',
+    // About 7 kB less gzip than esbuild on this code, for the same behaviour.
+    minify: 'terser',
+    terserOptions: {
+      ecma: 2020,
+      module: true,
+      compress: { passes: 2 },
+      format: { comments: false },
+    },
     modulePreload: { polyfill: false },
     // Tiny shared files cost more in gzip overhead than they save in splitting.
     rollupOptions: { output: { experimentalMinChunkSize: 5000 } },

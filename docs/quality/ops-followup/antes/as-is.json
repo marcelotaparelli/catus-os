@@ -1,84 +1,45 @@
 {
   "probes": {
     "admin": {
-      "Mission Control": [
-        "escopo",
-        "prioridade"
-      ],
+      "Mission Control": ["escopo", "prioridade"],
       "Solicitações": [],
       "Clientes e projetos": [],
-      "Comercial": [
-        "contrato",
-        "escopo"
-      ],
+      "Comercial": ["contrato", "escopo"],
       "Economia": []
     },
     "manager": {
-      "Mission Control": [
-        "prioridade"
-      ],
+      "Mission Control": ["prioridade"],
       "Solicitações": [],
       "Clientes e projetos": [],
-      "Comercial": [
-        "contrato",
-        "escopo"
-      ],
+      "Comercial": ["contrato", "escopo"],
       "Economia": []
     },
     "commercial": {
-      "Mission Control": [
-        "escopo",
-        "prioridade"
-      ],
+      "Mission Control": ["escopo", "prioridade"],
       "Solicitações": [],
       "Clientes e projetos": [],
-      "Comercial": [
-        "contrato",
-        "escopo"
-      ],
-      "Economia": [
-        "estimativa",
-        "planejamento"
-      ]
+      "Comercial": ["contrato", "escopo"],
+      "Economia": ["estimativa", "planejamento"]
     },
     "po": {
-      "Mission Control": [
-        "escopo",
-        "prioridade"
-      ],
+      "Mission Control": ["escopo", "prioridade"],
       "Solicitações": [],
       "Clientes e projetos": [],
-      "Comercial": [
-        "contrato",
-        "escopo"
-      ],
-      "Economia": [
-        "estimativa",
-        "planejamento"
-      ]
+      "Comercial": ["contrato", "escopo"],
+      "Economia": ["estimativa", "planejamento"]
     },
     "dev": {
-      "Mission Control": [
-        "prioridade"
-      ],
+      "Mission Control": ["prioridade"],
       "Solicitações": [],
       "Clientes e projetos": [],
-      "Comercial": [
-        "contrato",
-        "escopo"
-      ],
+      "Comercial": ["contrato", "escopo"],
       "Economia": []
     },
     "dev2": {
-      "Mission Control": [
-        "prioridade"
-      ],
+      "Mission Control": ["prioridade"],
       "Solicitações": [],
       "Clientes e projetos": [],
-      "Comercial": [
-        "contrato",
-        "escopo"
-      ],
+      "Comercial": ["contrato", "escopo"],
       "Economia": []
     }
   },

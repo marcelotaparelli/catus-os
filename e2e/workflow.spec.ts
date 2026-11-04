@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { login } from './login';
 import { open } from './nav';
+import { registerDemand } from './support-ops/form';
 test('PO completes M0, developer executes assigned work, session survives reload, logout revokes access', async ({
   page,
   browser,
@@ -29,22 +30,12 @@ test('PO completes M0, developer executes assigned work, session survives reload
   await page
     .getByRole('button', { name: 'Registrar atendimento', exact: true })
     .click();
-  await page
-    .getByRole('combobox', { name: 'Atendimento de origem', exact: true })
-    .selectOption({ label: 'E2E Loja · Melhorar checkout' });
-  await page.getByLabel('Título', { exact: true }).fill('Revisar checkout');
-  await page
-    .getByLabel('Descrição', { exact: true })
-    .fill('Investigar abandono');
-  await page
-    .getByRole('combobox', { name: 'Responsável', exact: true })
-    .selectOption({ label: 'Dev Browser · dev@browser.test' });
-  await page
-    .getByLabel('Próxima ação', { exact: true })
-    .fill('Confirmar requisitos');
-  await page
-    .getByRole('button', { name: 'Criar solicitação', exact: true })
-    .click();
+  await registerDemand(page, {
+    origin: 'E2E Loja · Melhorar checkout',
+    title: 'Revisar checkout',
+    description: 'Investigar abandono',
+    action: 'Confirmar requisitos',
+  });
   await open(page, 'Solicitações');
   const card = page.locator('article').filter({
     has: page.getByRole('heading', { name: 'Revisar checkout', exact: true }),

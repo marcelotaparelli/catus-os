@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import { login } from './login';
 import { open } from './nav';
+import { registerDemand } from './support-ops/form';
 
 // Controlled-pilot acceptance: one synthetic operation carried end to end through the
 // real UI by four roles. Inputs mirror e2e/economics.spec.ts (which builds them via API),
@@ -185,29 +186,12 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     await expect(directory).toContainText('Reunião');
 
     // 3. PO creates the request with an explicit owner and next action.
-    const origin = po.getByRole('combobox', {
-      name: 'Atendimento de origem',
-      exact: true,
+    await registerDemand(po, {
+      origin: `SYNTHETIC PILOT ${run}`,
+      title: REQUEST,
+      description: 'Investigar abandono no checkout da loja sintética',
+      action: 'Confirmar escopo comercial',
     });
-    await origin.selectOption(
-      (await origin
-        .locator('option')
-        .filter({ hasText: `SYNTHETIC PILOT ${run}` })
-        .getAttribute('value'))!,
-    );
-    await po.getByLabel('Título', { exact: true }).fill(REQUEST);
-    await po
-      .getByLabel('Descrição', { exact: true })
-      .fill('Investigar abandono no checkout da loja sintética');
-    await po
-      .getByRole('combobox', { name: 'Responsável', exact: true })
-      .selectOption({ label: 'Dev Browser · dev@browser.test' });
-    await po
-      .getByLabel('Próxima ação', { exact: true })
-      .fill('Confirmar escopo comercial');
-    await po
-      .getByRole('button', { name: 'Criar solicitação', exact: true })
-      .click();
     await open(po, 'Solicitações');
     await expect(card(po)).toContainText('Nova');
     await expect(card(po)).toContainText('Dev Browser');

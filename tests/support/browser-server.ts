@@ -108,6 +108,20 @@ const handler = createApp(config, oidcProvider(config, await mockOidcFetch()), {
   loginRate: { limit: 200, windowSeconds: 60 },
   apiRate: { limit: 2000, windowSeconds: 60 },
 });
+// The same automation as production. The journeys switch a simulated fault on and off with a file.
+const { startFollowupAutomation, evaluate } =
+  await import('../../src/server/followup/automation');
+const { existsSync } = await import('node:fs');
+startFollowupAutomation(pool, {
+  intervalMs: 500,
+  sweepSeconds: 5,
+  backoffSeconds: 1,
+  evaluator: async (db, job) => {
+    if (existsSync('test-results/automation-fault'))
+      throw Object.assign(new Error('simulated'), { code: 'SIMULATED_FAULT' });
+    await evaluate(db, job);
+  },
+});
 const server = Bun.serve({
   hostname: '127.0.0.1',
   port: 3000,

@@ -1,5 +1,4 @@
 // Deterministic rules: same facts, same answer. No external service and no inference.
-import { templates } from '../../shared/followup';
 import type {
   Signal,
   SignalKind,
@@ -23,6 +22,16 @@ export interface DemandFacts {
   planned_minutes: number | null;
   logged_minutes: number;
 }
+/** Starting parameters of the workflow, not targets. */
+const limits: Record<
+  TemplateId,
+  { stallDays: number; coverageFrom: readonly Status[] }
+> = {
+  // Maintenance goes straight to execution: coverage only matters once work starts.
+  manutencao: { stallDays: 3, coverageFrom: ['in_progress'] },
+  implantacao: { stallDays: 7, coverageFrom: ['ready', 'in_progress'] },
+};
+export const WIP_LIMIT = 5;
 const DAY = 864e5;
 const hours = (m: number) => `${Math.round((m / 60) * 10) / 10}h`;
 const pluralDays = (n: number) => (n === 1 ? '1 dia' : `${n} dias`);
@@ -31,7 +40,7 @@ const daysBetween = (from: string, to: string) =>
 
 export function assess(f: DemandFacts, today: string, now: Date): Signal[] {
   if (f.status === 'done') return [];
-  const t = templates[f.template ?? 'manutencao'],
+  const t = limits[f.template ?? 'manutencao'],
     out: Signal[] = [],
     late = !!f.follow_up_on && f.follow_up_on < today;
   if (!f.owner_user_id || !f.owner_active)
@@ -57,10 +66,7 @@ export function assess(f: DemandFacts, today: string, now: Date): Signal[] {
       label: 'Compromisso vencido',
       reason: `Venceu há ${pluralDays(daysBetween(f.follow_up_on!, today))}.`,
     });
-  if (
-    f.planned_minutes !== null &&
-    f.logged_minutes > f.planned_minutes
-  )
+  if (f.planned_minutes !== null && f.logged_minutes > f.planned_minutes)
     out.push({
       kind: 'over_hours',
       rank: 4,
