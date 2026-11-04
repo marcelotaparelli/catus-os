@@ -76,11 +76,48 @@ Lighthouse não foi adicionado: traria uma dependência pesada e um segundo nave
 | Contraste abaixo de 4,5:1 (cinzas de texto, rótulos superiores, selo, estados vazios)                                        | Alta (WCAG) | Paleta de cinzas ajustada (≥ 4,5:1)                                                                                        |
 | `<pre>` roláveis inacessíveis por teclado; campo de data sem anel de foco                                                    | Alta (WCAG) | `tabindex="0"` nas regiões roláveis; `:focus-within` e `:focus-visible`                                                    |
 
+## Revisão UX Comercial e Economia (03/11/2026)
+
+Evidência em `docs/quality/ux-comercial-economia/`: `before-*.png`, `after-*.png`, `metrics-before.json` e `metrics-after.json`, com o mesmo cenário sintético e o mesmo Chromium local. A única diferença de dados é o e-mail no cabeçalho (`demo.*` antes, `ux.*` depois), porque a medição passou a ter organização própria no harness. O "antes" foi medido no commit `50eec4d` com `measure-before.spec.ts.txt`; o "depois" é `e2e/ux-tasks.spec.ts`, que também falha se uma tarefa passar a custar mais.
+
+Regra de contagem: um clique por clique, dois por seletor nativo (abrir e escolher), um campo por campo digitado.
+
+| Papel         | Tarefa (entrando pelo menu)               | Antes (cliques + campos) | Depois (cliques + campos) |
+| ------------- | ----------------------------------------- | ------------------------ | ------------------------- |
+| Gestor        | Decidir horas pendentes                   | 2 + 1                    | 1 + 1                     |
+| Administrador | Decidir registro, vendo o valor           | 3 + 1                    | 1 + 1                     |
+| Gestor        | Preparar custo por hora                   | 6 + 4                    | 5 + 2                     |
+| Gestor        | Calcular a rentabilidade de um projeto    | 3 + 0                    | 2 + 0                     |
+| Gestor        | Decidir escopo submetido                  | 3 + 1                    | 2 + 1                     |
+| PO            | Vincular demanda ao único item disponível | 5 + 0                    | 1 + 0                     |
+| PO            | Estimar demanda                           | 8 + 4                    | 3 + 4                     |
+| Desenvolvedor | Apontar horas                             | 6 + 2                    | 3 + 2                     |
+
+| Medida na tela                             | Antes    | Depois   |
+| ------------------------------------------ | -------- | -------- |
+| Altura de Economia com as horas abertas    | 3.439 px | 1.025 px |
+| Botões com UUID nessa tela                 | 15       | 0        |
+| Botões desabilitados sem explicação        | 15       | 0        |
+| Justificativa até o botão de decisão       | 256 px   | 145 px   |
+| Altura de Comercial ao abrir (gestor)      | 1.602 px | 2.014 px |
+| Controles visíveis ao abrir Economia (PO)  | 8        | 23       |
+| Controles visíveis ao abrir Economia (dev) | 6        | 11       |
+
+As três últimas linhas pioraram por escolha: Comercial traz as listas de decisão e de cobertura para o topo, e PO e desenvolvedor abrem direto no formulário em vez de um accordion fechado.
+
+Nada mudou no servidor além dos links das recomendações: payloads, regras e permissões são os mesmos. O servidor continua guardando unidades mínimas, pontos-base e minutos; a conversão fica em `src/shared/units.ts`, que recusa o que não consegue ler com exatidão (`12.50`, ou `0,33` h, que não dá minutos inteiros) e nunca transforma vazio em zero. Economia e Comercial só desenham o conteúdo depois de carregar os dados, para não empurrar a tela (CLS).
+
 ## Backlog priorizado
 
 1. ~~Página longa~~: resolvido com a navegação por módulo (rotas `#/…`, `src/web/routes.ts`).
-2. Estender a regressão visual e as capturas de UX a M4 (horas/rentabilidade), atendimento inteligente e M5.
-3. Formato de data `mm/dd/yyyy` no renderizador do CI (locale do navegador sem dados pt-BR); avaliar campos de data com formato explícito.
+2. Estender a regressão visual e as capturas de UX a atendimento inteligente e M5. M4 tem capturas em `docs/quality/ux-comercial-economia/` e baselines dos formulários, sem dados de horas ou relatórios, porque o seed de qualidade não cria dados econômicos.
+3. ~~Formato de data `mm/dd/yyyy` no renderizador do CI~~: resolvido com campos de data em DD/MM/AAAA, independentes do idioma do navegador.
 4. Espaço superior excessivo no cartão de item do escopo (padding do cartão + margem do título).
 5. Ordem de cabeçalhos (h3 → h4) dentro do detalhe do escopo (`heading-order`, prática recomendada, não WCAG).
 6. Jornada visual ponta a ponta cliente → projeto → atendimento → solicitação → triagem → escopo → execução → horas → rentabilidade. Hoje a jornada funcional é coberta por `e2e/pilot-journey.spec.ts`; o visual cobre Mission Control e M3.
+
+## Datas e orçamento de JS
+
+Datas aparecem e são digitadas em DD/MM/AAAA (`UnitField kind="date"`). O `input[type=date]` foi retirado porque ele segue o idioma do navegador, e não o da aplicação: em um navegador em inglês mostrava mm/dd/aaaa, e o calendário nativo deixa de existir. A API e o banco continuam em ISO; `e2e/value-first.spec.ts` confere o valor enviado e o valor persistido.
+
+O JS total fica em 79,8 de 80 kB gzip, sem aumento de orçamento. A economia veio de retirar o polyfill de modulepreload, unir chunks muito pequenos e eliminar duplicações (rótulos, formatador de horário e POST idempotente). A próxima adição exige nova otimização antes de qualquer aumento.

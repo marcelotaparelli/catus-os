@@ -7,6 +7,14 @@ export const statuses = [
   'done',
 ] as const;
 export type Status = (typeof statuses)[number];
+export const statusLabels: Record<Status, string> = {
+  new: 'Nova',
+  triage: 'Em triagem',
+  ready: 'Pronta',
+  in_progress: 'Em execução',
+  blocked: 'Bloqueada',
+  done: 'Concluída',
+};
 export const transitions: Record<Status, readonly Status[]> = {
   new: ['triage'],
   triage: ['ready', 'blocked'],
@@ -82,4 +90,34 @@ export interface Snapshot {
   projects: Project[];
   interactions: Interaction[];
   requests: WorkRequest[];
+}
+/** ISO day (or timestamp) shown as DD/MM/AAAA; text only, so no timezone shift. */
+export function dayText(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${d}/${m}/${y}`;
+}
+export function timeLabel(
+  iso: string,
+  timeStyle: 'short' | 'medium' = 'short',
+): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle });
+}
+/** DD/MM/AAAA or DDMMAAAA to ISO; null when that calendar day does not exist. */
+export function dayFromText(raw: string): string | null {
+  const m = /^(\d{2})\/?(\d{2})\/?(\d{4})$/.exec(raw.trim());
+  if (!m) return null;
+  const iso = `${m[3]}-${m[2]}-${m[1]}`,
+    t = new Date(Date.UTC(+m[3]!, +m[2]! - 1, +m[1]!));
+  return t.toISOString().slice(0, 10) === iso ? iso : null;
+}
+/** Local "DD/MM/AAAA HH:MM" to an instant; null when it does not exist. */
+export function instantFromText(raw: string): string | null {
+  const m = /^(\S+) (\d{2}):(\d{2})$/.exec(raw.trim()),
+    day = m && dayFromText(m[1]!);
+  if (!day || +m![2]! > 23 || +m![3]! > 59) return null;
+  return new Date(`${day}T${m![2]}:${m![3]}`).toISOString();
 }

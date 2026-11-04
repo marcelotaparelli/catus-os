@@ -83,8 +83,8 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
   await commercial
     .getByLabel('Título do contrato')
     .fill('M3 Contrato Sintético');
-  await commercial.getByLabel('Vigência inicial (UTC)').fill('2020-01-01');
-  await commercial.getByLabel('Vigência final (UTC)').fill('2099-12-31');
+  await commercial.getByLabel('Vigência inicial (UTC)').fill('01/01/2020');
+  await commercial.getByLabel('Vigência final (UTC)').fill('31/12/2099');
   await commercial
     .getByLabel('Referência documental')
     .fill('SYNTHETIC-M3-DOC-001');

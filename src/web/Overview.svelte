@@ -12,7 +12,8 @@
     ProjectOverview,
     RecommendedAction,
   } from '../shared/overview';
-  import type { WorkRequest } from '../shared/domain';
+  import { statusLabels } from '../shared/domain';
+  import type { Status, WorkRequest } from '../shared/domain';
   import { href } from './routes';
   let {
     overview,
@@ -55,14 +56,6 @@
       plan: (r.planned_minutes / total) * 100,
     };
   }
-  const statusLabels: Record<string, string> = {
-    new: 'Nova',
-    triage: 'Em triagem',
-    ready: 'Pronta',
-    in_progress: 'Em execução',
-    blocked: 'Bloqueada',
-    done: 'Concluída',
-  };
   let projects = $derived(
     overview?.kind === 'financial' ? overview.projects : [],
   );
@@ -459,7 +452,7 @@
                 >
                 <td
                   ><span class="status" data-status={d.status}
-                    >{statusLabels[d.status] ?? d.status}</span
+                    >{statusLabels[d.status as Status] ?? d.status}</span
                   ></td
                 >
                 <td>{d.owner}</td>

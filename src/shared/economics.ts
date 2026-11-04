@@ -1,3 +1,4 @@
+import { dayText } from './domain';
 // Monetary values are decimal integer strings in the currency's smallest unit. Never JS floats.
 export type Minor = string;
 export type EconomicKind =
@@ -191,9 +192,6 @@ export function hoursLabel(minutes: number | null | undefined): string {
     m = abs % 60;
   return `${minutes < 0 ? '-' : ''}${h}h${m ? String(m).padStart(2, '0') : ''}`;
 }
-/** ISO day (UTC) as dd/mm/aaaa; parsing as text avoids any timezone shift. */
 export function dayLabel(iso: string | null | undefined): string {
-  if (!iso) return 'Indisponível';
-  const [y, m, d] = iso.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
+  return dayText(iso) || 'Indisponível';
 }

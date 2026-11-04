@@ -37,7 +37,7 @@ A lista é ordenada pelo que protege o lucro primeiro: margem negativa; horas pe
 
 O sistema não tem dono de projeto. Por isso, decisões apontam para quem tem alçada ("Alice Admin ou Marina Gestora") e trabalho aponta para o responsável pela demanda. Limitação conhecida: em projetos com muitas alçadas o responsável é um grupo, não uma pessoa.
 
-Cada recomendação tem um link que abre o painel certo em Economia, com tipo, projeto e demanda já preenchidos.
+Cada recomendação tem um link que abre o painel certo em Economia ou o escopo e a demanda certos em Comercial, com tipo, projeto e demanda já preenchidos.
 
 ## Formulários
 

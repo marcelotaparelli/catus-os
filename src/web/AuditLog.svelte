@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { timeLabel } from '../shared/domain';
   import type { Member } from '../shared/identity';
   interface AuditEvent {
     id: string;
@@ -50,12 +51,7 @@
       loading = false;
     }
   }
-  function when(iso: string) {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime())
-      ? iso
-      : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
-  }
+  const when = (iso: string) => timeLabel(iso, 'medium');
 </script>
 
 <section class="panel" aria-label="Auditoria">

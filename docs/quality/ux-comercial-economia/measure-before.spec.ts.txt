@@ -1,0 +1,344 @@
+import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { open } from './nav';
+import {
+  Meter,
+  agency,
+  screenFacts,
+  distancePx,
+  PENDING_RATE_SOURCE,
+  demandToCover,
+  demandToEstimate,
+} from './support-ux/meter';
+
+const OUT = 'docs/quality/ux-comercial-economia';
+const shot = (page: Page, name: string) =>
+  page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true });
+const results: Record<string, unknown> = {};
+const econOf = (p: Page) =>
+  p.getByRole('region', { name: 'Inteligência econômica' });
+
+test('measure tasks on the UI before the change', async ({ browser }) => {
+  test.setTimeout(240000);
+  mkdirSync(OUT, { recursive: true });
+  const { pages, people } = await agency(browser);
+  const { manager, admin, po, dev } = pages;
+
+  for (const [role, p] of [
+    ['gestor', manager],
+    ['po', po],
+    ['desenvolvedor', dev],
+  ] as const) {
+    await p.reload();
+    await open(p, 'Economia');
+    await p.waitForLoadState('networkidle');
+    results[`tela-economia-${role}`] = await screenFacts(p);
+    await shot(p, `before-economia-${role}-1280`);
+  }
+
+  // Gestor: decide pending hours, entering by the menu.
+  {
+    const m = new Meter(),
+      econ = econOf(manager);
+    await m.click(econ.getByText('Horas e decisões', { exact: true }));
+    const reason = econ.getByLabel(
+      'Justificativa econômica de decisão/reversão',
+    );
+    const card = econ
+      .locator('article')
+      .filter({ hasText: 'Trabalho sintético 360 min há 5 dias' });
+    const button = card.getByRole('button', { name: /^Aprovar horas/ });
+    const facts = await screenFacts(manager);
+    const distance = await distancePx(reason, button);
+    await shot(manager, 'before-gestor-horas-1280');
+    await manager.setViewportSize({ width: 390, height: 844 });
+    await shot(manager, 'before-gestor-horas-390');
+    await manager.setViewportSize({ width: 1280, height: 900 });
+    await m.fill(reason, 'Horas conferidas');
+    await m.click(button);
+    await expect(card).toContainText('Aprovadas');
+    results['gestor-decidir-horas'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+      distanceReasonToButtonPx: distance,
+      ...facts,
+    };
+    await econ.getByText('Horas e decisões', { exact: true }).click();
+    await reason.fill('');
+  }
+
+  // Gestor: why can't I approve what I prepared?
+  {
+    const econ = econOf(manager);
+    await econ.getByRole('button', { name: 'Atualizar economia' }).click();
+    await econ
+      .getByText('Versões e decisões econômicas', { exact: true })
+      .click();
+    const card = econ
+      .locator('article')
+      .filter({ hasText: PENDING_RATE_SOURCE });
+    results['gestor-propria-versao'] = {
+      explainsWhyBlocked:
+        (await card.getByText(/você preparou|outra pessoa/i).count()) > 0,
+      approveDisabled: await card
+        .getByRole('button', { name: /^Aprovar registro/ })
+        .isDisabled(),
+    };
+    await econ
+      .getByText('Versões e decisões econômicas', { exact: true })
+      .click();
+  }
+
+  // Admin: decide a prepared record, seeing the value before deciding.
+  {
+    await admin.reload();
+    await open(admin, 'Economia');
+    await admin.waitForLoadState('networkidle');
+    const m = new Meter(),
+      econ = econOf(admin);
+    await m.click(
+      econ.getByText('Versões e decisões econômicas', { exact: true }),
+    );
+    const card = econ
+      .locator('article')
+      .filter({ hasText: PENDING_RATE_SOURCE });
+    await m.click(card.getByText('Valores e rastreabilidade'));
+    await expect(card.locator('pre')).toContainText('9500');
+    await shot(admin, 'before-admin-decidir-registro-1280');
+    await m.fill(
+      econ.getByLabel('Justificativa econômica de decisão/reversão'),
+      'Conferido com a planilha',
+    );
+    await m.click(card.getByRole('button', { name: /^Aprovar registro/ }));
+    await expect(card).toContainText('Aprovado');
+    results['admin-decidir-registro'] = { clicks: m.clicks, fields: m.fields };
+  }
+
+  // Gestor: prepare an hourly cost.
+  {
+    await manager.reload();
+    await open(manager, 'Economia');
+    await manager.waitForLoadState('networkidle');
+    const m = new Meter(),
+      econ = econOf(manager);
+    await m.click(
+      econ.getByText('Preparar premissas e estimativas', { exact: true }),
+    );
+    const form = econ.getByRole('form', {
+      name: 'Preparar registro econômico',
+    });
+    await m.select(
+      form.getByRole('combobox', {
+        name: 'Tipo de registro econômico',
+        exact: true,
+      }),
+      'rate',
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    await m.fill(form.getByLabel('Início da competência/vigência'), today);
+    await m.fill(form.getByLabel('Fim da competência/vigência'), today);
+    await m.fill(form.getByLabel('Fonte das premissas'), 'Planilha de custos');
+    await m.select(
+      form.getByRole('combobox', {
+        name: 'Profissional econômico',
+        exact: true,
+      }),
+      people.dev,
+    );
+    await m.fill(form.getByLabel('Custo por hora em unidades mínimas'), '12500');
+    await shot(manager, 'before-gestor-preparar-custo-1280');
+    await m.click(
+      form.getByRole('button', { name: 'Preparar versão econômica' }),
+    );
+    await expect(econ.getByRole('status')).toContainText('Versão preparada');
+    results['gestor-preparar-custo'] = { clicks: m.clicks, fields: m.fields };
+  }
+
+  // Gestor: calculate and read a project's profitability.
+  {
+    const m = new Meter(),
+      econ = econOf(manager);
+    const rf = econ.getByRole('form', {
+      name: 'Calcular observação econômica',
+    });
+    const terms = rf.getByRole('combobox', {
+      name: 'Termos para relatório',
+      exact: true,
+    });
+    const value = await terms
+      .locator('option')
+      .filter({ hasText: 'Loja Aurora' })
+      .first()
+      .getAttribute('value');
+    await m.select(terms, value!);
+    await m.click(rf.getByRole('button', { name: 'Calcular e preservar' }));
+    const report = econ
+      .getByRole('article', { name: /^Relatório econômico/ })
+      .first();
+    await expect(report).toContainText('Margem projetada');
+    const top =
+      (await report.boundingBox())!.y +
+      (await manager.evaluate(() => window.scrollY));
+    results['gestor-calcular-rentabilidade'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+      reportTopPx: Math.round(top),
+    };
+    await shot(manager, 'before-gestor-rentabilidade-1280');
+  }
+
+  // PO: estimate a demand (runs after coverage, as the server requires).
+  const estimateTask = async () => {
+    await po.reload();
+    await open(po, 'Economia');
+    await po.waitForLoadState('networkidle');
+    const target = await demandToEstimate(po);
+    results['po-demanda-estimada'] = target.title;
+    const m = new Meter(),
+      econ = econOf(po);
+    await m.click(
+      econ.getByText('Preparar premissas e estimativas', { exact: true }),
+    );
+    const form = econ.getByRole('form', {
+      name: 'Preparar registro econômico',
+    });
+    await m.select(
+      form.getByRole('combobox', { name: 'Projeto econômico', exact: true }),
+      { label: target.project },
+    );
+    await expect(
+      form.getByRole('combobox', { name: 'Termos aprovados para planejamento' }),
+    ).not.toHaveValue('');
+    await m.fill(
+      form.getByLabel('Fonte das premissas'),
+      'Reunião de refinamento',
+    );
+    await m.select(
+      form.getByRole('combobox', {
+        name: 'Profissional econômico',
+        exact: true,
+      }),
+      target.owner ?? people.dev,
+    );
+    const demand = form.getByRole('combobox', {
+      name: 'Demanda a estimar',
+      exact: true,
+    });
+    await m.select(demand, target.id);
+    await m.fill(form.getByLabel('Baseline prevista em minutos'), '600');
+    await m.fill(form.getByLabel('Minutos para concluir'), '480');
+    await m.fill(
+      form.getByLabel('Data prevista de conclusão'),
+      new Date(Date.now() + 864e6).toISOString().slice(0, 10),
+    );
+    await shot(po, 'before-po-estimativa-1280');
+    await m.click(
+      form.getByRole('button', { name: 'Preparar versão econômica' }),
+    );
+    await expect(econ.getByRole('status')).toContainText('Versão preparada');
+    results['po-estimar-demanda'] = { clicks: m.clicks, fields: m.fields };
+  };
+
+  // Developer: log hours, entering by the menu.
+  {
+    const m = new Meter(),
+      econ = econOf(dev);
+    await m.click(econ.getByText('Apontar horas próprias', { exact: true }));
+    const form = econ.getByRole('form', { name: 'Apontar horas próprias' });
+    await m.select(
+      form.getByRole('combobox', { name: 'Projeto das horas', exact: true }),
+      { label: 'Integração ERP' },
+    );
+    const demand = form.getByRole('combobox', {
+      name: 'Demanda das horas',
+      exact: true,
+    });
+    await m.select(
+      demand,
+      (await demand.locator('option').nth(1).getAttribute('value'))!,
+    );
+    await m.fill(form.getByLabel('Duração em minutos'), '90');
+    await m.fill(
+      form.getByLabel('Comentário do apontamento'),
+      'Ajuste de integração',
+    );
+    await shot(dev, 'before-desenvolvedor-apontar-1280');
+    await dev.setViewportSize({ width: 390, height: 844 });
+    await shot(dev, 'before-desenvolvedor-apontar-390');
+    await dev.setViewportSize({ width: 1280, height: 900 });
+    await m.click(form.getByRole('button', { name: 'Registrar minutos' }));
+    await expect(econ.getByRole('status')).toContainText('Horas pendentes');
+    results['desenvolvedor-apontar-horas'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+    };
+  }
+
+  // Gestor: decide a submitted scope, entering by the menu.
+  {
+    await manager.reload();
+    await open(manager, 'Comercial');
+    await manager.waitForLoadState('networkidle');
+    const m = new Meter(),
+      c = manager.getByRole('region', { name: 'Controle comercial' });
+    results['tela-comercial-gestor'] = await screenFacts(manager);
+    await shot(manager, 'before-comercial-gestor-1280');
+    const sel = c.getByRole('combobox', {
+      name: 'Versão de escopo',
+      exact: true,
+    });
+    const v = await sel
+      .locator('option')
+      .filter({ hasText: 'Submetido' })
+      .first()
+      .getAttribute('value');
+    await m.select(sel, v!);
+    await m.fill(
+      c.getByLabel('Justificativa da decisão'),
+      'Escopo conferido com o cliente',
+    );
+    await shot(manager, 'before-comercial-decidir-1280');
+    await m.click(c.getByRole('button', { name: 'Aprovar escopo' }));
+    await expect(c.getByRole('status')).toContainText('Decisão humana');
+    results['gestor-decidir-escopo'] = { clicks: m.clicks, fields: m.fields };
+  }
+
+  // PO: link an uncovered demand to an approved scope item.
+  {
+    await po.reload();
+    await open(po, 'Comercial');
+    await po.waitForLoadState('networkidle');
+    const m = new Meter(),
+      c = po.getByRole('region', { name: 'Controle comercial' });
+    const form = c.getByRole('form', { name: 'Revisar cobertura comercial' });
+    const target = await demandToCover(po);
+    results['po-demanda-coberta'] = target.title;
+    results['po-itens-disponiveis'] = target.itemCount;
+    await m.select(
+      form.getByRole('combobox', {
+        name: 'Demanda para cobertura',
+        exact: true,
+      }),
+      target.id,
+    );
+    await m.select(
+      form.getByRole('combobox', {
+        name: 'Item de escopo aprovado',
+        exact: true,
+      }),
+      target.itemId,
+    );
+    await shot(po, 'before-comercial-cobertura-1280');
+    await m.click(form.getByRole('button', { name: 'Confirmar cobertura' }));
+    await expect(c.getByRole('status')).toContainText('Cobertura revisada');
+    results['po-vincular-cobertura'] = { clicks: m.clicks, fields: m.fields };
+  }
+
+  await estimateTask();
+
+  writeFileSync(
+    `${OUT}/metrics-before.json`,
+    JSON.stringify(results, null, 2) + '\n',
+  );
+});

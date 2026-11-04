@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
   import type { Component } from 'svelte';
-  import { statuses, transitions } from '../shared/domain';
+  import {
+    dayText,
+    instantFromText,
+    statuses,
+    statusLabels,
+    timeLabel,
+    transitions,
+  } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
   import './style.css';
   import {
@@ -14,7 +21,8 @@
     takeReturn,
   } from './routes';
   import type { Location, RouteId } from './routes';
-  import type { SessionView, Member, Role } from '../shared/identity';
+  import { roleLabels } from '../shared/identity';
+  import type { SessionView, Member } from '../shared/identity';
   import type { Overview as OverviewData } from '../shared/overview';
   // Module screens load on first visit (separate chunks), then stay mounted while
   // hidden so drafts, selections and scroll survive switching between modules.
@@ -56,6 +64,7 @@
           userId: s.user.id,
           members,
           onChanged: refresh,
+          query: route.query,
         };
       case 'economia':
         return {
@@ -65,6 +74,7 @@
           role,
           userId: s.user.id,
           query: route.query,
+          onChanged: refresh,
         };
       case 'atendimento-inteligente':
         return {
@@ -146,20 +156,7 @@
   let editStatus = $state<Status>('new');
   let editOwner = $state('');
   let editAction = $state('');
-  const labels: Record<Status, string> = {
-    new: 'Nova',
-    triage: 'Em triagem',
-    ready: 'Pronta',
-    in_progress: 'Em execução',
-    blocked: 'Bloqueada',
-    done: 'Concluída',
-  };
-  const roleLabels: Record<Role, string> = {
-    administrator: 'Administrador',
-    manager: 'Gestor',
-    po: 'PO',
-    developer: 'Desenvolvedor',
-  };
+  const labels = statusLabels;
   const kindLabels: Record<string, string> = {
     meeting: 'Reunião',
     service: 'Atendimento',
@@ -275,21 +272,17 @@
   $effect(() => {
     document.title = `Catus OS · ${connected ? page.title : 'Mission Control'}`;
   });
-  function when(iso: string) {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime())
-      ? iso
-      : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-  }
+  const when = timeLabel;
   function focusFirst(node: HTMLElement) {
     node.scrollIntoView({ block: 'nearest' });
     node.querySelector<HTMLElement>('select,textarea,input')?.focus();
   }
   onMount(() => {
     const now = new Date();
-    occurred = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 16);
+    const local = new Date(
+      now.getTime() - now.getTimezoneOffset() * 60000,
+    ).toISOString();
+    occurred = `${dayText(local)} ${local.slice(11, 16)}`;
     applyRoute(route);
     void execute(initialize);
     addEventListener('hashchange', navigated);
@@ -962,13 +955,19 @@
               <form
                 onsubmit={(e) => {
                   e.preventDefault();
+                  const occurredAt = instantFromText(occurred);
+                  if (!occurredAt) {
+                    error =
+                      'Informe uma data e hora válidas em DD/MM/AAAA HH:MM.';
+                    return;
+                  }
                   void create(
                     'interactions',
                     {
                       project_id: projectId,
                       kind,
                       summary,
-                      occurred_at: new Date(occurred).toISOString(),
+                      occurred_at: occurredAt,
                     },
                     (id) => {
                       summary = '';
@@ -994,10 +993,11 @@
                     ></select
                   ></label
                 ><label
-                  >Data e hora local<input
-                    type="datetime-local"
+                  >Data e hora local (DD/MM/AAAA HH:MM)<input
                     bind:value={occurred}
                     required
+                    inputmode="numeric"
+                    autocomplete="off"
                   /></label
                 ><label
                   >Resumo e contexto<textarea

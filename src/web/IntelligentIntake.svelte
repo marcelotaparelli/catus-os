@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { timeLabel } from '../shared/domain';
   import type { Interaction, Project } from '../shared/domain';
   import type {
     AiCapability,
@@ -302,8 +303,8 @@
         class="secondary"
         disabled={busy}
         onclick={() => open(j.id)}
-        >{new Date(j.created_at).toLocaleString()} · {labels[j.state]} · {j
-          .provider_config.model}</button
+        >{timeLabel(j.created_at)} · {labels[j.state]} · {j.provider_config
+          .model}</button
       >{/each}{#if !jobs.length}<p class="muted">
         Nenhuma extração registrada.
       </p>{/if}
@@ -476,7 +477,7 @@
       <h3>Histórico de revisões humanas</h3>
       <ul>
         {#each selected.reviews as r}<li>
-            {new Date(r.created_at).toLocaleString()} · {r.action} · autor {r.actor_user_id}
+            {timeLabel(r.created_at)} · {r.action} · autor {r.actor_user_id}
             · proposta {r.proposal_id}
             <details>
               <summary>Antes / depois</summary>

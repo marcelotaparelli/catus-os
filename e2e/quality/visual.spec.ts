@@ -80,6 +80,37 @@ test('M3 developer read-only view (768)', async ({ page, as }) => {
   await expect(m3(page)).toHaveScreenshot('m3-developer-768.png', mask(page));
 });
 
+const econ = (page: Page) =>
+  page.getByRole('region', { name: 'Inteligência econômica' });
+// Today's date fills the hours form, so date fields are masked along with timestamps.
+const maskDates = (page: Page) => ({
+  mask: [page.locator('time'), page.locator('input[placeholder="DD/MM/AAAA"]')],
+});
+
+test('Economia administrator chooses what to prepare (1280)', async ({
+  page,
+  as,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await as('administrator');
+  await visit(page, 'Economia');
+  await econ(page).getByRole('tab', { name: 'Preparar' }).click();
+  await expect(econ(page)).toHaveScreenshot(
+    'economia-admin-preparar-1280.png',
+    maskDates(page),
+  );
+});
+
+test('Economia developer logs hours on mobile (390)', async ({ page, as }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await as('developer');
+  await visit(page, 'Economia');
+  await expect(econ(page)).toHaveScreenshot(
+    'economia-developer-390.png',
+    maskDates(page),
+  );
+});
+
 test('Mission Control developer on mobile (390)', async ({ page, as }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await as('developer');

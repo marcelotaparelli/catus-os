@@ -14,8 +14,8 @@ const CONTRACT = `PILOTO ${run} Contrato Sintético`;
 const MEETING = `SYNTHETIC PILOT ${run} reunião: checkout com abandono alto`;
 const ITEM = `PILOTO ${run} checkout contratado`;
 const REQUEST = `PILOTO ${run} Revisar checkout`;
-const FROM = '2026-10-01',
-  UNTIL = '2026-10-31';
+const FROM = '01/10/2026',
+  UNTIL = '31/10/2026';
 
 function econ(page: Page) {
   return page.getByRole('region', { name: 'Inteligência econômica' });
@@ -45,12 +45,13 @@ async function prepareEconomic(
   await open(page, 'Economia');
   const e = econ(page);
   await e.getByRole('button', { name: 'Atualizar economia' }).click();
-  await openDetails(e, 'Preparar premissas e estimativas');
+  await e.getByRole('tab', { name: 'Preparar' }).click();
   const form = e.getByRole('form', { name: 'Preparar registro econômico' });
-  await form
-    .getByRole('combobox', { name: 'Tipo de registro econômico', exact: true })
-    .selectOption(kind);
-  if (!['config', 'rate'].includes(kind))
+  // The PO only prepares estimates: the form opens directly, with no type to choose.
+  if (kind !== 'estimate')
+    await form.locator(`input[type=radio][value=${kind}]`).check();
+  // An estimate takes its project from the demand.
+  if (!['config', 'rate', 'estimate'].includes(kind))
     await form
       .getByRole('combobox', { name: 'Projeto econômico', exact: true })
       .selectOption({ label: PROJECT });
@@ -71,13 +72,14 @@ async function approveEconomic(page: Page, source: string) {
   await open(page, 'Economia');
   const e = econ(page);
   await e.getByRole('button', { name: 'Atualizar economia' }).click();
-  await openDetails(e, 'Versões e decisões econômicas');
+  await e.getByRole('tab', { name: /^Para decidir/ }).click();
   await e
     .getByLabel('Justificativa econômica de decisão/reversão')
     .fill(`Conferência independente ${source}`);
   const record = e.locator('article').filter({ hasText: source });
   await record.getByRole('button', { name: /^Aprovar registro/ }).click();
-  await expect(record).toContainText('Aprovado');
+  await expect(e.getByRole('status')).toContainText('decisão registrada');
+  await expect(record).toHaveCount(0);
 }
 async function editRequest(
   page: Page,
@@ -222,8 +224,8 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     await pc
       .getByRole('combobox', { name: 'Moeda', exact: true })
       .selectOption('USD');
-    await pc.getByLabel('Vigência inicial (UTC)').fill('2020-01-01');
-    await pc.getByLabel('Vigência final (UTC)').fill('2099-12-31');
+    await pc.getByLabel('Vigência inicial (UTC)').fill('01/01/2020');
+    await pc.getByLabel('Vigência final (UTC)').fill('31/12/2099');
     await pc.getByLabel('Referência documental').fill(`SYNTHETIC-PILOT-${run}`);
     await pc
       .getByRole('button', { name: 'Registrar contrato', exact: true })
@@ -362,21 +364,21 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
       'config',
       `PILOT-${run}-CONFIG`,
       async (f) => {
-        await f.getByLabel('Tributos em pontos-base').fill('1000');
-        await f.getByLabel('Comissões em pontos-base').fill('500');
+        await f.getByLabel('Tributos (%)').fill('10');
+        await f.getByLabel('Comissões (%)').fill('5');
         await f
           .getByRole('combobox', { name: 'Regra de overhead', exact: true })
           .selectOption('per_labor_minute');
-        await f
-          .getByLabel('Overhead por hora em unidades mínimas')
-          .fill('1200');
-        await expect(f.locator('.money-preview').first()).toHaveText(
-          '= USD 12,00',
+        await f.getByLabel('Overhead por hora (USD)').fill('12,00');
+        await expect(f.getByText('= USD 12,00')).toBeVisible();
+        // Monday to Friday and an 8-hour day come filled; the approver still sees them.
+        await expect(f.getByRole('checkbox', { name: 'Seg' })).toBeChecked();
+        await expect(
+          f.getByRole('checkbox', { name: 'Dom' }),
+        ).not.toBeChecked();
+        await expect(f.getByLabel('Horas de trabalho por dia')).toHaveValue(
+          '8h',
         );
-        await f
-          .getByLabel('Dias de trabalho ISO separados por vírgula')
-          .fill('1,2,3,4,5');
-        await f.getByLabel('Minutos de trabalho por dia').fill('480');
       },
     );
     await approveEconomic(admin, `PILOT-${run}-CONFIG`);
@@ -384,7 +386,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
       await f
         .getByRole('combobox', { name: 'Profissional econômico', exact: true })
         .selectOption({ label: 'Dev Browser · dev@browser.test' });
-      await f.getByLabel('Custo por hora em unidades mínimas').fill('6000');
+      await f.getByLabel('Custo por hora (USD)').fill('60,00');
       await expect(f.getByText('= USD 60,00')).toBeVisible();
     });
     await approveEconomic(admin, `PILOT-${run}-RATE`);
@@ -399,14 +401,12 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
         })
         .selectOption({ label: 'V1 · Piloto V1' });
       await f
-        .getByLabel('Valor contratado na competência em unidades mínimas')
-        .fill('1000000');
+        .getByLabel('Valor contratado na competência (USD)')
+        .fill('10.000,00');
       await f
         .getByRole('combobox', { name: 'Regra de reconhecimento', exact: true })
         .selectOption('manual');
-      await f
-        .getByLabel('Receita reconhecida em unidades mínimas')
-        .fill('400000');
+      await f.getByLabel('Receita reconhecida (USD)').fill('4000');
       await f.getByLabel('Custos externos estão completos').check();
       await f.getByLabel('Apontamentos estão completos').check();
       // Fixed price: no retainer balance fields are asked for.
@@ -424,9 +424,7 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
             exact: true,
           })
           .selectOption({ label: 'Dev Browser · dev@browser.test' });
-        await f
-          .getByLabel('Capacidade disponível alocada em minutos')
-          .fill('1000');
+        await f.getByLabel('Capacidade alocada (horas)').fill('1000min');
       },
     );
     await approveEconomic(admin, `PILOT-${run}-CAPACITY`);
@@ -435,16 +433,8 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
       'direct_cost',
       `PILOT-${run}-DIRECT`,
       async (f) => {
-        const t = f.getByRole('combobox', {
-          name: 'Termos aprovados para planejamento',
-          exact: true,
-        });
-        await t.selectOption(
-          (await t
-            .locator('option')
-            .filter({ hasText: PROJECT })
-            .getAttribute('value'))!,
-        );
+        // The project has one approved term: it is inherited, not asked for.
+        await expect(f).toContainText('herdadas dos termos aprovados');
         await f.getByLabel('Referência única da despesa').fill(`PILOT-${run}`);
         await f
           .getByRole('combobox', {
@@ -452,15 +442,9 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
             exact: true,
           })
           .selectOption('external');
-        await f
-          .getByLabel('Orçamento da despesa em unidades mínimas')
-          .fill('20000');
-        await f
-          .getByLabel('Parcela incorrida em unidades mínimas')
-          .fill('5000');
-        await f
-          .getByLabel('Parcela para concluir em unidades mínimas')
-          .fill('15000');
+        await f.getByLabel('Orçamento da despesa (USD)').fill('200,00');
+        await f.getByLabel('Parcela incorrida (USD)').fill('50');
+        await f.getByLabel('Parcela para concluir (USD)').fill('150');
       },
       false,
     );
@@ -473,31 +457,22 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
       'estimate',
       `PILOT-${run}-ESTIMATE`,
       async (f) => {
-        await expect(
-          f.getByRole('combobox', { name: 'Tipo de registro econômico' }),
-        ).not.toContainText('Custo por hora');
-        const t = f.getByRole('combobox', {
-          name: 'Termos aprovados para planejamento',
-          exact: true,
-        });
-        await t.selectOption(
-          (await t
-            .locator('option')
-            .filter({ hasText: PROJECT })
-            .getAttribute('value'))!,
-        );
+        await expect(f.getByRole('radio')).toHaveCount(0);
+        await expect(f).not.toContainText('Custo por hora');
+        await f
+          .getByRole('combobox', { name: 'Demanda a estimar', exact: true })
+          .selectOption({ label: REQUEST });
+        // The demand brings its project, the only approved term and its owner.
+        await expect(f).toContainText('herdadas dos termos aprovados');
         await f
           .getByRole('combobox', {
             name: 'Profissional econômico',
             exact: true,
           })
           .selectOption({ label: 'Dev Browser · dev@browser.test' });
-        await f
-          .getByRole('combobox', { name: 'Demanda a estimar', exact: true })
-          .selectOption({ label: REQUEST });
-        await f.getByLabel('Baseline prevista em minutos').fill('600');
-        await f.getByLabel('Minutos para concluir').fill('1200');
-        await f.getByLabel('Data prevista de conclusão').fill('2026-10-30');
+        await f.getByLabel('Horas previstas').fill('10');
+        await f.getByLabel('Horas para concluir').fill('20');
+        await f.getByLabel('Data prevista de conclusão').fill('30/10/2026');
       },
       false,
     );
@@ -527,20 +502,16 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     await expect(card(dev)).toContainText('Em execução');
     await open(dev, 'Economia');
     const de = econ(dev);
-    await de.getByText('Apontar horas próprias', { exact: true }).click();
     const hours = de.getByRole('form', { name: 'Apontar horas próprias' });
     await hours
-      .getByRole('combobox', { name: 'Projeto das horas', exact: true })
-      .selectOption({ label: PROJECT });
-    await hours
       .getByRole('combobox', { name: 'Demanda das horas', exact: true })
-      .selectOption({ label: REQUEST });
-    await hours.getByLabel('Data trabalhada').fill('2026-10-15');
-    await hours.getByLabel('Duração em minutos').fill('120');
+      .selectOption({ label: `${REQUEST} · ${PROJECT}` });
+    await hours.getByLabel('Data trabalhada').fill('15/10/2026');
+    await hours.getByLabel('Duração (horas)').fill('2');
     await hours
       .getByLabel('Comentário do apontamento')
       .fill(`PILOT ${run} developer 120 minutes`);
-    await hours.getByRole('button', { name: 'Registrar minutos' }).click();
+    await hours.getByRole('button', { name: 'Registrar horas' }).click();
     await expect(de.getByRole('status')).toContainText('Horas pendentes');
     const devEconomics = JSON.stringify(
       await (await dev.request.get('/api/economics')).json(),
@@ -560,7 +531,6 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     await me
       .getByLabel('Justificativa econômica de decisão/reversão')
       .fill('Minutos do piloto conferidos');
-    await openDetails(me, 'Horas e decisões');
     const entry = me.locator('article').filter({
       has: manager.getByRole('heading', {
         name: `PILOT ${run} developer 120 minutes`,
@@ -569,34 +539,28 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     });
     await expect(entry).toContainText('Dev Browser');
     await entry.getByRole('button', { name: /^Aprovar horas/ }).click();
+    await expect(me.getByRole('status')).toContainText('2h de Dev Browser');
+    await expect(entry).toHaveCount(0);
+    await me.getByRole('tab', { name: 'Horas' }).click();
     await expect(entry).toContainText('Aprovadas');
+    await me.getByRole('tab', { name: 'Rentabilidade' }).click();
     const reportForm = me.getByRole('form', {
       name: 'Calcular observação econômica',
     });
-    const reportTerms = reportForm.getByRole('combobox', {
-      name: 'Termos para relatório',
-      exact: true,
-    });
-    await reportTerms.selectOption(
-      (await reportTerms
-        .locator('option')
-        .filter({ hasText: PROJECT })
-        .getAttribute('value'))!,
-    );
     await reportForm.getByLabel('Data de corte das horas').fill(UNTIL);
     await reportForm
-      .getByRole('button', { name: 'Calcular e preservar' })
+      .getByRole('button', { name: `Calcular e preservar ${PROJECT}` })
       .click();
     const report = me
       .getByRole('article', { name: /^Relatório econômico/ })
       .filter({ hasText: PROJECT });
     // Same inputs as the API-built M4 suite must give identical deterministic figures.
-    await expect(report).toContainText('USD 10000,00');
-    await expect(report).toContainText('USD 3284,00');
-    await expect(report).toContainText('USD 6716,00');
+    await expect(report).toContainText('USD 10.000,00');
+    await expect(report).toContainText('USD 3.284,00');
+    await expect(report).toContainText('USD 6.716,00');
     await expect(report).toContainText('EAC acima do orçamento');
-    await expect(report).toContainText('600 / 120 / 0 / 1200');
-    await expect(report).toContainText('1000 minutos');
+    await expect(report).toContainText('10h / 2h / 0h / 20h');
+    await expect(report).toContainText('16h40');
     await expect(report).not.toContainText('incompleta');
 
     // 10. Mission Control shows one consistent state for every role.
@@ -622,11 +586,12 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
     ).toContainText(/[1-9]/);
     await manager.reload();
     await open(manager, 'Economia');
+    await econ(manager).getByRole('tab', { name: 'Rentabilidade' }).click();
     await expect(
       econ(manager)
         .getByRole('article', { name: /^Relatório econômico/ })
         .filter({ hasText: PROJECT }),
-    ).toContainText('USD 3284,00');
+    ).toContainText('USD 3.284,00');
 
     // 11. Audit trail: manager sees who did what; PO cannot read it.
     await open(manager, 'Auditoria');
