@@ -2,6 +2,10 @@
 
 Branch `feat/pilot-readiness` (base `feat/m5-acceptance @ b4fc3cf`). Runbook: [docs/PILOT.md](docs/PILOT.md). Não iniciar M6. M2 (LLM) e M5 (agentes) permanecem desligados no piloto.
 
+## Value-first MVP
+
+PR `feat/value-first-mvp` aguarda revisão; ver [docs/VALUE_FIRST.md](docs/VALUE_FIRST.md). Economia e Comercial seguem densos: a simplificação profunda é da frente `catus-ux-engineer`.
+
 ## P0 — Bloqueios do proprietário (sem eles não há piloto com pessoas)
 
 1. **Host privado de homologação (G2):** opção preferida do proprietário: Docker Compose no Arch — `deploy/catus.sh install` e `verify --recreate` com `0 FAIL`, CA em perfil Firefox dedicado ([docs/DOCKER.md](docs/DOCKER.md) §7). Alternativa nativa: executar [docs/G2_HOST.md](docs/G2_HOST.md) num host Linux persistente com systemd (não na VM efêmera de desenvolvimento) até `scripts/g2-preflight.sh` terminar com `0 FAIL`; registrar itens HUMAN e testes negativos. Ensaio na VM descartável aprovado exceto os itens do próprio host.

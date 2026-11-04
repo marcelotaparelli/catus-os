@@ -15,6 +15,7 @@
   } from './routes';
   import type { Location, RouteId } from './routes';
   import type { SessionView, Member, Role } from '../shared/identity';
+  import type { Overview as OverviewData } from '../shared/overview';
   // Module screens load on first visit (separate chunks), then stay mounted while
   // hidden so drafts, selections and scroll survive switching between modules.
   const loaders = {
@@ -25,6 +26,22 @@
     auditoria: () => import('./AuditLog.svelte'),
     entrega: () => import('./DeliveryControl.svelte'),
   };
+  // Role reading of the Mission Control. Awaited with the first data load so the page
+  // does not shift when it appears; separate chunk to keep the initial bundle small.
+  const loadOverview = () => import('./Overview.svelte');
+  let Reading = $state.raw<Component<any> | null>(null);
+  let readingFailed = $state(false);
+  async function ensureReading() {
+    if (Reading) return;
+    try {
+      Reading = (await loadOverview()).default as Component<any>;
+      readingFailed = false;
+    } catch {
+      readingFailed = true;
+    }
+  }
+  let overview = $state<OverviewData | null>(null);
+  let overviewError = $state('');
   type LazyId = keyof typeof loaders;
   const lazyIds = Object.keys(loaders) as LazyId[];
   /** Props per module screen; identical to the former single-page wiring. */
@@ -41,7 +58,14 @@
           onChanged: refresh,
         };
       case 'economia':
-        return { api, data, members, role, userId: s.user.id };
+        return {
+          api,
+          data,
+          members,
+          role,
+          userId: s.user.id,
+          query: route.query,
+        };
       case 'atendimento-inteligente':
         return {
           api,
@@ -221,11 +245,14 @@
     }
     if (next.id && session && allowed(next.id, session.role))
       visited[next.id] = true;
+    if (next.id === 'mission-control' && session) void ensureReading();
   }
   async function navigated() {
     if (route.id) scrollTops.set(route.id, window.scrollY);
     applyRoute(parse(location.hash));
     error = notice = '';
+    // Decisions taken in other modules must show here without a manual refresh.
+    if (route.id === 'mission-control' && session) void refreshOverview();
     await tick();
     window.scrollTo({
       top: (route.id && scrollTops.get(route.id)) || 0,
@@ -317,9 +344,20 @@
     if (creation) creationAttempts.delete(path);
     return result as T;
   }
+  async function refreshOverview() {
+    try {
+      overview = await api<OverviewData>('overview');
+      overviewError = '';
+    } catch (e) {
+      // The operational screen stays usable; nothing is shown as if it were a value.
+      overview = null;
+      overviewError = e instanceof Error ? e.message : 'Falha inesperada';
+    }
+  }
   async function refresh() {
     data = await api<Snapshot>('mission-control');
     members = await api<Member[]>('members');
+    await refreshOverview();
   }
   async function execute(action: () => Promise<void>) {
     if (busy) return;
@@ -354,6 +392,8 @@
     editing = null;
     ownerFilter = '';
     members = [];
+    overview = null;
+    overviewError = '';
     data = { clients: [], projects: [], interactions: [], requests: [] };
     // Unmount module screens so nothing from this session or organization lingers.
     visited = {};
@@ -373,7 +413,12 @@
     }
     if (!res.ok) throw new Error('Não foi possível verificar a sessão');
     session = (await res.json()) as SessionView;
-    await refresh();
+    await Promise.all([
+      refresh(),
+      parse(location.hash).id === 'mission-control'
+        ? ensureReading()
+        : undefined,
+    ]);
     const back = takeReturn();
     if (back && !location.hash.replace(/^#\/?/, ''))
       history.replaceState(history.state, '', back);
@@ -394,12 +439,18 @@
       await initialize();
     });
   }
-  async function create(path: string, body: unknown, clear: () => void) {
+  // Each saved record preselects itself in the next form, so nobody retypes the chain.
+  async function create(
+    path: string,
+    body: unknown,
+    clear: (id: string) => void,
+    next: string,
+  ) {
     await execute(async () => {
-      await api(path, 'POST', body);
-      clear();
+      const saved = await api<{ id: string }>(path, 'POST', body);
+      clear(saved.id);
       await refresh();
-      notice = 'Registro salvo.';
+      notice = `Registro salvo. ${next}`;
     });
   }
   function edit(r: WorkRequest) {
@@ -561,6 +612,13 @@
         </section>
       {/if}
       {#if show('mission-control')}
+        <!-- Ready before the first paint (see initialize), so nothing shifts when it appears. -->
+        {#if Reading}<Reading
+            {overview}
+            error={overviewError}
+            requests={data.requests}
+            userId={session.user.id}
+          />{:else if readingFailed}{@render chunkFailed()}{/if}
         <section class="stats" aria-label="Resumo operacional">
           <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
           <div>
@@ -604,6 +662,14 @@
                         <span class="muted">Próxima ação:</span>
                         {r.next_action}
                       </p>
+                      <a
+                        class="text-link"
+                        href={href('economia', {
+                          painel: 'apontar',
+                          projeto: r.project_id ?? '',
+                          demanda: r.id,
+                        })}>Apontar horas nesta demanda</a
+                      >
                     </div>
                   </li>{/each}
               </ol>
@@ -828,6 +894,15 @@
                 >Cliente → Projeto → Atendimento → Solicitação</span
               >
             </div>
+            <p class="next-step" role="note">
+              <strong>Próximo passo:</strong>
+              {#if !data.clients.length}cadastre o cliente em 01.{:else if !data.projects.length}crie
+                o projeto em 02.{:else if !data.interactions.length}registre o
+                atendimento em 03.{:else if !data.requests.length}crie a
+                solicitação em 04.{:else}para nova demanda de um atendimento
+                registrado, use 04; só preencha 01–03 se o cliente, o projeto ou
+                o atendimento forem novos.{/if}
+            </p>
             <div class="forms">
               <form
                 onsubmit={(e) => {
@@ -835,7 +910,11 @@
                   void create(
                     'clients',
                     { name: clientName },
-                    () => (clientName = ''),
+                    (id) => {
+                      clientName = '';
+                      clientId = id;
+                    },
+                    'Próximo passo: 02 · Projeto.',
                   );
                 }}
               >
@@ -854,7 +933,11 @@
                   void create(
                     'projects',
                     { client_id: clientId, name: projectName },
-                    () => (projectName = ''),
+                    (id) => {
+                      projectName = '';
+                      projectId = id;
+                    },
+                    'Próximo passo: 03 · Atendimento.',
                   );
                 }}
               >
@@ -887,7 +970,11 @@
                       summary,
                       occurred_at: new Date(occurred).toISOString(),
                     },
-                    () => (summary = ''),
+                    (id) => {
+                      summary = '';
+                      interactionId = id;
+                    },
+                    'Próximo passo: 04 · Solicitação.',
                   );
                 }}
               >
@@ -940,6 +1027,7 @@
                       owner = '';
                       nextAction = '';
                     },
+                    'Agora vincule a cobertura em Comercial e estime em Economia.',
                   );
                 }}
               >

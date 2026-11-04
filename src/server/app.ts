@@ -46,6 +46,7 @@ import {
   getMembers,
   getAudit,
 } from './modules/mission-control';
+import { overview } from './economics/overview';
 import { createClient } from './modules/clients';
 import { createProject } from './modules/projects';
 import { createInteraction } from './modules/interactions';
@@ -239,6 +240,9 @@ export function createApp(
               break;
             case '/api/audit':
               result = response(await getAudit(ctx));
+              break;
+            case '/api/overview':
+              result = response(await overview(ctx));
               break;
             case '/api/mission-control':
               result = response(await getMissionControl(ctx));

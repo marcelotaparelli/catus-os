@@ -43,15 +43,15 @@ CATUS_PW_WS=ws://127.0.0.1:3001/ npm run test:quality   # idêntico ao CI, com o
 | Métrica                                        | Antes (página única)     | Navegação por módulo | Orçamento      |
 | ---------------------------------------------- | ------------------------ | -------------------- | -------------- |
 | JS inicial bruto / gzip                        | 153,3 kB / 51,1 kB       | 76,5 kB / 28,6 kB    | 90 kB / 33 kB  |
-| JS total bruto / gzip (soma dos chunks)        | 153,3 kB / 51,1 kB       | 166,2 kB / 61,7 kB   | 180 kB / 70 kB |
+| JS total bruto / gzip (soma dos chunks)        | 153,3 kB / 51,1 kB       | 190,2 kB / 70,9 kB   | 215 kB / 80 kB |
 | CSS bruto / gzip                               | 10,4 kB / 3,0 kB         | 11,7 kB / 3,3 kB     | 16 kB / 5 kB   |
-| Chamadas de API na abertura                    | 10–11 (todos os módulos) | 4                    | 4              |
+| Chamadas de API na abertura                    | 10–11 (todos os módulos) | 5 (`/api/overview`)  | 5              |
 | Tela inicial utilizável (preview)              | 240–517 ms (tudo)        | 240–243 ms           | 1000 ms        |
 | Troca para o Comercial (chunk + dados, 1ª vez) | —                        | 143–149 ms           | 500 ms         |
 | LCP / CLS                                      | 92–156 ms / 0,004        | 72–96 ms / 0,004     | 1000 ms / 0,05 |
 | Interação M3 (abrir formulário / escopo)       | 32–66 ms                 | 38 ms                | 150 ms         |
 
-O total cresce porque cada chunk é comprimido separadamente e pela navegação (cerca de 5 kB gzip); o que o usuário baixa para começar caiu 44%.
+Value-first MVP: a leitura por papel do Mission Control é um chunk próprio, e o JS inicial segue dentro do orçamento original. O total cresce porque cada chunk é comprimido separadamente e pela navegação (cerca de 5 kB gzip); o que o usuário baixa para começar caiu 44%.
 
 Lighthouse não foi adicionado: traria uma dependência pesada e um segundo navegador, e não mede nada além do que estas métricas cobrem para um SPA autenticado em rede local.
 

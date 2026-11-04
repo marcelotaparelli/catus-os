@@ -120,6 +120,7 @@ test('only Mission Control data loads at start; each module loads once, on first
   expect([...new Set(api)].sort()).toEqual([
     'GET /api/members',
     'GET /api/mission-control',
+    'GET /api/overview',
     'GET /api/session',
   ]);
   api.length = 0;

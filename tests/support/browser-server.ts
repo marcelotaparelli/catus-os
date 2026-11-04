@@ -10,19 +10,32 @@ await pool.query(
   'TRUNCATE rate_limits,idempotency_keys,audit_events,sessions,oidc_transactions,requests,interactions,projects,clients,memberships,users,organizations CASCADE',
 );
 const org = crypto.randomUUID(),
-  orgB = crypto.randomUUID();
-await pool.query('INSERT INTO organizations(id,name) VALUES($1,$2),($3,$4)', [
-  org,
-  'Browser Catus',
-  orgB,
-  'Browser Other',
-]);
+  orgB = crypto.randomUUID(),
+  // Own tenant for the e-commerce demonstration, so its periods and approvals
+  // cannot collide with the other journeys that share this disposable database.
+  orgDemo = crypto.randomUUID();
+await pool.query(
+  'INSERT INTO organizations(id,name) VALUES($1,$2),($3,$4),($5,$6)',
+  [
+    org,
+    'Browser Catus',
+    orgB,
+    'Browser Other',
+    orgDemo,
+    'Agência Demo E-commerce (sintético)',
+  ],
+);
 for (const [email, name, role, organization] of [
   ['po@browser.test', 'PO Browser', 'po', org],
   ['dev@browser.test', 'Dev Browser', 'developer', org],
   ['manager@browser.test', 'Gestor Browser', 'manager', org],
   ['admin@browser.test', 'Admin Browser', 'administrator', org],
   ['outsider@browser.test', 'Other Browser', 'po', orgB],
+  ['demo.admin@browser.test', 'Alice Admin', 'administrator', orgDemo],
+  ['demo.gestor@browser.test', 'Marina Gestora', 'manager', orgDemo],
+  ['demo.po@browser.test', 'Paulo PO', 'po', orgDemo],
+  ['demo.dev@browser.test', 'Davi Dev', 'developer', orgDemo],
+  ['demo.dev2@browser.test', 'Bia Dev', 'developer', orgDemo],
 ]) {
   const id = crypto.randomUUID();
   await pool.query(

@@ -166,3 +166,34 @@ export function moneyLabel(
   const digits = ['JPY', 'CLP'].includes(currency) ? 0 : 2;
   return `${currency} ${sign}${digits ? `${abs / 100n},${(abs % 100n).toString().padStart(2, '0')}` : abs}`;
 }
+/** Same value as moneyLabel, with thousands separators for executive reading. */
+export function moneyGrouped(
+  minor: string | null | undefined,
+  currency: string,
+): string {
+  const label = moneyLabel(minor, currency);
+  return minor == null
+    ? label
+    : label.replace(/\d+/, (whole) =>
+        whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.'),
+      );
+}
+export function percentLabel(bps: string | null | undefined): string {
+  if (bps == null) return 'Indisponível';
+  const n = BigInt(bps),
+    abs = n < 0n ? -n : n;
+  return `${n < 0n ? '-' : ''}${abs / 100n},${(abs % 100n).toString().padStart(2, '0')}%`;
+}
+export function hoursLabel(minutes: number | null | undefined): string {
+  if (minutes == null) return 'Indisponível';
+  const abs = Math.abs(minutes),
+    h = Math.floor(abs / 60),
+    m = abs % 60;
+  return `${minutes < 0 ? '-' : ''}${h}h${m ? String(m).padStart(2, '0') : ''}`;
+}
+/** ISO day (UTC) as dd/mm/aaaa; parsing as text avoids any timezone shift. */
+export function dayLabel(iso: string | null | undefined): string {
+  if (!iso) return 'Indisponível';
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${d}/${m}/${y}`;
+}

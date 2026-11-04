@@ -82,7 +82,7 @@ async function member(ctx: Context, id: unknown) {
     throw new HttpError(404, 'Profissional indisponível nesta organização');
   return p;
 }
-async function allRecords(ctx: Context): Promise<EconomicRecord[]> {
+export async function allRecords(ctx: Context): Promise<EconomicRecord[]> {
   return (
     await ctx.db.query(
       `SELECT r.*,d.decision,d.snapshot decision_snapshot,d.decided_at FROM economic_records r LEFT JOIN economic_decisions d ON d.record_id=r.id AND d.organization_id=r.organization_id WHERE r.organization_id=$1 ORDER BY r.created_at,r.id`,
@@ -94,7 +94,7 @@ async function allRecords(ctx: Context): Promise<EconomicRecord[]> {
     valid_until: dateText(r.valid_until),
   }));
 }
-function current(records: EconomicRecord[]) {
+export function current(records: EconomicRecord[]) {
   return records.filter(
     (r) =>
       r.decision === 'approved' &&
@@ -111,7 +111,7 @@ async function record(ctx: Context, id: unknown) {
   if (!r) throw new HttpError(404, 'Registro econômico não encontrado');
   return r;
 }
-async function times(
+export async function times(
   ctx: Context,
 ): Promise<(TimeEntry & { snapshot: Record<string, unknown> | null })[]> {
   return (
@@ -755,18 +755,17 @@ export async function timeAction(
   });
   return { id: t.id, state: action };
 }
-export async function generateReport(ctx: Context, b: Record<string, unknown>) {
-  financial(ctx);
-  fields(b, ['terms_id', 'as_of']);
-  const records = await allRecords(ctx),
-    approved = current(records),
-    term = approved.find(
-      (r) => r.id === uuid(b.terms_id) && r.kind === 'terms',
-    );
-  if (!term) throw new HttpError(409, 'Termos aprovados atuais obrigatórios');
-  const asof = day(b.as_of);
-  if (asof > today() || asof < term.valid_from)
-    throw new HttpError(422, 'Data de corte inválida');
+/**
+ * Gathers one observation's frozen inputs. Shared by the persisted report and the
+ * read-only executive overview, so both are always the same deterministic M4 calculation.
+ */
+export async function observe(
+  ctx: Context,
+  approved: EconomicRecord[],
+  allEntries: Awaited<ReturnType<typeof times>>,
+  term: EconomicRecord,
+  asof: string,
+) {
   const p = await project(ctx, term.project_id),
     contract = (
       await ctx.db.query(
@@ -801,7 +800,7 @@ export async function generateReport(ctx: Context, b: Record<string, unknown>) {
         r.valid_until === term.valid_until &&
         r.currency === term.currency,
     );
-  const entries = (await times(ctx)).filter(
+  const entries = allEntries.filter(
     (t) =>
       t.project_id === term.project_id &&
       t.work_date >= term.valid_from &&
@@ -937,28 +936,47 @@ export async function generateReport(ctx: Context, b: Record<string, unknown>) {
     actual_missing: am,
     alerts,
   };
+  const inputs = {
+    engine_input: input,
+    terms: term,
+    config: config ?? null,
+    estimates,
+    costs,
+    capacities,
+    time_entries: entries,
+    commercial_basis: {
+      contract_id: contract.id,
+      scope_id: scoped.id,
+      scope_number: scoped.number,
+      contract_kind: contract.kind,
+      currency: contract.currency,
+      valid_from: dateText(contract.valid_from),
+      valid_until: dateText(contract.valid_until),
+    },
+    client_id: p.client_id,
+  };
+  return { input, inputs, project: p, entries, estimates };
+}
+export async function generateReport(ctx: Context, b: Record<string, unknown>) {
+  financial(ctx);
+  fields(b, ['terms_id', 'as_of']);
+  const records = await allRecords(ctx),
+    approved = current(records),
+    term = approved.find(
+      (r) => r.id === uuid(b.terms_id) && r.kind === 'terms',
+    );
+  if (!term) throw new HttpError(409, 'Termos aprovados atuais obrigatórios');
+  const asof = day(b.as_of);
+  if (asof > today() || asof < term.valid_from)
+    throw new HttpError(422, 'Data de corte inválida');
+  const {
+    input,
+    inputs,
+    project: p,
+  } = await observe(ctx, approved, await times(ctx), term, asof);
   const result = calculate(input),
     id = crypto.randomUUID(),
-    inputs = {
-      engine_input: input,
-      terms: term,
-      config: config ?? null,
-      estimates,
-      costs,
-      capacities,
-      time_entries: entries,
-      commercial_basis: {
-        contract_id: contract.id,
-        scope_id: scoped.id,
-        scope_number: scoped.number,
-        contract_kind: contract.kind,
-        currency: contract.currency,
-        valid_from: dateText(contract.valid_from),
-        valid_until: dateText(contract.valid_until),
-      },
-      client_id: p.client_id,
-    };
-  const json = JSON.stringify(inputs),
+    json = JSON.stringify(inputs),
     hash = inputHash(inputs);
   await ctx.db.query(
     'INSERT INTO economic_reports(id,organization_id,project_id,terms_id,as_of,engine_version,inputs,result,input_hash,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',

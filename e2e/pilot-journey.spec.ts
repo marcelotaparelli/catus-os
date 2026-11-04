@@ -54,10 +54,11 @@ async function prepareEconomic(
     await form
       .getByRole('combobox', { name: 'Projeto econômico', exact: true })
       .selectOption({ label: PROJECT });
-  await form
-    .getByRole('combobox', { name: 'Moeda econômica', exact: true })
-    .selectOption('USD');
+  // Estimates and direct costs inherit currency and period from the approved terms.
   if (period) {
+    await form
+      .getByRole('combobox', { name: 'Moeda econômica', exact: true })
+      .selectOption('USD');
     await form.getByLabel('Início da competência/vigência').fill(FROM);
     await form.getByLabel('Fim da competência/vigência').fill(UNTIL);
   }
@@ -408,14 +409,8 @@ test('controlled pilot: PO intake → owner → scope/contract → approvals →
         .fill('400000');
       await f.getByLabel('Custos externos estão completos').check();
       await f.getByLabel('Apontamentos estão completos').check();
-      await f
-        .getByRole('combobox', { name: 'Regra de excedente', exact: true })
-        .selectOption('none');
-      await f
-        .getByRole('combobox', { name: 'Regra de rollover', exact: true })
-        .selectOption('none');
-      await f.getByLabel('Teto de rollover em minutos').fill('0');
-      await f.getByLabel('Entrada de rollover em minutos').fill('0');
+      // Fixed price: no retainer balance fields are asked for.
+      await expect(f.getByLabel('Regra de excedente')).toHaveCount(0);
     });
     await approveEconomic(admin, `PILOT-${run}-TERMS`);
     await prepareEconomic(
