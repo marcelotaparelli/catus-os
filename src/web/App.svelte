@@ -30,6 +30,8 @@
   // Module screens load on first visit (separate chunks), then stay mounted while
   // hidden so drafts, selections and scroll survive switching between modules.
   const loaders = {
+    overview: () => import('./Overview.svelte'),
+    queue: () => import('./DemandQueue.svelte'),
     comercial: () => import('./CommercialControl.svelte'),
     economia: () => import('./EconomicsControl.svelte'),
     'atendimento-inteligente': () => import('./IntelligentIntake.svelte'),
@@ -37,25 +39,26 @@
     auditoria: () => import('./AuditLog.svelte'),
     entrega: () => import('./DeliveryControl.svelte'),
   };
-  // Role reading of the Mission Control. Awaited with the first data load so the page
-  // does not shift when it appears; separate chunk to keep the initial bundle small.
-  const loadOverview = () => import('./Overview.svelte');
-  let Queue = $state.raw<Component<any> | null>(null);
-  let Reading = $state.raw<Component<any> | null>(null);
-  let readingFailed = $state(false);
-  async function ensureReading() {
-    if (Reading) return;
+  // A failed chunk is null, so the screen can say so. The Mission Control reading is awaited
+  // with the first data load, so the page does not shift when it appears.
+  let mods = $state.raw<
+    Partial<Record<keyof typeof loaders, Component<any> | null>>
+  >({});
+  async function fetchMod(name: keyof typeof loaders) {
+    if (mods[name]) return;
+    let mod = null;
     try {
-      Reading = (await loadOverview()).default as Component<any>;
-      readingFailed = false;
+      mod = (await loaders[name]()).default as Component<any>;
     } catch {
-      readingFailed = true;
+      // Shown by chunkFailed where the module would be.
     }
+    mods = { ...mods, [name]: mod };
   }
+  const ensureReading = () => fetchMod('overview');
   let overview = $state<OverviewData | null>(null);
   let overviewError = $state('');
-  type LazyId = keyof typeof loaders;
-  const lazyIds = Object.keys(loaders) as LazyId[];
+  type LazyId = Exclude<keyof typeof loaders, 'overview' | 'queue'>;
+  const lazyIds = Object.keys(loaders).slice(2) as LazyId[];
   /** Props per module screen; identical to the former single-page wiring. */
   function moduleProps(id: LazyId, s: SessionView): Record<string, unknown> {
     const role = s.role;
@@ -113,20 +116,8 @@
         return { api, data, role };
     }
   }
-  const chunks = new Map<LazyId, Promise<unknown>>();
-  function load(id: LazyId) {
-    let chunk = chunks.get(id);
-    if (!chunk) {
-      chunk = loaders[id]().catch((e: unknown) => {
-        chunks.delete(id);
-        throw e;
-      });
-      chunks.set(id, chunk);
-    }
-    return chunk as Promise<{ default: unknown }>;
-  }
   function prefetch(id: RouteId) {
-    if (id in loaders) load(id as LazyId).catch(() => {});
+    if (id in loaders) void fetchMod(id as LazyId);
   }
   let session = $state<SessionView | null>(null);
   let members = $state<Member[]>([]);
@@ -238,13 +229,12 @@
       filter = (statuses as readonly string[]).includes(estado) ? estado : '';
       ownerFilter = next.query.get('responsavel') ?? '';
     }
-    if (next.id && session && allowed(next.id, session.role))
+    if (next.id && session && allowed(next.id, session.role)) {
       visited[next.id] = true;
+      if (next.id in loaders) void fetchMod(next.id as LazyId);
+    }
     if (next.id === 'mission-control' && session) void ensureReading();
-    if (next.id === 'solicitacoes' && session && !Queue)
-      void import('./DemandQueue.svelte').then(
-        (m) => (Queue = m.default as Component<any>),
-      );
+    if (next.id === 'solicitacoes' && session) void fetchMod('queue');
   }
   async function navigated() {
     if (route.id) scrollTops.set(route.id, window.scrollY);
@@ -723,12 +713,12 @@
       {/if}
       {#if show('mission-control')}
         <!-- Ready before the first paint (see initialize), so nothing shifts when it appears. -->
-        {#if Reading}<Reading
+        {#if mods.overview}<mods.overview
             {overview}
             error={overviewError}
             requests={data.requests}
             userId={session.user.id}
-          />{:else if readingFailed}{@render chunkFailed()}{/if}
+          />{:else if mods.overview === null}{@render chunkFailed()}{/if}
         {#if overview?.followup?.for_me}<p class="attention">
             <strong>{overview.followup.for_me}</strong>
             na sua <a href={href('solicitacoes')}>fila de ações</a>
@@ -803,7 +793,7 @@
         </section>
       {/if}
       {#if show('solicitacoes')}
-        {#if Queue}<Queue
+        {#if mods.queue}<mods.queue
             {api}
             {session}
             {members}
@@ -827,7 +817,7 @@
                   notice = done;
                 }
               })}
-          />{/if}
+          />{:else if mods.queue === null}{@render chunkFailed()}{/if}
         <section class="panel" id="solicitacoes" aria-label="Solicitações">
           <div class="section-heading">
             <div>
@@ -1115,12 +1105,14 @@
             class="route-view"
             hidden={!show(id)}
           >
-            {#await load(id)}<p class="loading" role="status">
-                Carregando módulo…
-              </p>{:then mod}{@const Screen =
-                mod.default as Component<any>}<Screen
+            {#if mods[id]}{@const Screen = mods[id]}<Screen
                 {...moduleProps(id, session)}
-              />{:catch}{@render chunkFailed()}{/await}
+              />{:else if mods[id] === null}{@render chunkFailed()}{:else}<p
+                class="loading"
+                role="status"
+              >
+                Carregando módulo…
+              </p>{/if}
           </div>{/if}{/each}
       {@render feedback()}
     </main>
