@@ -232,6 +232,31 @@ FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace,
 WHERE n.nspname='public' AND c.relkind='r' AND c.relname NOT IN ('rate_limits','oidc_transactions','automation_jobs','demand_alerts')
 SQL
 }
+# automation_jobs and demand_alerts are written by the running app, so they stay out of the
+# exact digest. What must not change is checked here: rows that existed at a given instant
+# keep their immutable columns, and the tables keep their invariants.
+derived_sql() { # instant
+  cat <<SQL
+SELECT (SELECT count(*)||':'||md5(coalesce(string_agg(concat_ws('|',id,request_id,kind,opened_at),',' ORDER BY id),'')) FROM demand_alerts WHERE opened_at<='$1')
+ ||' '||(SELECT count(*)||':'||md5(coalesce(string_agg(concat_ws('|',id,organization_id,kind,request_id,dedupe_key,created_at),',' ORDER BY id),'')) FROM automation_jobs WHERE created_at<='$1')
+SQL
+}
+derived_broken_sql() { # rows breaking an invariant, and invalid or missing unique indexes; must be 0
+  cat <<'SQL'
+SELECT (SELECT count(*) FROM (SELECT 1 FROM demand_alerts WHERE resolved_at IS NULL GROUP BY request_id,kind HAVING count(*)>1) d)
+ +(SELECT count(*) FROM demand_alerts WHERE resolved_at<opened_at OR acknowledged_at<opened_at)
+ +(SELECT count(*) FROM automation_jobs WHERE (state='done' AND finished_at IS NULL) OR attempts<0)
+ +(SELECT count(*) FROM (SELECT 1 FROM automation_jobs GROUP BY organization_id,dedupe_key HAVING count(*)>1) d)
+ +(2-(SELECT count(*) FROM pg_index i WHERE i.indisvalid AND i.indisunique AND i.indrelid IN ('demand_alerts'::regclass,'automation_jobs'::regclass) AND i.indexrelid IN ('demand_alerts_one_open'::regclass,'automation_jobs_organization_id_dedupe_key_key'::regclass)))
+SQL
+}
+check_derived() { # database, what
+  local got
+  got=$(disp_sql "$1" "$(derived_sql "$T0")" 2>&1 || true)
+  [ -n "$F0" ] && [ "$got" = "$F0" ] && pass C "automação e alertas preservados: $2" "$F0" || fail C "automação e alertas divergem: $2" "$got"
+  got=$(disp_sql "$1" "$(derived_broken_sql)" 2>&1 || true)
+  [ "$got" = 0 ] && pass C "automação e alertas íntegros: $2" || fail C "automação e alertas com violação: $2" "$got"
+}
 disp_sql() { # db name, sql
   dcg exec -T db sh -c 'PGPASSWORD=$(cat /run/secrets/pg_admin_password) psql -XAtq -v ON_ERROR_STOP=1 -h 127.0.0.1 -U catus_admin -d "$0" -c "$1"' "$1" "$2"
 }
@@ -351,7 +376,14 @@ EOF
       if disp_sql catus "BEGIN; INSERT INTO organizations(id,name) VALUES('$o','G4 Sintética'); INSERT INTO users(id,issuer,email,display_name) VALUES('$u','https://g4.invalid','g4@example.invalid','Pessoa Sintética'); INSERT INTO memberships(user_id,organization_id,role) VALUES('$u','$o','po'); INSERT INTO clients(id,name,organization_id) VALUES('$cl','Cliente Sintético','$o'); INSERT INTO projects(id,client_id,name,organization_id) VALUES('$pr','$cl','Projeto Sintético','$o'); COMMIT;" >"$OUT/logs/disposable-seed.log" 2>&1; then
         pass C "dados sintéticos inseridos"
       else fail C "dados sintéticos" "ver logs/disposable-seed.log"; fi
+      # A real row in each derived table, so the checks below can never pass on empty tables.
+      i=$(cat /proc/sys/kernel/random/uuid) q=$(cat /proc/sys/kernel/random/uuid)
+      disp_sql catus "BEGIN; INSERT INTO interactions(id,organization_id,project_id,kind,summary,occurred_at) VALUES('$i','$o','$pr','service','Atendimento sintético',now()); INSERT INTO requests(id,organization_id,interaction_id,title,description,status,owner,owner_user_id,next_action,template) VALUES('$q','$o','$i','Demanda sintética','Sintética','new','Pessoa Sintética','$u','Revisar','manutencao'); INSERT INTO automation_jobs(organization_id,kind,dedupe_key,state,finished_at) VALUES('$o','sweep','g4:$o','done',now()); INSERT INTO demand_alerts(organization_id,request_id,kind) VALUES('$o','$q','stalled'); COMMIT;" >/dev/null 2>&1 || true
+      c=$(disp_sql catus "SELECT (SELECT count(*) FROM automation_jobs WHERE dedupe_key='g4:$o')||' '||(SELECT count(*) FROM demand_alerts WHERE organization_id='$o')" 2>&1 || true)
+      [ "$c" = "1 1" ] && pass C "automação e alertas com dados sintéticos" || fail C "automação e alertas sem dados sintéticos" "$c"
       D0=$(disp_sql catus "$(digest_sql)")
+      T0=$(disp_sql catus "SELECT clock_timestamp()" 2>/dev/null || true)
+      F0=$(disp_sql catus "$(derived_sql "$T0")" 2>/dev/null || true)
       run C backup dcg run --rm backup || true
       bk=$(find "$WORK/backups" -maxdepth 1 -type f -name '*.catus' | head -1)
       if [ -n "$bk" ]; then
@@ -363,6 +395,7 @@ EOF
           D1=$(disp_sql "$rdb" "$(digest_sql)" 2>&1 || true)
           [ -n "$D0" ] && [ "$D0" = "$D1" ] && pass C "restauração idêntica ao original" "$(wc -w <<<"$D0") tabelas comparadas por contagem e md5" ||
             { fail C "restauração difere do original" "ver logs/restore-diff.log" && diff <(tr ' ' '\n' <<<"$D0") <(tr ' ' '\n' <<<"$D1") >"$OUT/logs/restore-diff.log" || true; }
+          check_derived "$rdb" "na restauração"
         fi
         cp "$bk" "$WORK/backups/tampered.catus" && printf '\x00' | dd of="$WORK/backups/tampered.catus" bs=1 seek=$(($(stat -c %s "$bk") / 2)) conv=notrunc status=none
         printf '\xff' | dd of="$WORK/backups/tampered.catus" bs=1 seek=$(($(stat -c %s "$bk") / 2 + 1)) conv=notrunc status=none
@@ -375,8 +408,10 @@ EOF
       else fail C "backup cifrado gerado" "nenhum arquivo"; fi
       run C recreate-containers dcg up -d --force-recreate && { disp_healthy db edge app cleanup || fail C "saudáveis após recriar"; }
       [ -n "$D0" ] && [ "$(disp_sql catus "$(digest_sql)")" = "$D0" ] && pass C "dados preservados após recriar contêineres" || fail C "dados mudaram após recriar contêineres"
+      check_derived catus "após recriar contêineres"
       run C down-up dcg down && run C up-again dcg up -d && { disp_healthy db edge app cleanup || fail C "saudáveis após down/up"; }
       [ -n "$D0" ] && [ "$(disp_sql catus "$(digest_sql)")" = "$D0" ] && pass C "dados preservados após down (sem -v) e up" || fail C "dados mudaram após down/up"
+      check_derived catus "após down/up"
       run C restart-db dcg restart db && { disp_healthy db || fail C "banco saudável após reinício"; }
       c=""
       for i in $(seq 1 30); do

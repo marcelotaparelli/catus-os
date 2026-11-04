@@ -102,7 +102,8 @@ export function assess(f: DemandFacts, today: string, now: Date): Signal[] {
       label: 'Bloqueada',
       reason: f.blocked_reason ?? 'Motivo do bloqueio não registrado.',
     });
-  if (!f.follow_up_on && ['ready', 'in_progress', 'blocked'].includes(f.status))
+  // New demands are born with a commitment: an empty one predates migration 010.
+  if (!f.follow_up_on)
     out.push({
       kind: 'no_follow_up',
       rank: 8,

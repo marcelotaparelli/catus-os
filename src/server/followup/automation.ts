@@ -15,33 +15,40 @@ export interface AutomationJob {
 export type Evaluate = (db: PoolClient, job: AutomationJob) => Promise<void>;
 const MAX_ATTEMPTS = 6;
 
-/** Opens what is true now and resolves what stopped being true; both are idempotent. */
+/**
+ * Opens what is true now and resolves what stopped being true; both are idempotent.
+ * Only demands actually evaluated, or actually closed, can lose an alert: being absent
+ * from a list is never a reason to resolve one.
+ */
 export const evaluate: Evaluate = async (db, job) => {
-  const today = new Date().toISOString().slice(0, 10),
-    now = new Date(),
-    rows = await loadFacts(
-      db,
-      job.organization_id,
-      job.request_id ?? undefined,
-    );
-  // A sweep also covers demands that left the open list: their alerts must close.
-  const known = rows.map((r) => r.id);
-  for (const r of rows) {
-    const kinds = assess(r, today, now).map((s) => s.kind);
-    for (const kind of kinds)
-      await db.query(
-        'INSERT INTO demand_alerts(organization_id,request_id,kind) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
-        [job.organization_id, r.id, kind],
-      );
-    await db.query(
-      'UPDATE demand_alerts SET resolved_at=now() WHERE request_id=$1 AND organization_id=$2 AND resolved_at IS NULL AND NOT kind=ANY($3::text[])',
-      [r.id, job.organization_id, kinds],
-    );
-  }
+  const org = job.organization_id,
+    today = new Date().toISOString().slice(0, 10),
+    now = new Date();
+  // One evaluation at a time per organization, so a sweep cannot undo a newer job's alert.
+  await db.query('SELECT pg_advisory_xact_lock(74612004,hashtext($1))', [org]);
+  const rows = await loadFacts(db, org, job.request_id ?? undefined),
+    requests: string[] = [],
+    kinds: string[] = [],
+    evaluated = rows.map((r) => r.id);
+  for (const r of rows)
+    for (const s of assess(r, today, now)) {
+      requests.push(r.id);
+      kinds.push(s.kind);
+    }
+  await db.query(
+    'INSERT INTO demand_alerts(organization_id,request_id,kind) SELECT $1,r,k FROM unnest($2::uuid[],$3::text[]) AS t(r,k) ON CONFLICT DO NOTHING',
+    [org, requests, kinds],
+  );
+  await db.query(
+    `UPDATE demand_alerts a SET resolved_at=now() WHERE a.organization_id=$1 AND a.resolved_at IS NULL AND a.request_id=ANY($2::uuid[])
+ AND NOT EXISTS(SELECT 1 FROM unnest($3::uuid[],$4::text[]) AS t(r,k) WHERE t.r=a.request_id AND t.k=a.kind)`,
+    [org, evaluated, requests, kinds],
+  );
+  // A sweep reads open demands only: alerts of demands closed since are closed here.
   if (!job.request_id)
     await db.query(
-      'UPDATE demand_alerts SET resolved_at=now() WHERE organization_id=$1 AND resolved_at IS NULL AND NOT request_id=ANY($2::uuid[])',
-      [job.organization_id, known],
+      "UPDATE demand_alerts a SET resolved_at=now() FROM requests r WHERE r.id=a.request_id AND r.organization_id=a.organization_id AND a.organization_id=$1 AND a.resolved_at IS NULL AND r.status='done'",
+      [org],
     );
 };
 

@@ -26,7 +26,7 @@ export type Row = DemandFacts & {
   client_name: string;
 };
 
-/** Facts of open demands, or of one demand in any state. Includes approved estimates and hours. */
+/** Every open demand, or one demand in any state, with approved estimates and hours. Never capped: callers take this as the whole set. */
 export async function loadFacts(
   db: PoolClient,
   organizationId: string,
@@ -42,7 +42,7 @@ export async function loadFacts(
  LEFT JOIN users u ON u.id=r.owner_user_id LEFT JOIN memberships m ON m.user_id=r.owner_user_id AND m.organization_id=r.organization_id
  LEFT JOIN scope_items si ON si.id=r.scope_item_id AND si.organization_id=r.organization_id LEFT JOIN scope_versions s ON s.id=si.scope_id AND s.organization_id=si.organization_id AND s.project_id=p.id LEFT JOIN contracts ct ON ct.id=s.contract_id AND ct.organization_id=s.organization_id
  WHERE r.organization_id=$1 AND ($2::uuid IS NOT NULL AND r.id=$2 OR $2::uuid IS NULL AND r.status<>'done')
- ORDER BY r.updated_at,r.id LIMIT 500`,
+ ORDER BY r.updated_at,r.id`,
     [organizationId, requestId ?? null],
   );
   if (!rows.length) return [];

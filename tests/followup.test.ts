@@ -209,7 +209,7 @@ test('rules: each condition is detected and a healthy demand is silent', () => {
   expect(on({ follow_up_on: '2026-11-04' })).toEqual(['overdue']);
   expect(on({ follow_up_on: '2026-11-05' })).toEqual([]);
   expect(on({ follow_up_on: null })).toEqual(['no_follow_up']);
-  expect(on({ status: 'new', follow_up_on: null })).toEqual([]);
+  expect(on({ status: 'new', follow_up_on: null })).toEqual(['no_follow_up']);
   expect(
     on({
       status: 'blocked',
@@ -746,6 +746,220 @@ test('concurrency: two people acting on one demand, the second gets 409 and no e
   const events = await call<any[]>('manager', `followup/${r.id}/events`);
   expect(events.map((e) => e.changes[0])).toEqual(['created', 'status']);
 });
+test('demands from before migration 010: flagged, usable and given a commitment', async () => {
+  const r = await demand('Anterior à 010');
+  await db.query(
+    'UPDATE requests SET template=NULL,follow_up_on=NULL WHERE id=$1',
+    [r.id],
+  );
+  let q = await queue('dev');
+  expect(kinds(q, r.id)).toEqual(['no_follow_up']);
+  expect(item(q, r.id)!.template).toBeNull();
+  // A legacy demand follows the triage path and asks for no field it does not have.
+  const refused = await raw(
+    'po',
+    `requests/${r.id}`,
+    'PATCH',
+    patchOf(r, { status: 'ready', version: r.version + 0 }),
+  );
+  expect(refused.status).toBe(422);
+  const same = (
+    await db.query(
+      'SELECT status,owner_user_id,next_action,version FROM requests WHERE id=$1',
+      [r.id],
+    )
+  ).rows[0];
+  // Editing without a date keeps it empty; nothing is invented silently.
+  const kept = await call(
+    'dev',
+    `requests/${r.id}`,
+    'PATCH',
+    patchOf(same, { next_action: 'Revista' }),
+  );
+  expect(kept.follow_up_on).toBeNull();
+  await drain();
+  // Moving stage gives the default commitment and the signal goes away.
+  const moved = await call(
+    'po',
+    `requests/${r.id}`,
+    'PATCH',
+    patchOf(kept, { status: 'triage' }),
+  );
+  expect(moved.follow_up_on).not.toBeNull();
+  q = await queue('dev');
+  expect(kinds(q, r.id)).toEqual([]);
+  await drain();
+  expect(
+    (
+      await db.query(
+        "SELECT count(*)::int n FROM demand_alerts WHERE request_id=$1 AND kind='no_follow_up' AND resolved_at IS NULL",
+        [r.id],
+      )
+    ).rows[0].n,
+  ).toBe(0);
+});
+test('migration 010 keeps existing demands untouched and writes no event for them', async () => {
+  const legacy = `fu_legacy_${randomBytes(3).toString('hex')}_test`;
+  await admin.query(`CREATE DATABASE ${ident(legacy)}`);
+  const url = new URL(control);
+  url.pathname = '/' + legacy;
+  const c = new pg.Client({ connectionString: url.href });
+  await c.connect();
+  try {
+    const files = (
+      await Array.fromAsync(new Bun.Glob('*.sql').scan('db/migrations'))
+    ).sort();
+    for (const f of files.filter((f) => f < '010'))
+      await c.query(await Bun.file('db/migrations/' + f).text());
+    const o = crypto.randomUUID(),
+      u = crypto.randomUUID(),
+      cl = crypto.randomUUID(),
+      p = crypto.randomUUID(),
+      i = crypto.randomUUID(),
+      q = crypto.randomUUID();
+    await c.query("INSERT INTO organizations(id,name) VALUES($1,'L')", [o]);
+    await c.query(
+      "INSERT INTO users(id,issuer,email,display_name) VALUES($1,'i','l@l.test','L')",
+      [u],
+    );
+    await c.query(
+      "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,'po')",
+      [u, o],
+    );
+    await c.query(
+      "INSERT INTO clients(id,organization_id,name) VALUES($1,$2,'C')",
+      [cl, o],
+    );
+    await c.query(
+      "INSERT INTO projects(id,organization_id,client_id,name) VALUES($1,$2,$3,'P')",
+      [p, o, cl],
+    );
+    await c.query(
+      "INSERT INTO interactions(id,organization_id,project_id,kind,summary,occurred_at) VALUES($1,$2,$3,'service','S',now())",
+      [i, o, p],
+    );
+    await c.query(
+      "INSERT INTO requests(id,organization_id,interaction_id,title,description,status,owner,owner_user_id,next_action) VALUES($1,$2,$3,'T','D','in_progress','L',$4,'A')",
+      [q, o, i, u],
+    );
+    const before = (await c.query('SELECT * FROM requests')).rows[0];
+    await c.query(
+      await Bun.file('db/migrations/010_demand_followup.sql').text(),
+    );
+    const after = (await c.query('SELECT * FROM requests')).rows[0];
+    expect(after).toEqual({
+      ...before,
+      template: null,
+      follow_up_on: null,
+      blocked_reason: null,
+      waiting_on: null,
+    });
+    expect(
+      (await c.query('SELECT count(*)::int n FROM request_events')).rows[0].n,
+    ).toBe(0);
+    expect(
+      (await c.query('SELECT count(*)::int n FROM automation_jobs')).rows[0].n,
+    ).toBe(0);
+  } finally {
+    await c.end();
+    await dropDisposableDatabase(admin, legacy);
+  }
+});
+test('more than 500 open demands: every one is covered and no open alert is resolved', async () => {
+  await drain();
+  const total = 650,
+    ids_: string[] = [];
+  const rows = await db.query(
+    `INSERT INTO requests(id,organization_id,interaction_id,title,description,status,owner,owner_user_id,next_action,template,follow_up_on,updated_at)
+ SELECT gen_random_uuid(),$1,$2,'Volume '||g,'D','ready','Pessoa dev2',$3,'A','manutencao',current_date-1,now()-make_interval(mins=>g)
+ FROM generate_series(1,$4::int) g RETURNING id`,
+    [org, interaction, ids.dev2, total],
+  );
+  for (const r of rows.rows) ids_.push(r.id);
+  const newest = ids_[0]!,
+    oldest = ids_[total - 1]!;
+  const openOf = async () =>
+    (
+      await db.query(
+        "SELECT count(*)::int n FROM demand_alerts WHERE kind='overdue' AND resolved_at IS NULL AND request_id=ANY($1::uuid[])",
+        [ids_],
+      )
+    ).rows[0].n;
+  await drain();
+  // All of them, including those past any 500 cut in either direction.
+  await enqueueSweeps(runtime, new Date(Date.now() + 45 * 60000));
+  const started = Date.now();
+  await drain();
+  const sweepMs = Date.now() - started;
+  expect(await openOf()).toBe(total);
+  // The queue covers them all too, with the ones past 500 present.
+  const q = await queue('dev2');
+  for (const id of [newest, oldest]) expect(kinds(q, id)).toContain('overdue');
+  expect(q.items.filter((i) => ids_.includes(i.id))).toHaveLength(total);
+  // Repeated and concurrent sweeps neither resolve nor duplicate.
+  const openIds = async () =>
+    (
+      await db.query(
+        'SELECT id FROM demand_alerts WHERE resolved_at IS NULL AND request_id=ANY($1::uuid[]) ORDER BY id',
+        [ids_],
+      )
+    ).rows.map((r) => r.id);
+  const first = await openIds();
+  await enqueueSweeps(runtime, new Date(Date.now() + 50 * 60000));
+  await Promise.all([1, 2, 3, 4].map(() => runDueJobs(runtime)));
+  await drain();
+  expect(await openIds()).toEqual(first);
+  // A failed sweep changes nothing, and the retry leaves the same alerts.
+  let failed = 0;
+  const flaky: Evaluate = async (client, job) => {
+    await evaluate(client, job);
+    if (job.kind === 'sweep' && !failed++) throw new Error('after the writes');
+  };
+  await enqueueSweeps(runtime, new Date(Date.now() + 55 * 60000));
+  await runDueJobs(runtime, { evaluator: flaky, backoffSeconds: 0 });
+  expect(failed).toBeGreaterThan(0);
+  await Bun.sleep(5);
+  await drain();
+  expect(await openIds()).toEqual(first);
+  // Closing one demand past the cut resolves exactly that alert, by its own job.
+  const cur = (
+    await db.query(
+      'SELECT status,owner_user_id,next_action,version FROM requests WHERE id=$1',
+      [oldest],
+    )
+  ).rows[0];
+  const started2 = await call(
+    'dev2',
+    `requests/${oldest}`,
+    'PATCH',
+    patchOf(cur, { status: 'in_progress', follow_up_on: day(2) }),
+  );
+  await call(
+    'dev2',
+    `requests/${oldest}`,
+    'PATCH',
+    patchOf(started2, { status: 'done' }),
+  );
+  await drain();
+  expect(await openOf()).toBe(total - 1);
+  // A closed demand whose own job never ran is closed by the next sweep, and only it.
+  await db.query("UPDATE requests SET status='done' WHERE id=$1", [newest]);
+  await db.query(
+    "UPDATE automation_jobs SET state='done' WHERE request_id=$1 AND state='queued'",
+    [newest],
+  );
+  await enqueueSweeps(runtime, new Date(Date.now() + 60 * 60000));
+  await drain();
+  expect(await openOf()).toBe(total - 2);
+  console.log(`sweep with ${total} open demands: ${sweepMs} ms`);
+  // Leaves the shared database as the other tests expect it.
+  await db.query("UPDATE requests SET status='done' WHERE id=ANY($1::uuid[])", [
+    ids_,
+  ]);
+  await enqueueSweeps(runtime, new Date(Date.now() + 65 * 60000));
+  await drain();
+  expect(await openOf()).toBe(0);
+}, 120000);
 test('summary travels with the overview without an extra start-up call', async () => {
   const o = await call('dev', 'overview');
   expect(o.followup.for_me).toBeGreaterThanOrEqual(0);
