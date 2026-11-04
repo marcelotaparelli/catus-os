@@ -42,9 +42,11 @@ for (const [name, type] of Object.entries({ chromium, firefox, webkit })) {
     for (const f of ['400 16px Inter', '400 16px Lexend']) loaded[f] = (await document.fonts.load(f)).map((x) => x.status);
     return { loaded, faces: [...document.fonts].map((f) => `${f.family} ${f.weight} ${f.status}`), used: getComputedStyle(document.body).fontFamily, heading: getComputedStyle(document.querySelector('h1') ?? document.body).fontFamily, csp: window.__csp };
   });
+  // Page messages are read before the screenshot: Playwright injects its own <style> to take it.
+  const beforeShot = [...console_];
+  const fine = Object.values(r.loaded).every((l) => l.length > 0 && l.every((s) => s === 'loaded')) && !r.csp.length && !failed.length && !beforeShot.some((t) => /font|style|Content.Security|MIME|OTS/i.test(t));
   await page.screenshot({ path: `${OUT}/${name}.png` });
-  const fine = Object.values(r.loaded).every((l) => l.length > 0 && l.every((s) => s === 'loaded')) && !r.csp.length && !failed.length && !console_.some((t) => /font|Content.Security|MIME|OTS/i.test(t));
-  browsers[name] = { version: b.version(), ok: fine, ...r, responses, failed, console: console_ };
+  browsers[name] = { version: b.version(), ok: fine, ...r, responses, failed, console_before_screenshot: beforeShot, console_after_screenshot: console_.slice(beforeShot.length) };
   ok &&= fine;
   await b.close();
 }
