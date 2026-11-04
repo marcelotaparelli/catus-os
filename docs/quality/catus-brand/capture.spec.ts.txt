@@ -1,0 +1,117 @@
+import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { open } from './nav';
+import type { Module } from './nav';
+import { agency } from './support-ux/meter';
+// Before/after evidence: same synthetic agency, same local Chromium, same steps.
+// Copied into e2e/ only when capturing (see docs/quality/catus-brand/README.md).
+const DIR = process.env.BRAND_EVIDENCE ?? 'test-results/brand';
+const WIDTHS = [1280, 390];
+const SCREENS: [string, string, Module, string?][] = [
+  ['gestor', 'manager', 'Mission Control'],
+  ['gestor', 'manager', 'Comercial'],
+  ['gestor', 'manager', 'Economia'],
+  ['gestor', 'manager', 'Economia', 'Rentabilidade'],
+  ['gestor', 'manager', 'Solicitações'],
+  ['admin', 'admin', 'Mission Control'],
+  ['admin', 'admin', 'Economia', 'Preparar'],
+  ['po', 'po', 'Mission Control'],
+  ['po', 'po', 'Comercial'],
+  ['po', 'po', 'Economia'],
+  ['po', 'po', 'Clientes e projetos'],
+  ['dev', 'dev', 'Mission Control'],
+  ['dev', 'dev', 'Economia'],
+  ['dev', 'dev', 'Solicitações'],
+  ['admin', 'admin', 'Atendimento inteligente'],
+  ['admin', 'admin', 'Acesso e usuários'],
+  ['admin', 'admin', 'Auditoria'],
+];
+const slug = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-');
+test('brand before/after captures', async ({ browser }) => {
+  test.setTimeout(420000);
+  mkdirSync(DIR, { recursive: true });
+  const login = await (await browser.newContext()).newPage();
+  await login.setViewportSize({ width: 1280, height: 800 });
+  await login.goto('/');
+  await expect(
+    login.getByRole('link', { name: 'Entrar com conta corporativa' }),
+  ).toBeVisible();
+  await login.screenshot({ path: `${DIR}/login-1280.png` });
+  await login.setViewportSize({ width: 390, height: 844 });
+  await login.screenshot({ path: `${DIR}/login-390.png` });
+  const { pages } = await agency(browser);
+  const metrics: Record<string, unknown> = {};
+  for (const [role, key, module, tab] of SCREENS) {
+    const p = (pages as Record<string, Page>)[key]!;
+    for (const width of WIDTHS) {
+      await p.setViewportSize({ width, height: width > 500 ? 900 : 844 });
+      await p.goto('/#/');
+      await p.reload();
+      await p.waitForLoadState('networkidle');
+      await open(p, module);
+      await p.waitForLoadState('networkidle');
+      await expect(p.getByText(/^Carregando/)).toHaveCount(0);
+      if (tab) await p.getByRole('tab', { name: tab }).click();
+      await p.evaluate(() => document.fonts.ready);
+      await p.waitForTimeout(150);
+      const name = `${slug(module)}-${role}${tab ? '-' + slug(tab) : ''}-${width}`;
+      await p.screenshot({ path: `${DIR}/${name}.png`, fullPage: true });
+      metrics[name] = await p.evaluate(() => ({
+        height: document.documentElement.scrollHeight,
+        overflow:
+          document.documentElement.scrollWidth >
+          document.documentElement.clientWidth,
+        contentTop: Math.round(
+          (document.querySelector('main .panel') ?? document.body).getBoundingClientRect().top + scrollY,
+        ),
+        firstActionTop: Math.round(
+          (document.querySelector('.action-list li, .work-list li, .queue-card') ?? document.body).getBoundingClientRect().top + scrollY,
+        ),
+        actionsInFirstView: [...document.querySelectorAll('.action-list li, .work-list li, .queue-card')].filter(
+          (e) => e.getBoundingClientRect().bottom + scrollY <= innerHeight,
+        ).length,
+      }));
+    }
+  }
+  // States that only exist after an action: a decision being reviewed, and calculated margins.
+  const gestor = (pages as Record<string, Page>).manager!;
+  for (const width of WIDTHS) {
+    await gestor.setViewportSize({ width, height: width > 500 ? 900 : 844 });
+    await gestor.goto('/#/comercial');
+    await gestor.reload();
+    await gestor.waitForLoadState('networkidle');
+    await gestor.getByRole('button', { name: /^Revisar e decidir/ }).first().click();
+    await gestor.waitForTimeout(200);
+    await gestor.screenshot({
+      path: `${DIR}/comercial-gestor-decidindo-${width}.png`,
+      fullPage: true,
+    });
+    await gestor.goto('/#/economia');
+    await gestor.reload();
+    await gestor.waitForLoadState('networkidle');
+    await gestor.getByRole('tab', { name: 'Rentabilidade' }).click();
+    if (width === WIDTHS[0]) {
+      const calc = gestor.locator('.calc-row button');
+      for (const i of [0, 1, 2]) {
+        await calc.nth(i).click({ timeout: 15000 });
+        await gestor.waitForLoadState('networkidle');
+        await gestor.waitForTimeout(300);
+      }
+      await gestor.reload();
+      await gestor.waitForLoadState('networkidle');
+      await gestor.getByRole('tab', { name: 'Rentabilidade' }).click();
+    }
+    await gestor.waitForTimeout(200);
+    await gestor.screenshot({
+      path: `${DIR}/economia-gestor-observacoes-${width}.png`,
+      fullPage: true,
+    });
+  }
+  writeFileSync(`${DIR}/metrics.json`, JSON.stringify(metrics, null, 2));
+});

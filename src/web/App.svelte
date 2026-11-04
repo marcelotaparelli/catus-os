@@ -11,6 +11,8 @@
     transitions,
   } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
+  import { nextStep } from '../shared/followup';
+  import './ui/tokens.css';
   import './style.css';
   import {
     allowed,
@@ -273,6 +275,14 @@
   $effect(() => {
     document.title = `Catus OS · ${connected ? page.title : 'Mission Control'}`;
   });
+  // The compact menu scrolls sideways: the current module must not be out of view.
+  $effect(() => {
+    void route.id;
+    const current = document.querySelector<HTMLElement>(
+      '.mobile-nav [aria-current]',
+    );
+    if (current) current.parentElement!.scrollLeft = current.offsetLeft - 12;
+  });
   const when = timeLabel;
   function focusFirst(node: HTMLElement) {
     node.scrollIntoView({ block: 'nearest' });
@@ -442,11 +452,10 @@
       notice = `Registro salvo. ${next}`;
     });
   }
-  async function openEdit(id: string, to?: Status) {
-    // The queue is read fresher than this snapshot: edit what is current now.
+  async function openEdit(item: WorkRequest, to?: Status) {
+    // The queue is read fresher than this snapshot, and covers demands past its 500.
     await execute(refresh);
-    const r = data.requests.find((x) => x.id === id);
-    if (!r) return;
+    const r = data.requests.find((x) => x.id === item.id) ?? item;
     edit(r);
     editInQueue = true;
     if (to) editStatus = to;
@@ -461,10 +470,25 @@
     editReason = r.blocked_reason ?? '';
     editWaiting = r.waiting_on ?? 'client';
   }
-  async function save() {
-    if (!editing) return;
-    const r = editing;
-    const followUp = editFollowUp && dayFromText(editFollowUp);
+  function nextState(r: WorkRequest) {
+    const to = nextStep(r.status, r.template ?? null)?.to;
+    if (!to || !r.owner_user_id) return;
+    if (session?.role === 'developer') {
+      if (r.owner_user_id !== session.user.id) return;
+      if (to !== 'in_progress' && to !== 'done') return;
+    }
+    return to;
+  }
+  async function save(
+    r = editing,
+    status = editStatus,
+    owner = editOwner,
+    action = editAction,
+  ) {
+    if (!r) return;
+    // Closing from the card has no form: only what the form shows is sent.
+    const fromForm = r === editing;
+    const followUp = fromForm && editFollowUp ? dayFromText(editFollowUp) : '';
     if (followUp === null) {
       error = 'Informe o compromisso em DD/MM/AAAA.';
       return;
@@ -472,10 +496,10 @@
     await execute(async () => {
       try {
         await api(`requests/${r.id}`, 'PATCH', {
-          status: editStatus,
-          owner_user_id: editOwner,
-          next_action: editAction,
-          ...(editStatus === 'blocked'
+          status,
+          owner_user_id: owner,
+          next_action: action,
+          ...(status === 'blocked'
             ? { blocked_reason: editReason, waiting_on: editWaiting }
             : {}),
           // Untouched, the server keeps it or renews one that lapsed when the stage moves.
@@ -571,51 +595,41 @@
       >Recarregar página</button
     >
   </div>{/snippet}
-<svelte:head
-  ><meta
-    name="description"
-    content="Operação da agência: clientes, projetos, atendimentos e solicitações."
-  /></svelte:head
->
-<div class="shell">
-  <aside>
-    <a class="brand" href="#/">CATUS<span>OS</span></a>
-    <p class="eyebrow">WORKSPACE DA AGÊNCIA</p>
-    <nav aria-label="Módulos">
-      {#if connected && nav.length}
-        {#each nav as r (r.id)}<a
-            class="nav"
-            href={href(r.id)}
-            aria-current={route.id === r.id ? 'page' : undefined}
-            onpointerenter={() => prefetch(r.id)}
-            onfocus={() => prefetch(r.id)}>{r.label}</a
-          >{/each}
-      {:else}<span class="nav active">Mission Control</span>{/if}
-    </nav>
-    <p class="aside-note">Operação conectada.<br />Decisões rastreáveis.</p>
-    <div class="local">● Ambiente local</div>
-  </aside>
-  <main>
-    <header>
-      <div>
-        {#if connected}
-          <p class="eyebrow">{page.eyebrow}</p>
-          <h1 tabindex="-1" bind:this={heading}>{page.title}</h1>
-          <p class="muted">{page.description}</p>
-        {:else}
-          <p class="eyebrow">OPERAÇÃO / VISÃO GERAL</p>
-          <h1>Mission Control</h1>
-          <p class="muted">
-            Da conversa à próxima ação, com contexto e responsabilidade.
-          </p>
-        {/if}
-      </div>
-      <span class="badge">IA assistida · revisão humana obrigatória</span>
-    </header>
-    {#if !connected}
+{#snippet advance(r: WorkRequest)}{@const to =
+    nextState(r)}{#if to && editing?.id !== r.id}<button
+      class="secondary"
+      disabled={busy}
+      aria-label={`Avançar: ${labels[to]} · ${r.title}`}
+      onclick={() => {
+        if (to === 'done') void save(r, to, r.owner_user_id!, r.next_action);
+        else {
+          // The action of the old stage may no longer apply: it is shown before saving.
+          edit(r);
+          editStatus = to;
+        }
+      }}>Avançar: {labels[to]}</button
+    >{/if}{/snippet}
+{#snippet logo()}<a class="brand" href="#/" aria-label="Catus OS"
+    ><svg class="logo" viewBox="0 0 191 61" aria-hidden="true"
+      ><use href="#catus-logo" /></svg
+    ><span aria-hidden="true">OS</span></a
+  >{/snippet}
+{#snippet feedback()}{#if error}<p class="feedback error" role="alert">
+      {error}
+    </p>{/if}{#if notice}<p class="feedback" role="status">
+      {notice}
+    </p>{/if}{/snippet}
+{#if !connected}
+  <main class="access-page">
+    {@render logo()}
+    {#if loaded}
+      <header>
+        <p class="eyebrow">Catus OS</p>
+        <h1>Operação conectada. <span>Decisões rastreáveis.</span></h1>
+      </header>
       <section class="panel access">
         <h2>Entre no Catus OS</h2>
-        {#if !loaded}<p>Verificando sessão…</p>{:else if configured}
+        {#if configured}
           <p>
             Use sua conta corporativa previamente autorizada. O acesso depende
             dos vínculos da sua organização.
@@ -631,10 +645,30 @@
             no ambiente.
           </p>{/if}
       </section>
-    {:else if session}
+    {:else}<p class="loading" role="status">Verificando sessão…</p>{/if}
+    {@render feedback()}
+  </main>
+{:else if session}
+  <div class="shell">
+    <aside>
+      <div class="side">
+        {@render logo()}
+        <nav aria-label="Módulos">
+          {#each nav as r (r.id)}<a
+              class="nav"
+              href={href(r.id)}
+              aria-current={route.id === r.id ? 'page' : undefined}
+              onpointerenter={() => prefetch(r.id)}
+              onfocus={() => prefetch(r.id)}>{r.label}</a
+            >{/each}
+        </nav>
+      </div>
+    </aside>
+    <main>
       <div class="toolbar">
-        <span class="muted"
-          >{session.user.name} · {session.user.email} · {roleLabels[
+        {@render logo()}
+        <span class="who"
+          ><strong>{session.user.name}</strong> · {session.user.email} · {roleLabels[
             session.role
           ] ?? session.role}<br />{session.organization.name}</span
         >
@@ -655,7 +689,7 @@
         <button class="secondary" disabled={busy} onclick={() => logout()}
           >Sair</button
         >
-        <button class="secondary" disabled={busy} onclick={() => logout(true)}
+        <button class="quiet" disabled={busy} onclick={() => logout(true)}
           >Encerrar todas as sessões</button
         >
       </div>
@@ -665,6 +699,11 @@
             aria-current={route.id === r.id ? 'page' : undefined}>{r.label}</a
           >{/each}
       </nav>
+      <header>
+        <p class="eyebrow">{page.eyebrow}</p>
+        <h1 tabindex="-1" bind:this={heading}>{page.title}</h1>
+        <p class="muted">{page.description}</p>
+      </header>
       {#if !route.id || !permitted}
         <section class="panel route-message" aria-label={page.title}>
           <h2>
@@ -674,8 +713,8 @@
           </h2>
           <p class="muted">
             {route.id
-              ? 'O menu mostra apenas os módulos do seu papel, e o servidor recusa operações fora dele. Peça acesso a um administrador, se necessário.'
-              : 'Ele pode ter sido digitado incorretamente ou ser de uma versão anterior.'}
+              ? 'Peça acesso a um administrador, se necessário.'
+              : 'Confira o endereço digitado.'}
           </p>
           <a class="button-link" href={href('mission-control')}
             >Ir para o Mission Control</a
@@ -694,25 +733,6 @@
             <strong>{overview.followup.for_me}</strong>
             na sua <a href={href('solicitacoes')}>fila de ações</a>
           </p>{/if}
-        <section class="stats" aria-label="Resumo operacional">
-          <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
-          <div>
-            <span>Projetos</span><strong>{data.projects.length}</strong>
-          </div>
-          <div>
-            <span>Solicitações</span><strong>{data.requests.length}</strong>
-          </div>
-          <div><span>Em aberto</span><strong>{open}</strong></div>
-          <div>
-            <span>Atribuídas a mim (abertas)</span><strong>{mine}</strong>
-          </div>
-          <div>
-            <span>Bloqueadas</span><strong
-              >{data.requests.filter((r) => r.status === 'blocked')
-                .length}</strong
-            >
-          </div>
-        </section>
         <div class="overview">
           <section class="panel" aria-labelledby="mc-mine">
             <div class="section-heading">
@@ -738,20 +758,20 @@
                         <span class="muted">Próxima ação:</span>
                         {r.next_action}
                       </p>
-                      <a
-                        class="text-link"
-                        href={href('economia', {
-                          painel: 'apontar',
-                          projeto: r.project_id ?? '',
-                          demanda: r.id,
-                        })}>Apontar horas nesta demanda</a
-                      >
+                      <p class="row-actions">
+                        {@render advance(r)}<a
+                          class="text-link"
+                          href={href('economia', {
+                            painel: 'apontar',
+                            projeto: r.project_id ?? '',
+                            demanda: r.id,
+                          })}>Apontar horas nesta demanda</a
+                        >
+                      </p>
+                      {#if editing?.id === r.id && !editInQueue}{@render editForm()}{/if}
                     </div>
                   </li>{/each}
               </ol>
-              {#if priorities.length > 5}<p class="muted">
-                  E mais {priorities.length - 5} em aberto.
-                </p>{/if}
             {:else}<div class="empty compact">
                 <h3>Nada atribuído a você</h3>
                 <a class="button-link secondary" href={href('solicitacoes')}
@@ -760,6 +780,27 @@
               </div>{/if}
           </section>
         </div>
+        <section class="stats" aria-label="Resumo operacional">
+          <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
+          <div>
+            <span>Projetos</span><strong>{data.projects.length}</strong>
+          </div>
+          <div>
+            <span>Solicitações carregadas</span><strong
+              >{data.requests.length}</strong
+            >
+          </div>
+          <div><span>Em aberto</span><strong>{open}</strong></div>
+          <div>
+            <span>Atribuídas a mim (abertas)</span><strong>{mine}</strong>
+          </div>
+          <div>
+            <span>Bloqueadas</span><strong
+              >{data.requests.filter((r) => r.status === 'blocked')
+                .length}</strong
+            >
+          </div>
+        </section>
       {/if}
       {#if show('solicitacoes')}
         {#if Queue}<Queue
@@ -772,10 +813,20 @@
             editingId={editInQueue ? editing?.id : undefined}
             form={editForm}
             onedit={openEdit}
-            onsaved={async () => {
-              await refresh();
-              changes++;
-            }}
+            {busy}
+            run={(done: string, action: () => Promise<unknown>) =>
+              execute(async () => {
+                try {
+                  await action();
+                } finally {
+                  // Also after a failure: a lost race must show the current data.
+                  if (done) changes++;
+                }
+                if (done) {
+                  await refresh();
+                  notice = done;
+                }
+              })}
           />{/if}
         <section class="panel" id="solicitacoes" aria-label="Solicitações">
           <div class="section-heading">
@@ -801,6 +852,10 @@
               >
             </div>
           </div>
+          {#if data.requests.length >= 500}<p class="muted">
+              Mostrando as 500 mais recentes. A fila de ações cobre todas as
+              abertas.
+            </p>{/if}
           {#if !visible.length}<div class="empty">
               <h3>Nenhuma solicitação neste recorte</h3>
               <p>Ajuste os filtros ou registre uma demanda acima.</p>
@@ -852,15 +907,13 @@
                         ?.summary ?? r.interaction_id}
                     </dd>
                   </dl>
-                  {#if editing?.id === r.id && !editInQueue}{@render editForm()}{:else}<button
+                  {#if editing?.id === r.id && !editInQueue}{@render editForm()}{:else}{@render advance(
+                      r,
+                    )}<button
                       class="secondary"
                       disabled={busy ||
                         (session.role === 'developer' &&
                           r.owner_user_id !== session.user.id)}
-                      title={session.role === 'developer' &&
-                      r.owner_user_id !== session.user.id
-                        ? 'Somente o responsável atribuído pode atualizar'
-                        : undefined}
                       onclick={() => edit(r)}>Atualizar solicitação</button
                     >{/if}
                 </article>{/each}
@@ -877,10 +930,7 @@
               </div>
             </div>
             <p class="next-step" role="note">
-              <strong>Próximo passo:</strong>
-              {#if !data.clients.length}cadastre o cliente em 01.{:else if !data.projects.length}crie
-                o projeto em 02.{:else}registre o atendimento em 03 e a demanda
-                em Solicitações.{/if}
+              Depois do atendimento, registre a demanda em Solicitações.
             </p>
             <div class="forms">
               <form
@@ -893,7 +943,7 @@
                       clientName = '';
                       clientId = id;
                     },
-                    'Próximo passo: 02 · Projeto.',
+                    '',
                   );
                 }}
               >
@@ -916,7 +966,7 @@
                       projectName = '';
                       projectId = id;
                     },
-                    'Próximo passo: 03 · Atendimento.',
+                    '',
                   );
                 }}
               >
@@ -958,7 +1008,7 @@
                     () => {
                       summary = '';
                     },
-                    'Próximo passo: registre a demanda em Solicitações.',
+                    '',
                   );
                 }}
               >
@@ -1004,10 +1054,7 @@
               <h2>Clientes, projetos e atendimentos</h2>
             </div>
           </div>
-          <p class="muted">
-            Atendimentos e reuniões mais recentes (até 500) por projeto, com a
-            quantidade de solicitações abertas.
-          </p>
+          <p class="muted">Até 500 atendimentos mais recentes por projeto.</p>
           {#if !data.clients.length}<div class="empty">
               <h3>Nenhum cliente cadastrado</h3>
               <p>
@@ -1075,9 +1122,7 @@
                 {...moduleProps(id, session)}
               />{:catch}{@render chunkFailed()}{/await}
           </div>{/if}{/each}
-    {/if}
-    {#if error}<p class="feedback error" role="alert">
-        {error}
-      </p>{/if}{#if notice}<p class="feedback" role="status">{notice}</p>{/if}
-  </main>
-</div>
+      {@render feedback()}
+    </main>
+  </div>
+{/if}

@@ -1,0 +1,43 @@
+/* Catus design tokens. Origin of every value: docs/DESIGN_SYSTEM.md. */
+@font-face {
+  font-family: Inter;
+  src: url('../fonts/inter-var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: Lexend;
+  src: url('../fonts/lexend-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+:root {
+  /* Brand, as served by dev.catus.com.br */
+  --navy: #203c5e;
+  --navy-hover: #15293f;
+  --blue: #1e6bd0;
+  --blue-tint: #f0f4f9;
+  --blue-soft: #9fbfe8;
+  --text: #3d4b5c;
+  --muted: #5b6878;
+  --surface: #f5f7f9;
+  --disabled: #eef1f4;
+  --line: #e3e7eb;
+  --line-strong: #c9d0d8;
+  /* Derived for WCAG 1.4.11: field borders need 3:1 against white */
+  --field-line: #8590a0;
+  /* Status: good and critical come from the site's form feedback */
+  --good: #1e5b33;
+  --good-bg: #ecf6ef;
+  --bad: #8a1f17;
+  --bad-bg: #fdf0ef;
+  /* The site has no warning colour: functional, not brand */
+  --warn: #7a4a0c;
+  --warn-bg: #fdf1dc;
+  --font-ui: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-body: Lexend, ui-sans-serif, system-ui, sans-serif;
+  --radius-s: 3px;
+  --radius: 4px;
+  --radius-l: 6px;
+  --gap: 16px;
+}

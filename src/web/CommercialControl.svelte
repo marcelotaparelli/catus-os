@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { roleLabels } from '../shared/identity';
   import { onMount, untrack } from 'svelte';
   import { idempotentPost } from './ui/post';
   import { dayText } from '../shared/domain';
@@ -375,7 +376,6 @@
   </div>
   <p class="muted lead">
     Aprovação operacional e estado “Pronta” não autorizam escopo ou contrato.
-    Sem cobertura vigente, a demanda permanece pendente de análise comercial.
   </p>
   <p class="next-step"><strong>Próximo passo:</strong> {nextStep}</p>
   {#if error}<p role="alert" class="error">{error}</p>{/if}{#if info}<p
@@ -386,9 +386,11 @@
   {#if role === 'administrator'}<details class="m3-policy">
       <summary>Configurar alçadas comerciais</summary>
       <p class="muted">
-        Política atual: {view.policy?.approval_roles.join(', ') ??
-          'nenhuma; decisões bloqueadas'} · versão {view.policy?.version ?? 0}.
-        O servidor impede autoaprovação de qualquer preparador.
+        Política atual: {view.policy?.approval_roles
+          .map((r) => roleLabels[r] ?? r)
+          .join(', ') ?? 'nenhuma; decisões bloqueadas'} · versão {view.policy
+          ?.version ?? 0}. O servidor impede autoaprovação de qualquer
+        preparador.
       </p>
       <form
         class="policy-form"
@@ -563,17 +565,16 @@
                 placeholder="Identificador do documento externo autorizado"
               /></label
             >
-            <p class="muted span">
-              Referência textual, sem upload ou consulta externa. Nenhum valor
-              financeiro é inferido.
-            </p>
             <div class="actions">
               <button disabled={busy}>Registrar contrato</button>
             </div>
           </form>
         </details>{/if}
       <div class="cards m3-cards">
-        {#each view.contracts as c}<article class="request">
+        {#each view.contracts as c}{@const scope = view.scopes
+            .filter((x) => x.contract_id === c.id)
+            .sort((a, b) => b.number - a.number)[0]}
+          <article class="request">
             <div class="card-top">
               <h4>{c.title}</h4>
               <span class="status" data-status={c.state}
@@ -591,6 +592,15 @@
               {c.version}
             </p>
             <p class="description">Documento: {c.document_reference}</p>
+            {#if scope}<p>
+                Escopo V{scope.number}:
+                <strong>{labels[scope.state]}</strong>
+              </p>
+              <button
+                class="secondary"
+                aria-label={`Ver escopo de ${c.title}`}
+                onclick={() => openScope(scope.id)}>Ver escopo</button
+              >{/if}
             {#if ['manager', 'administrator'].includes(role) && c.state !== 'closed'}<button
                 class="secondary"
                 disabled={busy}
@@ -778,7 +788,9 @@
           {#if selected.decision}<p>
               Decisão: {labels[selected.decision.decision]} por {who(
                 selected.decision.actor_user_id,
-              )} ({selected.decision.actor_role}), política v{selected.decision
+              )} ({(roleLabels as Record<string, string>)[
+                selected.decision.actor_role
+              ] ?? selected.decision.actor_role}), política v{selected.decision
                 .policy_version}, revisão {selected.decision.scope_version}, em
               <time datetime={selected.decision.decided_at}
                 >{when(selected.decision.decided_at)}</time

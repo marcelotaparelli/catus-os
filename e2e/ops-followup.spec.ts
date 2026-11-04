@@ -48,9 +48,7 @@ test('nothing is forgotten: full journey, right people, failure and effort', asy
     const form = queueOf(po).getByRole('form', { name: 'Registrar demanda' });
     await m.fill(form.getByLabel('Título'), 'Corrigir frete na vitrine');
     await m.click(form.getByRole('button', { name: 'Criar demanda' }));
-    await expect(queueOf(po).getByRole('status')).toContainText(
-      'Demanda registrada',
-    );
+    await expect(po.getByRole('status')).toContainText('Demanda registrada');
     effort.registrar = {
       clicks: m.clicks,
       fields: m.fields,
@@ -402,6 +400,21 @@ test('nothing is forgotten: full journey, right people, failure and effort', asy
     await openQueue(dev);
     await expect(itemOf(dev, title)).toContainText('Compromisso vencido');
     await expect(itemOf(dev, title)).not.toContainText('novo');
+  }
+
+  // 8b. A long queue says how many there are and shows them all, step by step.
+  {
+    await db.query(
+      `INSERT INTO requests(id,organization_id,interaction_id,title,description,status,owner,owner_user_id,next_action,template,follow_up_on)
+ SELECT gen_random_uuid(),i.organization_id,i.id,'Lote '||g,'D','ready','Eva Dev',$1,'A','manutencao',current_date+1 FROM interactions i,generate_series(1,70) g WHERE i.id=$2`,
+      [ids.dev2, c.id],
+    );
+    await openQueue(dev2);
+    const list = queueOf(dev2).getByRole('list', { name: /^Com você/ });
+    await expect(queueOf(dev2)).toContainText(/Com você \(\d{2,}\)/);
+    await expect(list.getByRole('listitem')).toHaveCount(60);
+    await queueOf(dev2).getByRole('button', { name: 'Mostrar mais' }).click();
+    await expect(list.getByText('Lote 70', { exact: true })).toBeVisible();
   }
 
   // 9. Hours over the estimate: only for who may read them, with the economics untouched.

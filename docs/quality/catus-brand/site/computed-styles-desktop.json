@@ -1,0 +1,1513 @@
+{
+  "samples": {
+    "body": [
+      {
+        "cls": "home-v2",
+        "txt": "Pular para o conteúdoPlataformas ▾Não sabe qual es",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "header": [
+      {
+        "cls": "v2-header",
+        "txt": "Plataformas ▾Não sabe qual escolher? Fale com a ge",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(255, 255, 255, 0.38)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92) rgb(61, 75, 92) rgba(255, 255, 255, 0.55)",
+        "borderWidth": "0px 0px 1px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "nav": [
+      {
+        "cls": "v2-nav",
+        "txt": "Plataformas ▾Não sabe qual escolher? Fale com a ge",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "500",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-mobile-menu",
+        "txt": "PlataformasSoluçõesCasesConteúdoSobreContato",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "17px",
+        "fontWeight": "500",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "8px 32px 24px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "nav a": [
+      {
+        "cls": "",
+        "txt": "Plataformas ▾",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "500",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(30, 107, 208)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "500",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(30, 107, 208)",
+        "borderWidth": "0px",
+        "padding": "0px 12px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(30, 107, 208)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "500",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(30, 107, 208)",
+        "borderWidth": "0px",
+        "padding": "0px 12px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(30, 107, 208)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "500",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(30, 107, 208)",
+        "borderWidth": "0px",
+        "padding": "0px 12px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "h1": [
+      {
+        "cls": "",
+        "txt": "Seu e-commerce cresceu.Sua estrutura precisa acomp",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "37.44px",
+        "fontWeight": "600",
+        "lineHeight": "41.184px",
+        "letterSpacing": "-0.936px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "h2": [
+      {
+        "cls": "",
+        "txt": "Da estratégia à operação, cuidamos de tudo.",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "32px",
+        "fontWeight": "600",
+        "lineHeight": "38.4px",
+        "letterSpacing": "-0.64px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Projetos reais de quem evolui com a gente.",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "32px",
+        "fontWeight": "600",
+        "lineHeight": "38.4px",
+        "letterSpacing": "-0.64px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "A plataforma certa para cada etapa do seu negócio.",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "32px",
+        "fontWeight": "600",
+        "lineHeight": "38.4px",
+        "letterSpacing": "-0.64px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Parceiros que completam a sua operação",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "32px",
+        "fontWeight": "600",
+        "lineHeight": "38.4px",
+        "letterSpacing": "-0.64px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "h3": [
+      {
+        "cls": "",
+        "txt": "Estratégia & Consultoria",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "17px",
+        "fontWeight": "600",
+        "lineHeight": "21.25px",
+        "letterSpacing": "-0.17px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Desenvolvimento & E-commerce",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "17px",
+        "fontWeight": "600",
+        "lineHeight": "21.25px",
+        "letterSpacing": "-0.17px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Performance & CRO",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "17px",
+        "fontWeight": "600",
+        "lineHeight": "21.25px",
+        "letterSpacing": "-0.17px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Integrações & Sistemas",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "17px",
+        "fontWeight": "600",
+        "lineHeight": "21.25px",
+        "letterSpacing": "-0.17px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "h4": [],
+    "p": [
+      {
+        "cls": "v2-eyebrow",
+        "txt": "ESTRATÉGIA · TECNOLOGIA · RESULTADOS",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "lineHeight": "normal",
+        "letterSpacing": "1.68px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "uppercase",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Estruturamos operações digitais completas para esc",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "17px",
+        "fontWeight": "300",
+        "lineHeight": "28.05px",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-eyebrow",
+        "txt": "PARCEIRO CERTIFICADO DAS PRINCIPAIS PLATAFORMAS",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "lineHeight": "normal",
+        "letterSpacing": "1.68px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "uppercase",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-eyebrow",
+        "txt": "SOLUÇÕES",
+        "color": "rgb(30, 107, 208)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "lineHeight": "normal",
+        "letterSpacing": "1.68px",
+        "borderRadius": "0px",
+        "borderColor": "rgb(30, 107, 208)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "uppercase",
+        "backgroundImage": "none"
+      }
+    ],
+    "a": [
+      {
+        "cls": "v2-skip",
+        "txt": "Pular para o conteúdo",
+        "color": "rgb(30, 107, 208)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(30, 107, 208)",
+        "borderWidth": "0px",
+        "padding": "12px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-brand",
+        "txt": "",
+        "color": "rgb(30, 107, 208)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(30, 107, 208)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Plataformas ▾",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "500",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(30, 107, 208)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "500",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(30, 107, 208)",
+        "borderWidth": "0px",
+        "padding": "0px 12px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "button": [
+      {
+        "cls": "v2-burger",
+        "txt": "☰",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(213, 218, 224)",
+        "borderWidth": "1px",
+        "padding": "1px 6px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-button v2-contact-button",
+        "txt": "Agendar diagnóstico",
+        "color": "rgb(255, 255, 255)",
+        "backgroundColor": "rgb(32, 60, 94)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "600",
+        "lineHeight": "18px",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "1px",
+        "padding": "13px 22px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-footer-cookies",
+        "txt": "Cookies",
+        "color": "rgb(91, 104, 120)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(91, 104, 120)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-button v2-button-small",
+        "txt": "Aceitar",
+        "color": "rgb(255, 255, 255)",
+        "backgroundColor": "rgb(32, 60, 94)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "lineHeight": "21.7px",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "1px",
+        "padding": "10px 18px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "[class*=btn]": [],
+    "[class*=button]": [
+      {
+        "cls": "v2-button v2-button-small",
+        "txt": "Agendar diagnóstico",
+        "color": "rgb(255, 255, 255)",
+        "backgroundColor": "rgb(32, 60, 94)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "600",
+        "lineHeight": "18px",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "1px",
+        "padding": "10px 18px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-button",
+        "txt": "Agendar diagnóstico",
+        "color": "rgb(255, 255, 255)",
+        "backgroundColor": "rgb(32, 60, 94)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "600",
+        "lineHeight": "18px",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "1px",
+        "padding": "13px 22px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-button v2-button-secondary",
+        "txt": "Ver cases reais",
+        "color": "rgb(32, 60, 94)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "600",
+        "lineHeight": "18px",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(201, 208, 216)",
+        "borderWidth": "1px",
+        "padding": "12px 21px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-button v2-contact-button",
+        "txt": "Agendar diagnóstico",
+        "color": "rgb(255, 255, 255)",
+        "backgroundColor": "rgb(32, 60, 94)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "15px",
+        "fontWeight": "600",
+        "lineHeight": "18px",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(32, 60, 94)",
+        "borderWidth": "1px",
+        "padding": "13px 22px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "[class*=card]": [
+      {
+        "cls": "v2-solution-card",
+        "txt": "Estratégia & ConsultoriaDiagnóstico e roadmap de c",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "6px",
+        "borderColor": "rgb(227, 231, 235)",
+        "borderWidth": "1px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-solution-card",
+        "txt": "Desenvolvimento & E-commerceLojas nas plataformas ",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "6px",
+        "borderColor": "rgb(227, 231, 235)",
+        "borderWidth": "1px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-solution-card",
+        "txt": "Performance & CROAnálise de desempenho e jornada d",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "6px",
+        "borderColor": "rgb(227, 231, 235)",
+        "borderWidth": "1px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-solution-card",
+        "txt": "Integrações & SistemasERP, marketplaces, PDV e log",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "6px",
+        "borderColor": "rgb(227, 231, 235)",
+        "borderWidth": "1px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "input": [
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(207, 213, 220)",
+        "borderWidth": "1px",
+        "padding": "0px 12px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(207, 213, 220)",
+        "borderWidth": "1px",
+        "padding": "0px 12px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(207, 213, 220)",
+        "borderWidth": "1px",
+        "padding": "0px 12px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "textarea": [
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Inter, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "21px",
+        "letterSpacing": "normal",
+        "borderRadius": "4px",
+        "borderColor": "rgb(207, 213, 220)",
+        "borderWidth": "1px",
+        "padding": "10px 12px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "footer": [
+      {
+        "cls": "v2-footer",
+        "txt": "Evoluímos operações digitais para resultados reais",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(230, 233, 237) rgb(61, 75, 92) rgb(61, 75, 92)",
+        "borderWidth": "1px 0px 0px",
+        "padding": "100.8px 0px 0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "footer a": [
+      {
+        "cls": "",
+        "txt": "",
+        "color": "rgb(30, 107, 208)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(30, 107, 208)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Consultoria & Estratégia",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "300",
+        "lineHeight": "20.3px",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Desenvolvimento",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "300",
+        "lineHeight": "20.3px",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "",
+        "txt": "Performance & CRO",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "300",
+        "lineHeight": "20.3px",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ],
+    "section": [
+      {
+        "cls": "v2-hero",
+        "txt": "ESTRATÉGIA · TECNOLOGIA · RESULTADOSSeu e-commerce",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgb(255, 255, 255)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "60px 0px 0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "url(\"https://dev.catus.com.br/home-v2/assets/hero-office.webp\")"
+      },
+      {
+        "cls": "v2-partners wrap",
+        "txt": "PARCEIRO CERTIFICADO DAS PRINCIPAIS PLATAFORMAS",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "0px 32px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-numbers wrap",
+        "txt": "+400lojas desenvolvidas97,9%de NPSCertificadanas p",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "0px 32px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      },
+      {
+        "cls": "v2-section v2-solutions wrap",
+        "txt": "SOLUÇÕESDa estratégia à operação, cuidamos de tudo",
+        "color": "rgb(61, 75, 92)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "fontFamily": "V2Lexend, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "300",
+        "lineHeight": "normal",
+        "letterSpacing": "normal",
+        "borderRadius": "0px",
+        "borderColor": "rgb(61, 75, 92)",
+        "borderWidth": "0px",
+        "padding": "100.8px 32px 0px",
+        "boxShadow": "none",
+        "textTransform": "none",
+        "backgroundImage": "none"
+      }
+    ]
+  },
+  "hist": {
+    "color": {
+      "rgb(30, 107, 208)": 57,
+      "rgb(61, 75, 92)": 291,
+      "rgb(32, 60, 94)": 101,
+      "rgb(255, 255, 255)": 12,
+      "rgb(91, 104, 120)": 28,
+      "rgb(0, 0, 0)": 2,
+      "rgb(30, 91, 51)": 1,
+      "rgb(138, 31, 23)": 2
+    },
+    "backgroundColor": {
+      "rgb(255, 255, 255)": 57,
+      "rgba(255, 255, 255, 0.38)": 1,
+      "rgba(0, 0, 0, 0)": 396,
+      "rgb(32, 60, 94)": 4,
+      "rgba(16, 30, 48, 0.22)": 1,
+      "rgb(245, 247, 249)": 11,
+      "rgb(238, 241, 244)": 4,
+      "rgb(240, 244, 249)": 18,
+      "rgb(236, 246, 239)": 1,
+      "rgb(253, 240, 239)": 1
+    },
+    "fontFamily": {
+      "V2Lexend, sans-serif": 323,
+      "V2Inter, sans-serif": 171
+    },
+    "fontSize": {
+      "16px": 236,
+      "15px": 45,
+      "10px": 19,
+      "14px": 74,
+      "17px": 22,
+      "12px": 38,
+      "37.44px": 3,
+      "43.2px": 4,
+      "32px": 7,
+      "13px": 43,
+      "22px": 3
+    },
+    "borderRadius": {
+      "0px": 405,
+      "6px": 37,
+      "4px": 27,
+      "3px": 18,
+      "50%": 7
+    },
+    "borderColor": {
+      "rgb(30, 107, 208)": 56,
+      "rgb(61, 75, 92) rgb(61, 75, 92) rgba(255, 255, 255, 0.55)": 1,
+      "rgb(61, 75, 92)": 243,
+      "rgb(32, 60, 94)": 93,
+      "rgb(230, 233, 237)": 1,
+      "rgb(230, 233, 237) rgb(30, 107, 208) rgb(30, 107, 208)": 1,
+      "rgb(213, 218, 224)": 1,
+      "rgb(32, 60, 94) rgb(32, 60, 94) rgb(238, 240, 243)": 5,
+      "rgb(201, 208, 216)": 2,
+      "rgb(61, 75, 92) rgb(61, 75, 92) rgb(230, 233, 237)": 2,
+      "rgb(91, 104, 120)": 23,
+      "rgb(61, 75, 92) rgb(61, 75, 92) rgb(61, 75, 92) rgb(227, 231, 235)": 3,
+      "rgb(227, 231, 235)": 34,
+      "rgb(230, 233, 237) rgb(61, 75, 92) rgb(61, 75, 92)": 5,
+      "rgb(227, 231, 235) rgb(91, 104, 120) rgb(91, 104, 120)": 3,
+      "rgb(255, 255, 255)": 4,
+      "rgb(207, 213, 220)": 11,
+      "rgb(118, 118, 118)": 1,
+      "rgb(0, 0, 0)": 1,
+      "rgb(30, 91, 51)": 1,
+      "rgb(138, 31, 23)": 2,
+      "rgb(230, 233, 237) rgb(91, 104, 120) rgb(91, 104, 120)": 1
+    }
+  },
+  "rootVars": {},
+  "faces": [
+    {
+      "family": "V2Inter",
+      "weight": "100 900",
+      "style": "normal",
+      "status": "loaded"
+    },
+    {
+      "family": "V2Lexend",
+      "weight": "300",
+      "style": "normal",
+      "status": "loaded"
+    },
+    {
+      "family": "V2Lexend",
+      "weight": "400",
+      "style": "normal",
+      "status": "unloaded"
+    },
+    {
+      "family": "V2Lexend",
+      "weight": "500",
+      "style": "normal",
+      "status": "loaded"
+    }
+  ],
+  "ffs": [
+    "@font-face { font-family: V2Inter; src: url(\"/home-v2/assets/inter.woff2\") format(\"woff2\"); font-style: normal; font-weight: 100 900; font-display: swap; }",
+    "@font-face { font-family: V2Lexend; src: url(\"/home-v2/assets/lexend-300.ttf\") format(\"truetype\"); font-style: normal; font-weight: 300; font-display: swap; }",
+    "@font-face { font-family: V2Lexend; src: url(\"/home-v2/assets/lexend-400.ttf\") format(\"truetype\"); font-style: normal; font-weight: 400; font-display: swap; }",
+    "@font-face { font-family: V2Lexend; src: url(\"/home-v2/assets/lexend-500.ttf\") format(\"truetype\"); font-style: normal; font-weight: 500; font-display: swap; }"
+  ],
+  "svgs": [
+    {
+      "cls": null,
+      "aria": null,
+      "parent": "A.v2-whatsapp",
+      "w": 26,
+      "h": 26,
+      "html": 1018
+    }
+  ],
+  "imgs": [
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/logo-catus.svg",
+      "alt": "Catus",
+      "w": 132,
+      "h": 42
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-nuvemshop.png",
+      "alt": "Nuvemshop",
+      "w": 150,
+      "h": 50
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-wake.png",
+      "alt": "Wake",
+      "w": 150,
+      "h": 50
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-shopify.png",
+      "alt": "Shopify",
+      "w": 150,
+      "h": 50
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-uappi.png",
+      "alt": "Uappi",
+      "w": 150,
+      "h": 50
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-tray.png",
+      "alt": "Tray",
+      "w": 150,
+      "h": 50
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-olist.png",
+      "alt": "Olist",
+      "w": 150,
+      "h": 50
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-vtex.png",
+      "alt": "VTEX",
+      "w": 150,
+      "h": 50
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/hero-tablet.webp",
+      "alt": "Tablet com painel de e-commerce sobre uma mesa",
+      "w": 463,
+      "h": 347
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-nuvemshop.png",
+      "alt": "Nuvemshop",
+      "w": 87,
+      "h": 60
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-wake.png",
+      "alt": "Wake",
+      "w": 90,
+      "h": 41
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-shopify.png",
+      "alt": "Shopify",
+      "w": 111,
+      "h": 41
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-uappi.png",
+      "alt": "Uappi",
+      "w": 121,
+      "h": 41
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-tray.png",
+      "alt": "Tray",
+      "w": 73,
+      "h": 41
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-olist.png",
+      "alt": "Olist",
+      "w": 65,
+      "h": 41
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-vtex.png",
+      "alt": "VTEX",
+      "w": 87,
+      "h": 41
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/sol-1.webp",
+      "alt": "",
+      "w": 214,
+      "h": 150
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/sol-2.webp",
+      "alt": "",
+      "w": 214,
+      "h": 150
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/sol-3.webp",
+      "alt": "",
+      "w": 214,
+      "h": 150
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/sol-4.webp",
+      "alt": "",
+      "w": 214,
+      "h": 150
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/sol-5.webp",
+      "alt": "",
+      "w": 214,
+      "h": 150
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/sol-6.webp",
+      "alt": "",
+      "w": 214,
+      "h": 150
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/anhanguera.svg",
+      "alt": "Anhanguera Ferramentas",
+      "w": 150,
+      "h": 35
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/memo.svg",
+      "alt": "MEMO",
+      "w": 138,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/suamesa.webp",
+      "alt": "Sua Mesa Suas Vontades",
+      "w": 48,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/ultramaquinas.svg",
+      "alt": "Ultra Máquinas",
+      "w": 52,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/msam.svg",
+      "alt": "MSAM",
+      "w": 73,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/archai.webp",
+      "alt": "Archai",
+      "w": 150,
+      "h": 20
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/marinadecor.webp",
+      "alt": "Marina Decor",
+      "w": 148,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/horizon-play.svg",
+      "alt": "Horizon Play",
+      "w": 150,
+      "h": 34
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/tecnifibre.webp",
+      "alt": "Tecnifibre",
+      "w": 150,
+      "h": 27
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/ginga-store.webp",
+      "alt": "Ginga Store",
+      "w": 44,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/mikasa.webp",
+      "alt": "Mikasa",
+      "w": 150,
+      "h": 40
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/florence.svg",
+      "alt": "Florence",
+      "w": 120,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/bigens.svg",
+      "alt": "Bigens",
+      "w": 150,
+      "h": 41
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/docebeleza.webp",
+      "alt": "Doce Beleza",
+      "w": 150,
+      "h": 34
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/souldila.webp",
+      "alt": "Soul Dila",
+      "w": 150,
+      "h": 21
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/staleks.svg",
+      "alt": "Staleks",
+      "w": 150,
+      "h": 36
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/case-memo.webp",
+      "alt": "Projeto MEMO",
+      "w": 324,
+      "h": 243
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/case-horizon.webp",
+      "alt": "Projeto Horizon Play",
+      "w": 324,
+      "h": 243
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/case-tecnifibre.webp",
+      "alt": "Projeto Tecnifibre",
+      "w": 324,
+      "h": 243
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/case-ginga.jpg",
+      "alt": "Projeto Ginga Store",
+      "w": 324,
+      "h": 243
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-nuvemshop.png",
+      "alt": "Nuvemshop",
+      "w": 104,
+      "h": 72
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-wake.png",
+      "alt": "Wake",
+      "w": 113,
+      "h": 51
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-shopify.png",
+      "alt": "Shopify",
+      "w": 139,
+      "h": 51
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-uappi.png",
+      "alt": "Uappi",
+      "w": 144,
+      "h": 51
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-tray.png",
+      "alt": "Tray",
+      "w": 92,
+      "h": 51
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-olist.png",
+      "alt": "Olist",
+      "w": 81,
+      "h": 51
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/platform-vtex.png",
+      "alt": "VTEX",
+      "w": 109,
+      "h": 51
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/parceiros/konfidency.svg",
+      "alt": "Konfidency",
+      "w": 100,
+      "h": 17
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/parceiros/kyraly.svg",
+      "alt": "Kyraly",
+      "w": 100,
+      "h": 20
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/parceiros/appmax.svg",
+      "alt": "Appmax",
+      "w": 100,
+      "h": 18
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/parceiros/snowlink.svg",
+      "alt": "SnowLink",
+      "w": 100,
+      "h": 15
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/parceiros/flowbiz.webp",
+      "alt": "Flowbiz",
+      "w": 100,
+      "h": 16
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/parceiros/rd-station.svg",
+      "alt": "RD Station",
+      "w": 100,
+      "h": 22
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/parceiros/getnet.webp",
+      "alt": "Getnet",
+      "w": 100,
+      "h": 22
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/parceiros/widde.svg",
+      "alt": "Widde",
+      "w": 100,
+      "h": 25
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/met-1.webp",
+      "alt": "",
+      "w": 326,
+      "h": 180
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/met-2.webp",
+      "alt": "",
+      "w": 326,
+      "h": 180
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/met-3.webp",
+      "alt": "",
+      "w": 326,
+      "h": 180
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/met-4.webp",
+      "alt": "",
+      "w": 326,
+      "h": 180
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/horizon-play.svg",
+      "alt": "",
+      "w": 44,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/tecnifibre.webp",
+      "alt": "",
+      "w": 44,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/memo.svg",
+      "alt": "",
+      "w": 44,
+      "h": 44
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/horizon-play.svg",
+      "alt": "",
+      "w": 48,
+      "h": 48
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/tecnifibre.webp",
+      "alt": "",
+      "w": 48,
+      "h": 48
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/memo.svg",
+      "alt": "",
+      "w": 48,
+      "h": 48
+    },
+    {
+      "src": "https://dev.catus.com.br/assets/clientes/ginga-store.webp",
+      "alt": "",
+      "w": 48,
+      "h": 48
+    },
+    {
+      "src": "https://dev.catus.com.br/home-v2/assets/logo-catus.svg",
+      "alt": "Catus",
+      "w": 100,
+      "h": 32
+    }
+  ],
+  "meta": [
+    "<meta charset=\"utf-8\">",
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+    "<meta name=\"description\" content=\"Diagnóstico, planejamento e desenvolvimento de operações de e-commerce.\">",
+    "<meta name=\"robots\" content=\"noindex, follow\">",
+    "<meta property=\"og:locale\" content=\"pt_BR\">",
+    "<meta property=\"og:site_name\" content=\"Catus\">",
+    "<meta property=\"og:type\" content=\"website\">",
+    "<meta property=\"og:title\" content=\"Catus — Estratégia, tecnologia e e-commerce\">",
+    "<meta property=\"og:url\" content=\"https://catus.com.br/\">",
+    "<meta property=\"og:description\" content=\"Diagnóstico, planejamento e desenvolvimento de operações de e-commerce.\">",
+    "<meta property=\"og:image\" content=\"https://catus.com.br/home-v2/assets/hero-tablet.webp\">",
+    "<meta property=\"og:image:width\" content=\"1448\">",
+    "<meta property=\"og:image:height\" content=\"1086\">",
+    "<meta property=\"og:image:alt\" content=\"Tablet com painel de e-commerce sobre uma mesa\">",
+    "<meta name=\"twitter:card\" content=\"summary_large_image\">",
+    "<meta name=\"twitter:title\" content=\"Catus — Estratégia, tecnologia e e-commerce\">",
+    "<meta name=\"twitter:description\" content=\"Diagnóstico, planejamento e desenvolvimento de operações de e-commerce.\">",
+    "<meta name=\"twitter:image\" content=\"https://catus.com.br/home-v2/assets/hero-tablet.webp\">",
+    "<meta name=\"twitter:image:alt\" content=\"Tablet com painel de e-commerce sobre uma mesa\">",
+    "<link rel=\"icon\" href=\"/favicon.ico\" sizes=\"32x32\">",
+    "<link rel=\"icon\" href=\"/favicon.svg\" type=\"image/svg+xml\">",
+    "<link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\">"
+  ]
+}

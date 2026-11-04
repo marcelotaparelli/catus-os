@@ -65,9 +65,7 @@
     >
   </div>
   <p class="muted">
-    Somente leitura. Até 500 eventos mais recentes da organização, com autor
-    identificado pela sessão. Contratos, economia e entrega mantêm históricos
-    próprios em seus módulos.
+    Somente leitura. Até 500 eventos mais recentes da organização.
   </p>
   {#if loading}<p role="status">Carregando eventos…</p>{/if}
   {#if failure}<p class="inline-error" role="alert">{failure}</p>{/if}

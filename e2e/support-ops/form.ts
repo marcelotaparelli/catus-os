@@ -32,7 +32,7 @@ export async function registerDemand(
     .selectOption({ label: d.owner ?? 'Dev Browser · dev@browser.test' });
   await form.getByLabel('Próxima ação').fill(d.action);
   await form.getByRole('button', { name: 'Criar demanda' }).click();
-  await expect(queue.getByRole('status')).toContainText(
+  await expect(page.getByRole('status')).toContainText(
     `Demanda registrada: ${d.title}`,
   );
 }

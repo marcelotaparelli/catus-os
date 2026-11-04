@@ -1,7 +1,12 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { dayText, statusLabels } from '../shared/domain';
-  import type { Interaction, Project, Status } from '../shared/domain';
+  import type {
+    Interaction,
+    Project,
+    Status,
+    WorkRequest,
+  } from '../shared/domain';
   import {
     defaultFollowUp,
     nextStep,
@@ -27,7 +32,8 @@
     editingId,
     form,
     onedit,
-    onsaved,
+    busy,
+    run,
   }: {
     api: <T>(path: string, method?: string, body?: unknown) => Promise<T>;
     session: SessionView;
@@ -38,15 +44,14 @@
     changes: number;
     editingId?: string;
     form: Snippet;
-    onedit: (id: string, status?: Status) => void;
-    onsaved: () => Promise<void>;
+    onedit: (item: WorkRequest, status?: Status) => void;
+    busy: boolean;
+    run: (done: string, action: () => Promise<unknown>) => Promise<void>;
   } = $props();
 
   let queue = $state<FollowupQueue | null>(null);
-  let error = $state('');
-  let notice = $state('');
-  let busy = $state(false);
   let adding = $state(false);
+  let shown = $state(60);
   let title = $state('');
   let details = $state('');
   let action = $state('');
@@ -60,32 +65,12 @@
   const today = $derived(queue?.as_of ?? new Date().toISOString().slice(0, 10));
 
   async function load() {
-    try {
-      queue = await api<FollowupQueue>('followup');
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Falha inesperada';
-    }
+    queue = await api<FollowupQueue>('followup');
   }
   $effect(() => {
     void changes;
-    void load();
+    load().catch((e) => run('', () => Promise.reject(e)));
   });
-  async function run(done: string, action: () => Promise<unknown>) {
-    if (busy) return;
-    busy = true;
-    error = notice = '';
-    try {
-      await action();
-      await onsaved();
-      notice = done;
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Falha inesperada';
-      // A lost race shows the current data instead of retrying over it.
-      await load();
-    } finally {
-      busy = false;
-    }
-  }
   const patch = (i: QueueItem, changes: Record<string, unknown>) =>
     api(`requests/${i.id}`, 'PATCH', {
       status: i.status,
@@ -100,7 +85,7 @@
     // Closing has no next action. Any other stage shows it first: it may no longer apply.
     if (to === 'done')
       void run(`${i.title}: concluída.`, () => patch(i, { status: to }));
-    else onedit(i.id, to);
+    else onedit(i as unknown as WorkRequest, to);
   }
   function register(e: SubmitEvent) {
     e.preventDefault();
@@ -125,7 +110,7 @@
     <span class="status" data-status={i.status}>{statusLabels[i.status]}</span>
     <p class="eyebrow">{i.client_name} / {i.project_name}</p>
     <p><strong>{i.title}</strong></p>
-    {#each i.signals as s (s.kind)}<p class="signal">
+    {#each i.signals as s (s.kind)}<p class="attention">
         <strong>⚠ {s.label}{s.is_new ? ' · novo' : ''}</strong>
         {s.reason}
       </p>{/each}
@@ -143,7 +128,7 @@
         <dd>{waitingLabels[i.waiting_on]}</dd>{/if}
     </dl>
     {#if editingId === i.id}{@render form()}{:else}
-      <div class="queue-actions">
+      <div class="row-actions">
         {#if lacksOwner(i) && !developer}<button
             disabled={busy}
             onclick={() =>
@@ -161,13 +146,14 @@
             class="secondary"
             disabled={busy}
             aria-label={`Bloquear: ${i.title}`}
-            onclick={() => onedit(i.id, 'blocked')}>Bloquear</button
+            onclick={() => onedit(i as unknown as WorkRequest, 'blocked')}
+            >Bloquear</button
           >{/if}
         <button
           class="secondary"
           disabled={busy}
           aria-label={`Atualizar: ${i.title}`}
-          onclick={() => onedit(i.id)}>Atualizar</button
+          onclick={() => onedit(i as unknown as WorkRequest)}>Atualizar</button
         >
         {#if !developer && i.signals.some((s) => s.kind === 'no_coverage')}<a
             class="button-link secondary"
@@ -184,7 +170,7 @@
       <p class="eyebrow">O QUE FAZER AGORA</p>
       <h2>Fila de ações</h2>
     </div>
-    <div class="queue-actions">
+    <div class="row-actions">
       {#if queue?.new_alerts}<button
           class="secondary"
           disabled={busy}
@@ -198,8 +184,6 @@
         >{/if}
     </div>
   </div>
-  {#if error}<p class="attention" role="alert">{error}</p>{/if}
-  {#if notice}<p class="muted" role="status">{notice}</p>{/if}
   {#if queue?.automation && (queue.automation.late || queue.automation.failed || queue.automation.retrying)}
     <p class="attention" role="status">
       <strong>Automação com atraso.</strong> A fila continua correta; avisos
@@ -258,33 +242,17 @@
   {/if}
   {#if queue}
     <h3 id="queue-mine">Com você ({mine.length})</h3>
-    {#if mine.length}<ol class="cards" aria-labelledby="queue-mine">
-        {#each mine as i (i.id)}{@render card(i)}{/each}
+    {#if mine.length}<ol class="cards plain" aria-labelledby="queue-mine">
+        {#each mine.slice(0, shown) as i (i.id)}{@render card(i)}{/each}
       </ol>
     {:else}<p class="muted">Nada para você agora.</p>{/if}
     {#if team.length}<h3 id="queue-team">Da equipe ({team.length})</h3>
-      <ol class="cards" aria-labelledby="queue-team">
-        {#each team as i (i.id)}{@render card(i)}{/each}
+      <ol class="cards plain" aria-labelledby="queue-team">
+        {#each team.slice(0, shown) as i (i.id)}{@render card(i)}{/each}
       </ol>{/if}
+    {#if mine.length > shown || team.length > shown}<button
+        class="secondary"
+        onclick={() => (shown += 60)}>Mostrar mais</button
+      >{/if}
   {/if}
 </section>
-
-<style>
-  ol {
-    list-style: none;
-    padding: 0;
-  }
-  .queue-actions {
-    margin-top: 8px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .signal {
-    border-left: 3px solid currentColor;
-    padding-left: 8px;
-  }
-  .signal strong {
-    display: block;
-  }
-</style>

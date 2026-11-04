@@ -186,9 +186,8 @@
     >
   </div>
   <p class="muted">
-    Runner próprio sob administração da Catus; não é Codex Cloud. Somente
-    repositório sintético autorizado, sem merge, deploy ou produção. A revisão
-    do diff é humana e separada do estado da demanda.
+    Runner próprio da Catus, não Codex Cloud. Só repositório sintético
+    autorizado, sem merge, deploy ou produção. Revisão humana do diff.
   </p>
   <p>{view.capability.reason}</p>
   {#if error}<p class="error" role="alert">{error}</p>{/if}{#if notice}<p

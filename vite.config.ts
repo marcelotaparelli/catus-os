@@ -11,11 +11,17 @@ export default defineConfig({
     terserOptions: {
       ecma: 2020,
       module: true,
-      compress: { passes: 2 },
+      compress: { passes: 2, keep_fargs: false },
       format: { comments: false },
     },
     modulePreload: { polyfill: false },
-    // Tiny shared files cost more in gzip overhead than they save in splitting.
-    rollupOptions: { output: { experimentalMinChunkSize: 5000 } },
+    // The CSP has no font-src data: and img-src is the only data: exception.
+    assetsInlineLimit: 0,
+    rollupOptions: {
+      // Tiny shared files cost more in gzip overhead than they save in splitting.
+      output: {
+        experimentalMinChunkSize: 5000,
+      },
+    },
   },
 });

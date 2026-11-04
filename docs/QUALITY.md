@@ -107,6 +107,25 @@ As três últimas linhas pioraram por escolha: Comercial traz as listas de decis
 
 Nada mudou no servidor além dos links das recomendações: payloads, regras e permissões são os mesmos. O servidor continua guardando unidades mínimas, pontos-base e minutos; a conversão fica em `src/shared/units.ts`, que recusa o que não consegue ler com exatidão (`12.50`, ou `0,33` h, que não dá minutos inteiros) e nunca transforma vazio em zero. Economia e Comercial só desenham o conteúdo depois de carregar os dados, para não empurrar a tela (CLS).
 
+## Marca Catus e esforço operacional (04/11/2026)
+
+Identidade e tokens em [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md). Evidência em `docs/quality/catus-brand/`: `before/` e `after/` (mesmo cenário e mesmo Chromium local), `before-tasks/`, `after-tasks/` e o spec de captura.
+
+Mesma regra de contagem da revisão anterior. O "antes" foi medido em `75a9c14`, com `measure-before.spec.ts.txt` e `e2e/ux-tasks.spec.ts`. O "depois" é `e2e/ux-tasks.spec.ts`, que falha se uma tarefa passar a custar mais.
+
+| Papel         | Tarefa                                       | Antes (cliques + campos) | Depois (cliques + campos) |
+| ------------- | -------------------------------------------- | ------------------------ | ------------------------- |
+| Desenvolvedor | Avançar demanda, a partir do Mission Control | 5 + 0                    | 1 + 0                     |
+| Desenvolvedor | Avançar demanda na fila de Solicitações      | 4 + 0                    | 1 + 0                     |
+| Gestor        | Recalcular a rentabilidade dos 4 projetos    | 5 + 0                    | 2 + 0                     |
+| Gestor        | Ver o escopo de um contrato                  | 2 + 0                    | 1 + 0                     |
+| Desenvolvedor | Apontar horas na mesma demanda da última vez | 3 + 2                    | 1 + 2                     |
+| PO            | Estimar demanda ainda não iniciada           | 3 + 4                    | 3 + 3                     |
+
+Cada redução vale para o caso indicado. Apontar em outra demanda continua custando 3 + 2, e estimar com restante diferente do previsto continua custando 3 + 4. Bloquear uma demanda continua no formulário, de propósito, porque exige uma nova próxima ação.
+
+O orçamento de CSS bruto subiu de 18,5 kB para 20 kB. A camada de tokens custa 1.082 bytes: a mesma folha sem ela mede 18.619 bytes, ainda acima do orçamento antigo. As fontes têm orçamento próprio, `fontBytes`, fora dos totais de CSS.
+
 ## Backlog priorizado
 
 1. ~~Página longa~~: resolvido com a navegação por módulo (rotas `#/…`, `src/web/routes.ts`).
