@@ -1,0 +1,20 @@
+{
+  "commit": "75a9c14",
+  "renderer": "Chromium local (playwright 1.58.2, chromium-1208), not the pinned CI image",
+  "bundle": {
+    "initialJsRawBytes": 81176,
+    "initialJsGzipBytes": 30332,
+    "jsRawBytes": 213894,
+    "jsGzipBytes": 79808,
+    "cssRawBytes": 17896,
+    "cssGzipBytes": 4540
+  },
+  "runtime": {
+    "readyMs": 251,
+    "lcpMs": 60,
+    "cls": 0.0035866699218749997,
+    "startApiCalls": 5,
+    "routeMs": 143,
+    "interactionMs": 37
+  }
+}

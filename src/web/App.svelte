@@ -10,6 +10,7 @@
     transitions,
   } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
+  import './ui/tokens.css';
   import './style.css';
   import {
     allowed,
@@ -272,6 +273,14 @@
   $effect(() => {
     document.title = `Catus OS · ${connected ? page.title : 'Mission Control'}`;
   });
+  // The compact menu scrolls sideways: the current module must not be out of view.
+  $effect(() => {
+    void route.id;
+    const current = document.querySelector<HTMLElement>(
+      '.mobile-nav [aria-current]',
+    );
+    if (current) current.parentElement!.scrollLeft = current.offsetLeft - 12;
+  });
   const when = timeLabel;
   function focusFirst(node: HTMLElement) {
     node.scrollIntoView({ block: 'nearest' });
@@ -452,15 +461,37 @@
     editOwner = r.owner_user_id ?? '';
     editAction = r.next_action;
   }
-  async function save() {
-    if (!editing) return;
-    const r = editing;
+  // The usual way forward, one click from the card. Blocking is left out on purpose:
+  // it needs a new next action, so it stays in the form.
+  const forward: Partial<Record<Status, Status>> = {
+    new: 'triage',
+    triage: 'ready',
+    ready: 'in_progress',
+    in_progress: 'done',
+    blocked: 'in_progress',
+  };
+  function nextState(r: WorkRequest) {
+    const to = forward[r.status];
+    if (!to || !r.owner_user_id) return;
+    if (session?.role === 'developer') {
+      if (r.owner_user_id !== session.user.id) return;
+      if (to !== 'in_progress' && to !== 'done') return;
+    }
+    return to;
+  }
+  async function save(
+    r = editing,
+    status = editStatus,
+    owner = editOwner,
+    action = editAction,
+  ) {
+    if (!r) return;
     await execute(async () => {
       try {
         await api(`requests/${r.id}`, 'PATCH', {
-          status: editStatus,
-          owner_user_id: editOwner,
-          next_action: editAction,
+          status,
+          owner_user_id: owner,
+          next_action: action,
           version: r.version,
         });
       } catch (e) {
@@ -485,59 +516,83 @@
 
 {#snippet chunkFailed()}<div class="panel route-message" role="alert">
     <h2>Não foi possível carregar este módulo</h2>
-    <p class="muted">
-      A conexão falhou ou o Catus OS foi atualizado. Recarregue a página para
-      continuar.
-    </p>
+    <p class="muted">A conexão falhou ou o Catus OS foi atualizado.</p>
     <button type="button" onclick={() => location.reload()}
       >Recarregar página</button
     >
   </div>{/snippet}
-<svelte:head
-  ><meta
-    name="description"
-    content="Operação da agência: clientes, projetos, atendimentos e solicitações."
-  /></svelte:head
->
-<div class="shell">
-  <aside>
-    <a class="brand" href="#/">CATUS<span>OS</span></a>
-    <p class="eyebrow">WORKSPACE DA AGÊNCIA</p>
-    <nav aria-label="Módulos">
-      {#if connected && nav.length}
-        {#each nav as r (r.id)}<a
-            class="nav"
-            href={href(r.id)}
-            aria-current={route.id === r.id ? 'page' : undefined}
-            onpointerenter={() => prefetch(r.id)}
-            onfocus={() => prefetch(r.id)}>{r.label}</a
-          >{/each}
-      {:else}<span class="nav active">Mission Control</span>{/if}
-    </nav>
-    <p class="aside-note">Operação conectada.<br />Decisões rastreáveis.</p>
-    <div class="local">● Ambiente local</div>
-  </aside>
-  <main>
-    <header>
-      <div>
-        {#if connected}
-          <p class="eyebrow">{page.eyebrow}</p>
-          <h1 tabindex="-1" bind:this={heading}>{page.title}</h1>
-          <p class="muted">{page.description}</p>
-        {:else}
-          <p class="eyebrow">OPERAÇÃO / VISÃO GERAL</p>
-          <h1>Mission Control</h1>
-          <p class="muted">
-            Da conversa à próxima ação, com contexto e responsabilidade.
-          </p>
-        {/if}
-      </div>
-      <span class="badge">IA assistida · revisão humana obrigatória</span>
-    </header>
-    {#if !connected}
+{#snippet advance(r: WorkRequest)}{@const to =
+    nextState(r)}{#if to && editing?.id !== r.id}<button
+      class="secondary"
+      disabled={busy}
+      aria-label={`Avançar: ${labels[to]} · ${r.title}`}
+      onclick={() => {
+        if (to === 'done') void save(r, to, r.owner_user_id!, r.next_action);
+        else {
+          // The action of the old stage may no longer apply: it is shown before saving.
+          edit(r);
+          editStatus = to;
+        }
+      }}>Avançar: {labels[to]}</button
+    >{/if}{/snippet}
+{#snippet editForm(current: WorkRequest)}<section
+    class="edit"
+    aria-label="Editar solicitação"
+    use:focusFirst
+  >
+    <form
+      onsubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <label
+        >Estado<select bind:value={editStatus}
+          ><option value={current.status}>{labels[current.status]}</option
+          >{#each transitions[current.status].filter((s) => session?.role !== 'developer' || ['in_progress', 'blocked', 'done'].includes(s)) as s}<option
+              value={s}>{labels[s]}</option
+            >{/each}</select
+        ></label
+      ><label
+        >Responsável<select
+          bind:value={editOwner}
+          required
+          disabled={session?.role === 'developer'}
+          ><option value="">Vincule um membro</option
+          >{#each members as m}<option value={m.id}>{m.name} · {m.email}</option
+            >{/each}</select
+        ></label
+      ><label
+        >Próxima ação<textarea bind:value={editAction} required maxlength="2000"
+        ></textarea></label
+      ><button disabled={busy}>Salvar atualização</button><button
+        type="button"
+        class="secondary"
+        onclick={() => (editing = null)}>Cancelar</button
+      >
+    </form>
+  </section>{/snippet}
+{#snippet logo()}<a class="brand" href="#/" aria-label="Catus OS"
+    ><svg class="logo" viewBox="0 0 191 61" aria-hidden="true"
+      ><use href="#catus-logo" /></svg
+    ><span aria-hidden="true">OS</span></a
+  >{/snippet}
+{#snippet feedback()}{#if error}<p class="feedback error" role="alert">
+      {error}
+    </p>{/if}{#if notice}<p class="feedback" role="status">
+      {notice}
+    </p>{/if}{/snippet}
+{#if !connected}
+  <main class="access-page">
+    {@render logo()}
+    {#if loaded}
+      <header>
+        <p class="eyebrow">Catus OS</p>
+        <h1>Operação conectada. <span>Decisões rastreáveis.</span></h1>
+      </header>
       <section class="panel access">
         <h2>Entre no Catus OS</h2>
-        {#if !loaded}<p>Verificando sessão…</p>{:else if configured}
+        {#if configured}
           <p>
             Use sua conta corporativa previamente autorizada. O acesso depende
             dos vínculos da sua organização.
@@ -553,10 +608,30 @@
             no ambiente.
           </p>{/if}
       </section>
-    {:else if session}
+    {:else}<p class="loading" role="status">Verificando sessão…</p>{/if}
+    {@render feedback()}
+  </main>
+{:else if session}
+  <div class="shell">
+    <aside>
+      <div class="side">
+        {@render logo()}
+        <nav aria-label="Módulos">
+          {#each nav as r (r.id)}<a
+              class="nav"
+              href={href(r.id)}
+              aria-current={route.id === r.id ? 'page' : undefined}
+              onpointerenter={() => prefetch(r.id)}
+              onfocus={() => prefetch(r.id)}>{r.label}</a
+            >{/each}
+        </nav>
+      </div>
+    </aside>
+    <main>
       <div class="toolbar">
-        <span class="muted"
-          >{session.user.name} · {session.user.email} · {roleLabels[
+        {@render logo()}
+        <span class="who"
+          ><strong>{session.user.name}</strong> · {session.user.email} · {roleLabels[
             session.role
           ] ?? session.role}<br />{session.organization.name}</span
         >
@@ -577,7 +652,7 @@
         <button class="secondary" disabled={busy} onclick={() => logout()}
           >Sair</button
         >
-        <button class="secondary" disabled={busy} onclick={() => logout(true)}
+        <button class="quiet" disabled={busy} onclick={() => logout(true)}
           >Encerrar todas as sessões</button
         >
       </div>
@@ -587,6 +662,11 @@
             aria-current={route.id === r.id ? 'page' : undefined}>{r.label}</a
           >{/each}
       </nav>
+      <header>
+        <p class="eyebrow">{page.eyebrow}</p>
+        <h1 tabindex="-1" bind:this={heading}>{page.title}</h1>
+        <p class="muted">{page.description}</p>
+      </header>
       {#if !route.id || !permitted}
         <section class="panel route-message" aria-label={page.title}>
           <h2>
@@ -596,8 +676,8 @@
           </h2>
           <p class="muted">
             {route.id
-              ? 'O menu mostra apenas os módulos do seu papel, e o servidor recusa operações fora dele. Peça acesso a um administrador, se necessário.'
-              : 'Ele pode ter sido digitado incorretamente ou ser de uma versão anterior.'}
+              ? 'Peça acesso a um administrador, se necessário.'
+              : 'Confira o endereço digitado.'}
           </p>
           <a class="button-link" href={href('mission-control')}
             >Ir para o Mission Control</a
@@ -612,24 +692,7 @@
             requests={data.requests}
             userId={session.user.id}
           />{:else if readingFailed}{@render chunkFailed()}{/if}
-        <section class="stats" aria-label="Resumo operacional">
-          <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
-          <div>
-            <span>Projetos</span><strong>{data.projects.length}</strong>
-          </div>
-          <div>
-            <span>Solicitações carregadas</span><strong
-              >{data.requests.length}</strong
-            >
-          </div>
-          <div><span>Em aberto</span><strong>{open}</strong></div>
-          <div>
-            <span>Atribuídas a mim (abertas)</span><strong>{mine}</strong>
-          </div>
-          <div>
-            <span>Bloqueadas</span><strong>{blocked.length}</strong>
-          </div>
-        </section>
+
         <div class="overview">
           <section class="panel" aria-labelledby="mc-mine">
             <div class="section-heading">
@@ -655,14 +718,17 @@
                         <span class="muted">Próxima ação:</span>
                         {r.next_action}
                       </p>
-                      <a
-                        class="text-link"
-                        href={href('economia', {
-                          painel: 'apontar',
-                          projeto: r.project_id ?? '',
-                          demanda: r.id,
-                        })}>Apontar horas nesta demanda</a
-                      >
+                      <p class="row-actions">
+                        {@render advance(r)}<a
+                          class="text-link"
+                          href={href('economia', {
+                            painel: 'apontar',
+                            projeto: r.project_id ?? '',
+                            demanda: r.id,
+                          })}>Apontar horas nesta demanda</a
+                        >
+                      </p>
+                      {#if editing?.id === r.id}{@render editForm(editing)}{/if}
                     </div>
                   </li>{/each}
               </ol>
@@ -725,6 +791,24 @@
               </p>{/if}
           </section>
         </div>
+        <section class="stats" aria-label="Resumo operacional">
+          <div><span>Clientes</span><strong>{data.clients.length}</strong></div>
+          <div>
+            <span>Projetos</span><strong>{data.projects.length}</strong>
+          </div>
+          <div>
+            <span>Solicitações carregadas</span><strong
+              >{data.requests.length}</strong
+            >
+          </div>
+          <div><span>Em aberto</span><strong>{open}</strong></div>
+          <div>
+            <span>Atribuídas a mim (abertas)</span><strong>{mine}</strong>
+          </div>
+          <div>
+            <span>Bloqueadas</span><strong>{blocked.length}</strong>
+          </div>
+        </section>
       {/if}
       {#if show('solicitacoes')}
         <section class="panel" id="solicitacoes" aria-label="Solicitações">
@@ -751,11 +835,7 @@
               >
             </div>
           </div>
-          <p class="muted">
-            Até 500 solicitações mais recentes. Novas solicitações entram em
-            “Nova”; estados seguintes exigem triagem. Cada cartão mostra o
-            responsável e a próxima ação.
-          </p>
+          <p class="muted">Até 500 solicitações mais recentes.</p>
           {#if !visible.length}<div class="empty">
               <h3>Nenhuma solicitação neste recorte</h3>
               <p>
@@ -810,57 +890,17 @@
                           · legado, vinculação pendente</span
                         >{/if}
                     </dd>
-                    <dt>Próxima ação</dt>
-                    <dd>{r.next_action}</dd>
+                    {#if r.status !== 'done'}<dt>Próxima ação</dt>
+                      <dd>{r.next_action}</dd>{/if}
                     <dt>Atendimento de origem</dt>
                     <dd>
                       {data.interactions.find((i) => i.id === r.interaction_id)
                         ?.summary ?? r.interaction_id}
                     </dd>
                   </dl>
-                  {#if editing?.id === r.id}<section
-                      class="edit"
-                      aria-label="Editar solicitação"
-                      use:focusFirst
-                    >
-                      <form
-                        onsubmit={(e) => {
-                          e.preventDefault();
-                          void save();
-                        }}
-                      >
-                        <label
-                          >Estado<select bind:value={editStatus}
-                            ><option value={editing.status}
-                              >{labels[editing.status]}</option
-                            >{#each transitions[editing.status].filter((s) => session?.role !== 'developer' || ['in_progress', 'blocked', 'done'].includes(s)) as s}<option
-                                value={s}>{labels[s]}</option
-                              >{/each}</select
-                          ></label
-                        ><label
-                          >Responsável<select
-                            bind:value={editOwner}
-                            required
-                            disabled={session.role === 'developer'}
-                            ><option value="">Vincule um membro</option
-                            >{#each members as m}<option value={m.id}
-                                >{m.name} · {m.email}</option
-                              >{/each}</select
-                          ></label
-                        ><label
-                          >Próxima ação<textarea
-                            bind:value={editAction}
-                            required
-                            maxlength="2000"
-                          ></textarea></label
-                        ><button disabled={busy}>Salvar atualização</button
-                        ><button
-                          type="button"
-                          class="secondary"
-                          onclick={() => (editing = null)}>Cancelar</button
-                        >
-                      </form>
-                    </section>{:else}<button
+                  {#if editing?.id === r.id}{@render editForm(
+                      editing,
+                    )}{:else}{@render advance(r)}<button
                       class="secondary"
                       disabled={busy ||
                         (session.role === 'developer' &&
@@ -892,9 +932,8 @@
               {#if !data.clients.length}cadastre o cliente em 01.{:else if !data.projects.length}crie
                 o projeto em 02.{:else if !data.interactions.length}registre o
                 atendimento em 03.{:else if !data.requests.length}crie a
-                solicitação em 04.{:else}para nova demanda de um atendimento
-                registrado, use 04; só preencha 01–03 se o cliente, o projeto ou
-                o atendimento forem novos.{/if}
+                solicitação em 04.{:else}para nova demanda, use 04; preencha
+                01–03 só se algo for novo.{/if}
             </p>
             <div class="forms">
               <form
@@ -1082,10 +1121,7 @@
               <h2>Clientes, projetos e atendimentos</h2>
             </div>
           </div>
-          <p class="muted">
-            Atendimentos e reuniões mais recentes (até 500) por projeto, com a
-            quantidade de solicitações abertas.
-          </p>
+          <p class="muted">Até 500 atendimentos mais recentes por projeto.</p>
           {#if !data.clients.length}<div class="empty">
               <h3>Nenhum cliente cadastrado</h3>
               <p>
@@ -1153,9 +1189,7 @@
                 {...moduleProps(id, session)}
               />{:catch}{@render chunkFailed()}{/await}
           </div>{/if}{/each}
-    {/if}
-    {#if error}<p class="feedback error" role="alert">
-        {error}
-      </p>{/if}{#if notice}<p class="feedback" role="status">{notice}</p>{/if}
-  </main>
-</div>
+      {@render feedback()}
+    </main>
+  </div>
+{/if}

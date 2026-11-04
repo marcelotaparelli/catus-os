@@ -204,6 +204,18 @@
     return data.interactions.find((i) => i.id === r?.interaction_id)
       ?.project_id;
   }
+  // Most hours go to the demand of the last entry: start there, still open and editable.
+  $effect(() => {
+    if (!loaded || timeRequest) return;
+    const open = (id: string) =>
+      data.requests.some((r) => r.id === id && r.status !== 'done');
+    untrack(() => {
+      const last = view.times
+        .filter((t) => t.user_id === userId && open(t.request_id))
+        .sort((a, b) => b.work_date.localeCompare(a.work_date))[0];
+      if (last) timeRequest = last.request_id;
+    });
+  });
   const requestTitle = (id: unknown) =>
     data.requests.find((r) => r.id === id)?.title ?? 'Demanda indisponível';
 
@@ -443,7 +455,7 @@
           request_id: request,
           user_id: person,
           planned_minutes: planned,
-          remaining_minutes: remaining,
+          remaining_minutes: remaining ?? planned,
           expected_on: expected,
         };
       case 'capacity':
@@ -541,6 +553,7 @@
       role as 'manager' | 'administrator',
     ),
   );
+  let calculable = $derived(approvedTerms.filter((t) => matches(t.project_id)));
   let filteredHours = $derived(
     view.times
       .filter((t) => matches(t.project_id))
@@ -744,12 +757,6 @@
       known = (v: number | null, absent: string) =>
         v == null ? absent : hoursLabel(v);
     return [
-      ['Receita contratada', money(r.contracted_revenue)],
-      ['Receita reconhecida', money(r.recognized_revenue)],
-      ['Orçamento de custo', money(r.budget_cost)],
-      ['Custo incorrido, sem deduções sobre receita', money(r.cost_incurred)],
-      ['Custo para concluir (ETC)', money(r.estimate_to_complete)],
-      ['Custo previsto na conclusão (EAC)', money(r.eac)],
       [
         'Margem projetada na conclusão',
         `${money(r.projected_margin)} · ${percent(r.projected_margin_bps)}`,
@@ -758,6 +765,12 @@
         'Margem realizada sobre receita reconhecida',
         `${money(r.realized_margin)} · ${percent(r.realized_margin_bps)}`,
       ],
+      ['Receita contratada', money(r.contracted_revenue)],
+      ['Receita reconhecida', money(r.recognized_revenue)],
+      ['Orçamento de custo', money(r.budget_cost)],
+      ['Custo incorrido, sem deduções sobre receita', money(r.cost_incurred)],
+      ['Custo para concluir (ETC)', money(r.estimate_to_complete)],
+      ['Custo previsto na conclusão (EAC)', money(r.eac)],
       [
         'Horas previstas / aprovadas / pendentes / restantes',
         [
@@ -771,15 +784,19 @@
         'Capacidade alocada declarada',
         known(r.capacity_minutes, 'Desconhecida'),
       ],
-      [
-        'Retainer: incluídas / entrada / saldo / excedente',
-        [
-          known(r.included_minutes, 'Não aplicável'),
-          hoursLabel(r.carry_in_minutes),
-          known(r.balance_minutes, 'Não aplicável'),
-          known(r.overage_minutes, 'Não aplicável'),
-        ].join(' / '),
-      ],
+      ...(r.included_minutes == null
+        ? []
+        : ([
+            [
+              'Retainer: incluídas / entrada / saldo / excedente',
+              [
+                known(r.included_minutes, 'Não aplicável'),
+                hoursLabel(r.carry_in_minutes),
+                known(r.balance_minutes, 'Não aplicável'),
+                known(r.overage_minutes, 'Não aplicável'),
+              ].join(' / '),
+            ],
+          ] as [string, string][])),
     ];
   }
   // Messages from the engine name projects by id; people read names.
@@ -813,20 +830,11 @@
 {/snippet}
 
 {#snippet recordFacts(r: EconomicRecord)}
-  <dl class="econ-facts">
-    {#each recordValues(r) as [term, value]}<div>
-        <dt>{term}</dt>
-        <dd>{value}</dd>
-      </div>{/each}
-    <div>
-      <dt>Vigência</dt>
-      <dd>{period(r.valid_from, r.valid_until)}</dd>
-    </div>
-    <div>
-      <dt>Fonte</dt>
-      <dd>{r.source}</dd>
-    </div>
-  </dl>
+  {@render facts([
+    ...recordValues(r),
+    ['Vigência', period(r.valid_from, r.valid_until)],
+    ['Fonte', r.source],
+  ])}
 {/snippet}
 
 {#snippet trace(r: EconomicRecord)}
@@ -1223,7 +1231,11 @@
                 label="Horas para concluir"
                 kind="hours"
                 bind:value={remaining}
-                hint="Quanto ainda falta hoje."
+                required={false}
+                placeholder={planned === undefined
+                  ? ''
+                  : hoursLabel(planned as number)}
+                hint="Vazio: igual às previstas. Digite 0 se não falta nada."
               /><UnitField
                 label="Data prevista de conclusão"
                 kind="date"
@@ -1614,9 +1626,20 @@
             bind:value={asOf}
           />
         </div>
-        {#each approvedTerms.filter((t) => matches(t.project_id)) as t}<div
-            class="calc-row"
-          >
+        {#if calculable.length > 1}<button
+            class="secondary"
+            disabled={busy || !asOf}
+            onclick={() =>
+              void run(async () => {
+                for (const t of calculable)
+                  await post('economics/reports', {
+                    terms_id: t.id,
+                    as_of: asOf,
+                  });
+                notice = `${calculable.length} observações preservadas.`;
+              })}>Calcular todos os {calculable.length} projetos</button
+          >{/if}
+        {#each calculable as t}<div class="calc-row">
             <p>
               <strong>{projectName(t.project_id)}</strong>
               {period(t.valid_from, t.valid_until)} · revisão {t.revision}
@@ -1640,7 +1663,7 @@
           </p>{/each}
       </form>
       <div class="m3-block">
-        <h3>Observações por projeto · orçamento, incorrido e conclusão</h3>
+        <h3>Observações por projeto</h3>
         {@render filterNotice()}
         {#each visibleReports as report}<article
             class="request economic-report"
@@ -1684,8 +1707,7 @@
               <pre tabindex="0">{JSON.stringify(report.inputs, null, 2)}</pre>
             </details>
           </article>{:else}<p class="empty-line">
-            Nenhuma observação calculada; não há indicadores financeiros sem
-            dados aprovados.
+            Nenhuma observação calculada.
           </p>{/each}
         {#if olderReports > 0}<button
             type="button"
@@ -1701,7 +1723,6 @@
         <h3>Consolidação por cliente e competência</h3>
         <p class="muted">
           Última observação de cada projeto; moedas e competências separadas.
-          Não soma revisões ou observações históricas repetidas.
         </p>
         {#each view.clients ?? [] as c}<article class="request">
             <h4>

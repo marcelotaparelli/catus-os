@@ -293,10 +293,7 @@
       >Extrair com IA</button
     >
   </form>
-  {#if !capability?.available}<p class="muted">
-      Inferência indisponível. Nenhum resultado de demonstração é gerado pelo
-      aplicativo.
-    </p>{/if}
+  {#if !capability?.available}<p class="muted">Inferência indisponível.</p>{/if}
   <h3>Histórico de extrações</h3>
   <div class="intake-history">
     {#each jobs as j}<button

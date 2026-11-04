@@ -96,10 +96,10 @@
   >
 {/snippet}
 
-{#snippet metric(name: string, value: string, strong = false)}
+{#snippet metric(name: string, value: string)}
   <div class="kv">
     <dt>{name}</dt>
-    <dd class:strong>{value}</dd>
+    <dd>{value}</dd>
   </div>
 {/snippet}
 
@@ -121,64 +121,29 @@
     {#if r}
       <div class="metrics">
         <div>
-          <h5>Horas</h5>
-          <dl>
-            {@render metric('Previsto', hoursLabel(r.planned_minutes))}
-            {@render metric(
-              'Realizado (aprovado)',
-              hoursLabel(r.approved_minutes),
-            )}
-            {#if r.pending_minutes}{@render metric(
-                'Pendente de decisão',
-                hoursLabel(r.pending_minutes),
-              )}{/if}
-            {@render metric('Falta', hoursLabel(r.remaining_minutes))}
-            {@render metric(
-              'Desvio previsto',
-              signed(r.hours_variance_minutes),
-              true,
-            )}
-          </dl>
-          {#if b}<div
-              class="hours-bar"
-              aria-hidden="true"
-              title="Realizado + restante; o traço marca o previsto"
+          <h5>Margem projetada</h5>
+          <p class="figure">
+            {moneyGrouped(r.projected_margin, r.currency)}
+            <small
+              >{r.projected_margin_bps == null
+                ? ''
+                : percentLabel(r.projected_margin_bps) + ' da receita'}</small
             >
-              <span class="done" style:width="{b.done}%"></span><span
-                class="left"
-                style:width="{b.left}%"
-              ></span><i style:left="{b.plan}%"></i>
-            </div>{/if}
-        </div>
-        <div>
-          <h5>Custo</h5>
+          </p>
           <dl>
             {@render metric(
-              'Orçamento',
-              moneyGrouped(r.budget_cost, r.currency),
+              'Realizada',
+              moneyGrouped(r.realized_margin, r.currency),
             )}
-            {@render metric(
-              'Incorrido, sem deduções',
-              moneyGrouped(r.cost_incurred, r.currency),
-            )}
-            {@render metric(
-              'Previsto na conclusão (EAC)',
-              moneyGrouped(r.eac, r.currency),
-            )}
-            {@render metric(
-              'Desvio de custo',
-              signedMoney(r.cost_variance, r.currency),
-              true,
-            )}
+            {@render metric('% realizada', percentLabel(r.realized_margin_bps))}
           </dl>
         </div>
         <div>
-          <h5>Receita</h5>
+          <h5>Receita contratada</h5>
+          <p class="figure">
+            {moneyGrouped(r.contracted_revenue, r.currency)}
+          </p>
           <dl>
-            {@render metric(
-              'Contratada',
-              moneyGrouped(r.contracted_revenue, r.currency),
-            )}
             {@render metric(
               'Reconhecida',
               moneyGrouped(r.recognized_revenue, r.currency),
@@ -190,22 +155,61 @@
           </dl>
         </div>
         <div>
-          <h5>Margem</h5>
+          <h5>Custo na conclusão (EAC)</h5>
+          <p class="figure">
+            {moneyGrouped(r.eac, r.currency)}
+            <small
+              >{r.cost_variance == null
+                ? ''
+                : signedMoney(r.cost_variance, r.currency) +
+                  ' sobre o orçamento'}</small
+            >
+          </p>
           <dl>
             {@render metric(
-              'Projetada',
-              moneyGrouped(r.projected_margin, r.currency),
-              true,
+              'Orçamento',
+              moneyGrouped(r.budget_cost, r.currency),
             )}
             {@render metric(
-              '% projetada',
-              percentLabel(r.projected_margin_bps),
+              'Incorrido, sem deduções',
+              moneyGrouped(r.cost_incurred, r.currency),
             )}
+          </dl>
+        </div>
+        <div>
+          <h5>Horas: desvio previsto</h5>
+          <p class="figure">
+            {signed(r.hours_variance_minutes)}
+            <small
+              >{r.planned_minutes == null
+                ? ''
+                : hoursLabel(r.planned_minutes) + ' previstas'}</small
+            >
+          </p>
+          {#if b}<div
+              class="hours-bar"
+              aria-hidden="true"
+              title="Realizado + restante; o traço marca o previsto"
+            >
+              <span class="done" style:width="{b.done}%"></span><span
+                class="left"
+                style:width="{b.left}%"
+              ></span><i style:left="{b.plan}%"></i>
+            </div>
+            <p class="bar-key" aria-hidden="true">
+              <span class="done">Realizado</span><span class="left">Falta</span
+              ><span class="plan">Previsto</span>
+            </p>{/if}
+          <dl>
             {@render metric(
-              'Realizada',
-              moneyGrouped(r.realized_margin, r.currency),
+              'Realizado (aprovado)',
+              hoursLabel(r.approved_minutes),
             )}
-            {@render metric('% realizada', percentLabel(r.realized_margin_bps))}
+            {#if r.pending_minutes}{@render metric(
+                'Pendente de decisão',
+                hoursLabel(r.pending_minutes),
+              )}{/if}
+            {@render metric('Falta', hoursLabel(r.remaining_minutes))}
           </dl>
         </div>
       </div>
@@ -320,9 +324,9 @@
 
 {#snippet portfolio()}
   <p class="muted">
-    Corte {dayLabel(overview?.as_of)}. Calculado agora pelo motor econômico, a
-    partir de registros aprovados. Dado ausente fica indisponível, nunca zero.
-    Valores de competências e moedas diferentes não são somados.
+    Corte {dayLabel(overview?.as_of)}, a partir de registros aprovados. Dado
+    ausente fica indisponível, nunca zero. Moedas e competências diferentes não
+    são somadas.
   </p>
   <ul class="health-legend" aria-label="Projetos por situação">
     {#each healthOrder as h}

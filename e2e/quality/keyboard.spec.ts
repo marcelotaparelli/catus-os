@@ -84,7 +84,11 @@ test('module menu works with the keyboard and moves focus to the page title', as
   const title = page.getByRole('heading', { level: 1, name: 'Comercial' });
   await expect(title).toBeFocused();
   await expect(link).toHaveAttribute('aria-current', 'page');
-  // The next Tab continues inside the page, not back at the top of the menu.
+  // The next Tab continues inside the page, not back at the top of the menu. The
+  // account bar now sits above the title, so the next stop is in the module itself.
+  await expect(
+    page.getByRole('button', { name: 'Atualizar comercial' }),
+  ).toBeEnabled();
   await page.keyboard.press('Tab');
   const inMain = await page.evaluate(
     () => !!document.activeElement?.closest('main'),

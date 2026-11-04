@@ -1,0 +1,95 @@
+// Effort of the tasks added by the brand work, measured on 75a9c14 with the same Meter and
+// scenario as e2e/ux-tasks.spec.ts. Copy to e2e/ in a checkout of that commit to repeat it.
+import { test, expect } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { open } from './nav';
+import { Meter, agency } from './support-ux/meter';
+
+const DIR = process.env.UX_EVIDENCE ?? 'test-results/ux-before';
+test('effort before the brand work', async ({ browser }) => {
+  test.setTimeout(180000);
+  mkdirSync(DIR, { recursive: true });
+  const { pages } = await agency(browser);
+  const { manager, dev } = pages;
+  const results: Record<string, unknown> = {};
+
+  // Gestor: refresh the profitability of every project.
+  {
+    await manager.reload();
+    await open(manager, 'Economia');
+    await manager.waitForLoadState('networkidle');
+    const m = new Meter();
+    const econ = manager.getByRole('region', {
+      name: 'Inteligência econômica',
+    });
+    await m.click(econ.getByRole('tab', { name: 'Rentabilidade' }));
+    const buttons = econ.locator('.calc-row button');
+    const projects = await buttons.count();
+    for (let i = 0; i < projects; i++) {
+      await m.click(buttons.nth(i));
+      await expect(econ.getByRole('status')).toContainText('preservada');
+      await expect(buttons.nth(i)).toBeEnabled();
+    }
+    results['gestor-recalcular-todos'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+      projects,
+    };
+  }
+
+  // Gestor: from a contract to its scope.
+  {
+    await open(manager, 'Comercial');
+    await manager.waitForLoadState('networkidle');
+    const m = new Meter();
+    const c = manager.getByRole('region', { name: 'Controle comercial' });
+    const select = c.getByRole('combobox', {
+      name: 'Versão de escopo',
+      exact: true,
+    });
+    const option = select
+      .locator('option')
+      .filter({ hasText: 'Integração ERP · V1' });
+    await m.select(select, (await option.getAttribute('value'))!);
+    await expect(c.getByLabel('Detalhe do escopo')).toContainText(
+      'Integração ERP',
+    );
+    results['gestor-ver-escopo-do-contrato'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+    };
+  }
+
+  const advance = async (m: Meter, title: string) => {
+    const card = dev
+      .locator('article')
+      .filter({ has: dev.getByRole('heading', { name: title }) });
+    await m.click(card.getByRole('button', { name: 'Atualizar solicitação' }));
+    await m.select(card.getByRole('combobox', { name: 'Estado' }), 'done');
+    await m.click(card.getByRole('button', { name: 'Salvar atualização' }));
+    await expect(dev.getByRole('status')).toContainText(
+      'Solicitação atualizada',
+    );
+    await expect(card.locator('.status')).toHaveText('Concluída');
+  };
+
+  // Developer: advance a demand starting at the Mission Control, then from the queue.
+  {
+    await dev.reload();
+    await open(dev, 'Mission Control');
+    let m = new Meter();
+    await m.click(dev.getByRole('link', { name: 'Abrir minhas solicitações' }));
+    await advance(m, 'Sincronização de pedidos');
+    results['desenvolvedor-avancar-no-mission-control'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+    };
+    m = new Meter();
+    await advance(m, 'Checkout com Pix');
+    results['desenvolvedor-avancar-na-fila'] = {
+      clicks: m.clicks,
+      fields: m.fields,
+    };
+  }
+  writeFileSync(`${DIR}/metrics-before-extra.json`, JSON.stringify(results, null, 2));
+});

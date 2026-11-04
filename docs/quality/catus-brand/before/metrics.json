@@ -1,0 +1,240 @@
+{
+  "mission-control-gestor-1280": {
+    "height": 3402,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 460,
+    "actionsInFirstView": 3
+  },
+  "mission-control-gestor-390": {
+    "height": 6378,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 723,
+    "actionsInFirstView": 0
+  },
+  "comercial-gestor-1280": {
+    "height": 2014,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 482,
+    "actionsInFirstView": 3
+  },
+  "comercial-gestor-390": {
+    "height": 3024,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 709,
+    "actionsInFirstView": 0
+  },
+  "economia-gestor-1280": {
+    "height": 1025,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 612,
+    "actionsInFirstView": 1
+  },
+  "economia-gestor-390": {
+    "height": 1686,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 988,
+    "actionsInFirstView": 0
+  },
+  "economia-gestor-rentabilidade-1280": {
+    "height": 1062,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "economia-gestor-rentabilidade-390": {
+    "height": 1573,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "solicitacoes-gestor-1280": {
+    "height": 1951,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "solicitacoes-gestor-390": {
+    "height": 4674,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "mission-control-admin-1280": {
+    "height": 1323,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 925,
+    "actionsInFirstView": 0
+  },
+  "mission-control-admin-390": {
+    "height": 2152,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 1428,
+    "actionsInFirstView": 0
+  },
+  "economia-admin-preparar-1280": {
+    "height": 1645,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 727,
+    "actionsInFirstView": 0
+  },
+  "economia-admin-preparar-390": {
+    "height": 3127,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 1220,
+    "actionsInFirstView": 0
+  },
+  "mission-control-po-1280": {
+    "height": 2023,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 319,
+    "actionsInFirstView": 5
+  },
+  "mission-control-po-390": {
+    "height": 3475,
+    "overflow": false,
+    "contentTop": 379,
+    "firstActionTop": 462,
+    "actionsInFirstView": 2
+  },
+  "comercial-po-1280": {
+    "height": 1934,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 482,
+    "actionsInFirstView": 3
+  },
+  "comercial-po-390": {
+    "height": 2828,
+    "overflow": false,
+    "contentTop": 379,
+    "firstActionTop": 713,
+    "actionsInFirstView": 0
+  },
+  "economia-po-1280": {
+    "height": 2183,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 975,
+    "actionsInFirstView": 0
+  },
+  "economia-po-390": {
+    "height": 3944,
+    "overflow": false,
+    "contentTop": 379,
+    "firstActionTop": 1451,
+    "actionsInFirstView": 0
+  },
+  "clientes-e-projetos-po-1280": {
+    "height": 1449,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "clientes-e-projetos-po-390": {
+    "height": 2612,
+    "overflow": false,
+    "contentTop": 379,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "mission-control-dev-1280": {
+    "height": 1254,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 698,
+    "actionsInFirstView": 2
+  },
+  "mission-control-dev-390": {
+    "height": 2003,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 990,
+    "actionsInFirstView": 0
+  },
+  "economia-dev-1280": {
+    "height": 1625,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "economia-dev-390": {
+    "height": 2325,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "solicitacoes-dev-1280": {
+    "height": 1951,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "solicitacoes-dev-390": {
+    "height": 4674,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "atendimento-inteligente-admin-1280": {
+    "height": 900,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "atendimento-inteligente-admin-390": {
+    "height": 1216,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "acesso-e-usuarios-admin-1280": {
+    "height": 900,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "acesso-e-usuarios-admin-390": {
+    "height": 1297,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "auditoria-admin-1280": {
+    "height": 900,
+    "overflow": false,
+    "contentTop": 236,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  },
+  "auditoria-admin-390": {
+    "height": 844,
+    "overflow": false,
+    "contentTop": 375,
+    "firstActionTop": 0,
+    "actionsInFirstView": 0
+  }
+}

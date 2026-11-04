@@ -1,0 +1,114 @@
+{
+  "csp": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+  "css": ["/assets/index-BJlrWEeM.css"],
+  "fonts": [
+    {
+      "url": "/assets/inter-var-Dx4kXJAl.woff2",
+      "status": 200,
+      "content_type": "font/woff2",
+      "nosniff": "nosniff",
+      "cache": "public, max-age=86400, immutable",
+      "csp_header": true,
+      "bytes": 48256,
+      "signature": "wOF2",
+      "same_bytes_as_source": true
+    },
+    {
+      "url": "/assets/lexend-400-DMUfMsOs.woff2",
+      "status": 200,
+      "content_type": "font/woff2",
+      "nosniff": "nosniff",
+      "cache": "public, max-age=86400, immutable",
+      "csp_header": true,
+      "bytes": 25908,
+      "signature": "wOF2",
+      "same_bytes_as_source": true
+    }
+  ],
+  "browsers": {
+    "chromium": {
+      "version": "145.0.7632.6",
+      "ok": true,
+      "loaded": {
+        "400 16px Inter": ["loaded"],
+        "400 16px Lexend": ["loaded"]
+      },
+      "faces": ["Inter 100 900 loaded", "Lexend 400 loaded"],
+      "used": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "heading": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "csp": [],
+      "responses": [
+        {
+          "url": "/assets/inter-var-Dx4kXJAl.woff2",
+          "status": 200,
+          "type": "font/woff2"
+        },
+        {
+          "url": "/assets/lexend-400-DMUfMsOs.woff2",
+          "status": 200,
+          "type": "font/woff2"
+        }
+      ],
+      "failed": [],
+      "console_before_screenshot": [],
+      "console_after_screenshot": []
+    },
+    "firefox": {
+      "version": "146.0.1",
+      "ok": true,
+      "loaded": {
+        "400 16px Inter": ["loaded"],
+        "400 16px Lexend": ["loaded"]
+      },
+      "faces": ["Inter 100 900 loaded", "Lexend 400 loaded"],
+      "used": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "heading": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "csp": [],
+      "responses": [
+        {
+          "url": "/assets/inter-var-Dx4kXJAl.woff2",
+          "status": 200,
+          "type": "font/woff2"
+        },
+        {
+          "url": "/assets/lexend-400-DMUfMsOs.woff2",
+          "status": 200,
+          "type": "font/woff2"
+        }
+      ],
+      "failed": [],
+      "console_before_screenshot": [],
+      "console_after_screenshot": []
+    },
+    "webkit": {
+      "version": "26.0",
+      "ok": true,
+      "loaded": {
+        "400 16px Inter": ["loaded"],
+        "400 16px Lexend": ["loaded"]
+      },
+      "faces": ["Inter 100 900 loaded", "Lexend 400 loaded"],
+      "used": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "heading": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "csp": [],
+      "responses": [
+        {
+          "url": "/assets/inter-var-Dx4kXJAl.woff2",
+          "status": 200,
+          "type": "font/woff2"
+        },
+        {
+          "url": "/assets/lexend-400-DMUfMsOs.woff2",
+          "status": 200,
+          "type": "font/woff2"
+        }
+      ],
+      "failed": [],
+      "console_before_screenshot": [],
+      "console_after_screenshot": [
+        "Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive of the Content Security Policy."
+      ]
+    }
+  },
+  "ok": true
+}

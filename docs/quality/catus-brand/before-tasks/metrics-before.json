@@ -1,0 +1,72 @@
+{
+  "tela-economia-gestor": {
+    "pageHeightPx": 1025,
+    "visibleControls": 14,
+    "visibleDisabledButtons": 0,
+    "buttonsWithUuid": 0
+  },
+  "tela-economia-po": {
+    "pageHeightPx": 2183,
+    "visibleControls": 23,
+    "visibleDisabledButtons": 0,
+    "buttonsWithUuid": 0
+  },
+  "tela-economia-desenvolvedor": {
+    "pageHeightPx": 1625,
+    "visibleControls": 11,
+    "visibleDisabledButtons": 0,
+    "buttonsWithUuid": 0
+  },
+  "gestor-decidir-horas": {
+    "clicks": 1,
+    "fields": 1,
+    "distanceReasonToButtonPx": 145,
+    "pageHeightPx": 1025,
+    "visibleControls": 14,
+    "visibleDisabledButtons": 0,
+    "buttonsWithUuid": 0
+  },
+  "gestor-propria-versao": {
+    "explainsWhyBlocked": true,
+    "approveDisabled": false,
+    "approveShown": 0
+  },
+  "admin-decidir-registro": {
+    "clicks": 1,
+    "fields": 1
+  },
+  "gestor-preparar-custo": {
+    "clicks": 5,
+    "fields": 2
+  },
+  "gestor-calcular-rentabilidade": {
+    "clicks": 2,
+    "fields": 0,
+    "reportTopPx": 893
+  },
+  "desenvolvedor-apontar-horas": {
+    "clicks": 3,
+    "fields": 2
+  },
+  "tela-comercial-gestor": {
+    "pageHeightPx": 2014,
+    "visibleControls": 19,
+    "visibleDisabledButtons": 1,
+    "buttonsWithUuid": 0
+  },
+  "gestor-decidir-escopo": {
+    "clicks": 2,
+    "fields": 1
+  },
+  "po-demanda-coberta": "Programa de indicação",
+  "po-itens-disponiveis": 1,
+  "po-vincular-cobertura": {
+    "clicks": 1,
+    "fields": 0
+  },
+  "po-demanda-estimada": "Programa de indicação",
+  "po-estimar-demanda": {
+    "clicks": 3,
+    "fields": 4
+  }
+}
