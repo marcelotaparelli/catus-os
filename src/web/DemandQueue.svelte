@@ -104,7 +104,7 @@
   }
   function register(e: SubmitEvent) {
     e.preventDefault();
-    void run(`Demanda registrada: ${title}.`, async () => {
+    void run(`Demanda registrada: ${title}`, async () => {
       await api('requests', 'POST', {
         interaction_id: origin || interactions[0]?.id,
         title,
@@ -147,7 +147,7 @@
         {#if lacksOwner(i) && !developer}<button
             disabled={busy}
             onclick={() =>
-              run(`${i.title}: agora é sua.`, () =>
+              run(`${i.title}: assumida.`, () =>
                 patch(i, { owner_user_id: session.user.id }),
               )}>Assumir</button
           >{/if}
@@ -261,7 +261,7 @@
     {#if mine.length}<ol class="cards" aria-labelledby="queue-mine">
         {#each mine as i (i.id)}{@render card(i)}{/each}
       </ol>
-    {:else}<p class="muted">Nada aguarda você agora.</p>{/if}
+    {:else}<p class="muted">Nada para você agora.</p>{/if}
     {#if team.length}<h3 id="queue-team">Da equipe ({team.length})</h3>
       <ol class="cards" aria-labelledby="queue-team">
         {#each team as i (i.id)}{@render card(i)}{/each}
