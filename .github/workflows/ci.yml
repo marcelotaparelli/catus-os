@@ -12,6 +12,17 @@ on:
 permissions:
   contents: read
 jobs:
+  dev-local:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Fluxo completo de npm run dev:local, sem Docker
+        run: npm run test:dev-local
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
