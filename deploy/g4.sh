@@ -229,7 +229,7 @@ digest_sql() { # whole-database fingerprint: per table row count and md5 of its 
 SELECT string_agg(c.relname||'='||(xpath('/row/c/text()',q))[1]::text||':'||(xpath('/row/h/text()',q))[1]::text, ' ' ORDER BY c.relname)
 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace,
  LATERAL query_to_xml(format('SELECT count(*) c, md5(coalesce(string_agg(t::text,%L ORDER BY t::text),%L)) h FROM public.%I t',',','',c.relname),false,true,'') q
-WHERE n.nspname='public' AND c.relkind='r' AND c.relname NOT IN ('rate_limits','oidc_transactions')
+WHERE n.nspname='public' AND c.relkind='r' AND c.relname NOT IN ('rate_limits','oidc_transactions','automation_jobs','demand_alerts')
 SQL
 }
 disp_sql() { # db name, sql

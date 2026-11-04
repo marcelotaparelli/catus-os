@@ -173,3 +173,10 @@ Resultados em `docs/quality/ops-followup/antes/as-is.json` e `depois/depois.json
 5. Exibir o histórico (`GET /api/followup/:id/events`) e o tempo por etapa, já disponíveis na API.
 6. Modelo de implantação com descoberta, briefing e proposta.
 7. Feriados e fuso da organização nos compromissos.
+
+## 6. Efeito na homologação e nos gates
+
+A automação roda sozinha, então `automation_jobs` e `demand_alerts` mudam com o sistema parado. São dados operacionais derivados das demandas: voltam a ser calculados na varredura seguinte.
+
+- **G4:** a impressão digital do estágio C passa a ignorar essas duas tabelas, como já fazia com `rate_limits` e `oidc_transactions`. As tabelas de negócio, inclusive `requests` e `request_events`, continuam comparadas.
+- **Próximo rollout:** o script de atualização da homologação também precisa ignorar essas duas tabelas ao comparar os dados, ou vai parar sem motivo real.
