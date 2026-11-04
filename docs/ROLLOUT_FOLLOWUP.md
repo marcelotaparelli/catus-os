@@ -27,20 +27,20 @@ Depois de um rollback, `run` recusa executar de novo, porque o banco já tem a `
 
 Todos precisam estar cumpridos. Cada um tem como ser conferido.
 
-| #   | Critério                                               | Como conferir                                                               | Quem         |
-| --- | ------------------------------------------------------ | --------------------------------------------------------------------------- | ------------ |
-| 1   | `cea8960` aprovado, com checks verdes                  | `validate`, `quality` (41885979701) e `g4` (41885981145)                    | Registrado   |
-| 2   | Script revisado no PR, sem merge pendente que o altere | PR aprovado por você                                                        | Você         |
-| 3   | O script copiado é o revisado                          | `sha256sum -c` no comando abaixo                | Comando      |
-| 4   | `check` termina com `CHECK OK` no Arch                 | Saída do comando, enviada para revisão                                      | Você executa |
-| 5   | Migration pendente é só a `010`                        | Linha `pendente: só a migration`                                            | `check`      |
-| 6   | Cluster identificado                                   | Linha `Cluster:`, igual à identidade registrada no G4 de `75a9c14`          | Você compara |
-| 7   | Volume de alertas aceito                               | Linha `primeira varredura vai sinalizar`: cada demanda aberta gera um aviso | Você decide  |
-| 8   | 8 GB livres em repositório, Docker e `$HOME`           | `check` para se faltar                                                      | `check`      |
-| 9   | Janela sem uso combinada com a equipe                  | Uso durante a execução para o script. `check` avisa de sessões ativas       | Você         |
-| 10  | Quem fará a validação humana está definido             | Login Google, permissões e fila de cada papel                               | Você         |
-| 11  | Critérios de parada e rollback aceitos                 | Seção "Rollback"                                                            | Você         |
-| 12  | Autorização explícita                                  | Mensagem sua citando `cea8960`. **Nenhuma existe hoje**                     | Você         |
+| #   | Critério                                               | Como conferir                                                                                             | Quem         |
+| --- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | `cea8960` aprovado, com checks verdes                  | `validate`, `quality` (41885979701) e `g4` (41885981145)                                                  | Registrado   |
+| 2   | Script revisado no PR, sem merge pendente que o altere | PR aprovado por você                                                                                      | Você         |
+| 3   | O script copiado é o revisado                          | `sha256sum -c` no comando abaixo                                                                          | Comando      |
+| 4   | `check` termina com `CHECK OK` no Arch                 | Saída do comando, enviada para revisão                                                                    | Você executa |
+| 5   | Migration pendente é só a `010`                        | Linha `pendente: só a migration`                                                                          | `check`      |
+| 6   | Cluster identificado                                   | Linha `Cluster:`, igual ao início de `cluster+migrations` em `~/catus-state-g4-*.txt` do rollout anterior | Você compara |
+| 7   | Volume de alertas aceito                               | Linha `primeira varredura vai sinalizar`: cada demanda aberta gera um aviso                               | Você decide  |
+| 8   | 8 GB livres em repositório, Docker e `$HOME`           | `check` para se faltar                                                                                    | `check`      |
+| 9   | Janela sem uso combinada com a equipe                  | Uso durante a execução para o script. `check` avisa de sessões ativas                                     | Você         |
+| 10  | Quem fará a validação humana está definido             | Login Google, permissões e fila de cada papel                                                             | Você         |
+| 11  | Critérios de parada e rollback aceitos                 | Seção "Rollback"                                                                                          | Você         |
+| 12  | Autorização explícita                                  | Mensagem sua citando `cea8960`. **Nenhuma existe hoje**                                                   | Você         |
 
 Comando do `check`, que não altera nada na instalação; o `git fetch` só atualiza referências do repositório:
 
