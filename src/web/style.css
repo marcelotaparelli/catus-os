@@ -310,8 +310,8 @@ header .muted {
   margin: 2px 0;
   font-size: 13px;
 }
-.m3-cards button {
-  margin-top: 8px;
+.request > button {
+  margin: 8px 8px 0 0;
 }
 .m3-block,
 .scope-detail,
@@ -1327,7 +1327,12 @@ label.kind-option:has(:checked) {
   }
   .quiet {
     order: 6;
+    min-height: 0;
     margin-left: -6px;
+    padding: 4px 6px;
+  }
+  header .muted {
+    display: none;
   }
   .mobile-nav {
     position: sticky;

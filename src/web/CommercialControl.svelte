@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { roleLabels } from '../shared/identity';
   import { onMount, untrack } from 'svelte';
   import { idempotentPost } from './ui/post';
   import { dayText } from '../shared/domain';
@@ -385,9 +386,11 @@
   {#if role === 'administrator'}<details class="m3-policy">
       <summary>Configurar alçadas comerciais</summary>
       <p class="muted">
-        Política atual: {view.policy?.approval_roles.join(', ') ??
-          'nenhuma; decisões bloqueadas'} · versão {view.policy?.version ?? 0}.
-        O servidor impede autoaprovação de qualquer preparador.
+        Política atual: {view.policy?.approval_roles
+          .map((r) => roleLabels[r] ?? r)
+          .join(', ') ?? 'nenhuma; decisões bloqueadas'} · versão {view.policy
+          ?.version ?? 0}. O servidor impede autoaprovação de qualquer
+        preparador.
       </p>
       <form
         class="policy-form"
@@ -785,7 +788,9 @@
           {#if selected.decision}<p>
               Decisão: {labels[selected.decision.decision]} por {who(
                 selected.decision.actor_user_id,
-              )} ({selected.decision.actor_role}), política v{selected.decision
+              )} ({(roleLabels as Record<string, string>)[
+                selected.decision.actor_role
+              ] ?? selected.decision.actor_role}), política v{selected.decision
                 .policy_version}, revisão {selected.decision.scope_version}, em
               <time datetime={selected.decision.decided_at}
                 >{when(selected.decision.decided_at)}</time
