@@ -545,17 +545,12 @@ test('common Comercial and Economia tasks stay within their measured effort', as
     let version = created.version;
     for (const status of ['triage', 'ready'])
       version = (
-        await api<{ version: number }>(
-          po,
-          `requests/${created.id}`,
-          'PATCH',
-          {
-            status,
-            owner_user_id: people.dev,
-            next_action: 'Combinar o layout com o cliente',
-            version,
-          },
-        )
+        await api<{ version: number }>(po, `requests/${created.id}`, 'PATCH', {
+          status,
+          owner_user_id: people.dev,
+          next_action: 'Combinar o layout com o cliente',
+          version,
+        })
       ).version;
     await dev.reload();
     await open(dev, 'Mission Control');
