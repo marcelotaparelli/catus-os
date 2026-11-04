@@ -85,5 +85,9 @@
   "desenvolvedor-avancar-na-fila": {
     "clicks": 1,
     "fields": 0
+  },
+  "desenvolvedor-iniciar-revendo-proxima-acao": {
+    "clicks": 2,
+    "fields": 1
   }
 }

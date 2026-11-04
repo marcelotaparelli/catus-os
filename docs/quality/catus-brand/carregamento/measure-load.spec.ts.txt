@@ -1,0 +1,156 @@
+// Loading experience of the production build through the real static handler
+// (src/server/http.ts, no compression, real CSP) with the API proxied. Same steps on both
+// commits; run from a checkout of each. Network and CPU are emulated, not a real device.
+import { test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { spawn } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { login } from './login';
+
+const ORIGIN = 'http://127.0.0.1:4175';
+const OUT = process.env.LOAD_OUT ?? 'test-results/load';
+const RUNS = 3;
+const PROFILES = {
+  'slow-4g': { down: 1.6e6, up: 750e3, rtt: 150, cpu: 4 },
+  cabo: { down: 20e6, up: 5e6, rtt: 20, cpu: 1 },
+};
+test.use({ actionTimeout: 40000 });
+/** Page complete, fonts done and no new resource for 800 ms. */
+async function settled(page: Page) {
+  let last = -1,
+    since = Date.now();
+  for (const end = Date.now() + 40000; Date.now() < end; ) {
+    const n = await page.evaluate(() =>
+      document.readyState === 'complete' && document.fonts.status === 'loaded'
+        ? performance.getEntriesByType('resource').length
+        : -1,
+    );
+    if (n !== last) {
+      last = n;
+      since = Date.now();
+    } else if (n >= 0 && Date.now() - since > 800) return;
+    await page.waitForTimeout(100);
+  }
+  throw new Error('page did not settle');
+}
+const median = (xs: number[]) =>
+  [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
+
+test('loading experience', async ({ browser }) => {
+  test.setTimeout(1500000);
+  mkdirSync(OUT, { recursive: true });
+  const server = spawn('node_modules/.bin/bun', ['e2e/zz-load-server.ts'], {
+    stdio: 'ignore',
+  });
+  await new Promise((r) => setTimeout(r, 1500));
+  const ctxLogin = await browser.newContext();
+  const first = await ctxLogin.newPage();
+  await login(first, 'po@browser.test');
+  const state = await ctxLogin.storageState();
+  const results: Record<string, unknown> = {};
+  for (const [name, p] of Object.entries(PROFILES))
+    for (const [screen, auth] of [
+      ['entrada', false],
+      ['mission-control', true],
+    ] as const)
+      for (const warm of [false, true]) {
+        const samples: Record<string, number>[] = [];
+        for (let i = 0; i < RUNS; i++) {
+          const ctx = await browser.newContext({
+            viewport: { width: 1280, height: 900 },
+            ...(auth ? { storageState: state } : {}),
+          });
+          const page = await ctx.newPage();
+          const cdp = await ctx.newCDPSession(page);
+          await cdp.send('Network.enable');
+          await cdp.send('Emulation.setCPUThrottlingRate', { rate: p.cpu });
+          await cdp.send('Network.emulateNetworkConditions', {
+            offline: false,
+            latency: p.rtt,
+            downloadThroughput: p.down / 8,
+            uploadThroughput: p.up / 8,
+          });
+          await page.addInitScript(() => {
+            const w = window as unknown as Record<string, number>;
+            w.__lcp = 0;
+            w.__cls = 0;
+            new PerformanceObserver((l) => {
+              for (const e of l.getEntries()) w.__lcp = e.startTime;
+            }).observe({ type: 'largest-contentful-paint', buffered: true });
+            new PerformanceObserver((l) => {
+              for (const e of l.getEntries() as unknown as {
+                value: number;
+                hadRecentInput: boolean;
+              }[])
+                if (!e.hadRecentInput) w.__cls += e.value;
+            }).observe({ type: 'layout-shift', buffered: true });
+            document.fonts?.ready.then(() => {
+              w.__fonts = performance.now();
+            });
+          });
+          if (warm) {
+            await page.goto(ORIGIN + '/');
+            await settled(page);
+          }
+          await page.goto(ORIGIN + '/');
+          await page
+            .locator(auth ? 'main h1' : 'a,p')
+            .first()
+            .waitFor({ timeout: 40000 });
+          const action = auth
+            ? page.getByRole('button', { name: 'Atualizar dados' })
+            : page.getByRole('link', {
+                name: 'Entrar com conta corporativa',
+              });
+          await action.waitFor({ timeout: 40000 });
+          const usable = await page.evaluate(() => performance.now());
+          await settled(page);
+          await page.waitForTimeout(300);
+          samples.push(
+            await page.evaluate((u) => {
+              const w = window as unknown as Record<string, number>;
+              const res = performance.getEntriesByType(
+                'resource',
+              ) as PerformanceResourceTiming[];
+              const nav = performance.getEntriesByType(
+                'navigation',
+              )[0] as PerformanceNavigationTiming;
+              const by = (re: RegExp) =>
+                res
+                  .filter((r) => re.test(new URL(r.name).pathname))
+                  .reduce((a, r) => a + r.encodedBodySize, 0);
+              const fontsEnd = res
+                .filter((r) => /woff2/.test(r.name))
+                .reduce((a, r) => Math.max(a, r.responseEnd), 0);
+              return {
+                fcp:
+                  performance.getEntriesByName('first-contentful-paint')[0]
+                    ?.startTime ?? 0,
+                lcp: w.__lcp!,
+                cls: w.__cls!,
+                usable: u,
+                fonts_ready: w.__fonts ?? 0,
+                fonts_end: fontsEnd,
+                html_bytes: nav.encodedBodySize,
+                js_bytes: by(/\.js$/),
+                css_bytes: by(/\.css$/),
+                font_bytes: by(/\.woff2/),
+                api_bytes: by(/^\/api\//),
+              };
+            }, usable),
+          );
+          await ctx.close();
+        }
+        const keys = Object.keys(samples[0]!);
+        results[`${screen}/${name}/${warm ? 'repetida' : 'primeira'}`] =
+          Object.fromEntries(
+            keys.map((k) => [
+              k,
+              Math.round(median(samples.map((s) => s[k]!)) * 1000) / 1000,
+            ]),
+          );
+        writeFileSync(`${OUT}/load.json`, JSON.stringify(results, null, 2));
+      }
+  writeFileSync(`${OUT}/load.json`, JSON.stringify(results, null, 2));
+  server.kill('SIGTERM');
+});

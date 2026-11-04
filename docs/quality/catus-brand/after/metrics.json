@@ -35,10 +35,10 @@
     "actionsInFirstView": 2
   },
   "economia-gestor-390": {
-    "height": 1442,
+    "height": 1443,
     "overflow": false,
     "contentTop": 272,
-    "firstActionTop": 838,
+    "firstActionTop": 839,
     "actionsInFirstView": 0
   },
   "economia-gestor-rentabilidade-1280": {
@@ -49,7 +49,7 @@
     "actionsInFirstView": 0
   },
   "economia-gestor-rentabilidade-390": {
-    "height": 1343,
+    "height": 1344,
     "overflow": false,
     "contentTop": 272,
     "firstActionTop": 0,
@@ -77,10 +77,10 @@
     "actionsInFirstView": 0
   },
   "mission-control-admin-390": {
-    "height": 1838,
+    "height": 1839,
     "overflow": false,
     "contentTop": 272,
-    "firstActionTop": 1385,
+    "firstActionTop": 1386,
     "actionsInFirstView": 0
   },
   "economia-admin-preparar-1280": {
@@ -91,10 +91,10 @@
     "actionsInFirstView": 1
   },
   "economia-admin-preparar-390": {
-    "height": 2749,
+    "height": 2750,
     "overflow": false,
     "contentTop": 272,
-    "firstActionTop": 1086,
+    "firstActionTop": 1087,
     "actionsInFirstView": 0
   },
   "mission-control-po-1280": {
@@ -108,7 +108,7 @@
     "height": 3146,
     "overflow": false,
     "contentTop": 272,
-    "firstActionTop": 342,
+    "firstActionTop": 343,
     "actionsInFirstView": 2
   },
   "comercial-po-1280": {
@@ -140,14 +140,14 @@
     "actionsInFirstView": 0
   },
   "clientes-e-projetos-po-1280": {
-    "height": 1355,
+    "height": 1336,
     "overflow": false,
     "contentTop": 184,
     "firstActionTop": 0,
     "actionsInFirstView": 0
   },
   "clientes-e-projetos-po-390": {
-    "height": 2388,
+    "height": 2349,
     "overflow": false,
     "contentTop": 272,
     "firstActionTop": 0,
@@ -164,7 +164,7 @@
     "height": 1943,
     "overflow": false,
     "contentTop": 272,
-    "firstActionTop": 727,
+    "firstActionTop": 728,
     "actionsInFirstView": 0
   },
   "economia-dev-1280": {
@@ -203,7 +203,7 @@
     "actionsInFirstView": 0
   },
   "atendimento-inteligente-admin-390": {
-    "height": 1046,
+    "height": 1027,
     "overflow": false,
     "contentTop": 272,
     "firstActionTop": 0,

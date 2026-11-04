@@ -20,15 +20,19 @@ As imagens de `before/` e `after/` são de página inteira. Em telas estreitas, 
 
 ## Capturas finais
 
-`after/` e `after-tasks/` foram refeitas em `7c10f9e`, o último estado de tela, com o mesmo Chromium local de `before/`.
+`after/` e `after-tasks/` foram refeitas no último estado de tela, com o mesmo Chromium local de `before/`.
 
 ## Fontes na pilha Docker real
 
 `fonts-docker/` guarda os relatórios e as capturas das duas verificações, feitas no runner do GitHub com `deploy/catus.sh install`, pela borda HTTPS, sob a CSP do servidor, em Chromium, Firefox e WebKit.
 
-| Pasta                       | Build                                                | Execução    |
-| --------------------------- | ---------------------------------------------------- | ----------- |
-| `como-esta/`                | Este PR, com `*.woff2.css`                           | 41816497792 |
-| `com-correcao-no-servidor/` | Este PR, com a correção do servidor e sem o contorno | 41816527254 |
+| Pasta                       | Build                                                 | Execução    |
+| --------------------------- | ----------------------------------------------------- | ----------- |
+| `como-esta/`                | Este PR, com `*.woff2.css`                            | 41816497792 |
+| `com-correcao-no-servidor/` | Estado adotado: suporte nativo do #14, sem o contorno | 41816527254 |
 
 O WebKit registra uma recusa de `style-src` só depois da captura de tela: é o `<style>` que o próprio Playwright injeta para fotografar. Antes dela, a página não gera nenhuma mensagem nos três navegadores.
+
+## Experiência de carregamento
+
+`carregamento/` guarda a medição de `75a9c14` (`antes.json`) e deste PR (`depois.json`): build de produção pelo handler real, mediana de 3 execuções em Chromium, com rede e CPU emuladas. Não é um aparelho real. Os arquivos `measure-load*.txt` repetem a medição, se copiados para `e2e/` sem o sufixo `.txt`.

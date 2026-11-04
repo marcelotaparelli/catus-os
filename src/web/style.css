@@ -1355,6 +1355,7 @@ label.kind-option:has(:checked) {
     color: var(--navy);
     font-size: 13px;
     font-weight: 500;
+    line-height: 20px;
     text-decoration: none;
     border: 1px solid var(--line-strong);
     border-radius: var(--radius);
