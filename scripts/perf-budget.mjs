@@ -6,7 +6,7 @@ const budget = JSON.parse(readFileSync('perf-budget.json', 'utf8')).bundle;
 const files = readdirSync('dist/assets');
 // Fonts carry a .css name only because the server allows just .js and .css in
 // /assets (docs/DESIGN_SYSTEM.md); they are budgeted on their own, not as style.
-const isFont = (f) => f.endsWith('.woff2.css');
+const isFont = (f) => f.endsWith('.woff2');
 const sum = (ext, gzip) =>
   files
     .filter((f) => f.endsWith(ext) && !isFont(f))
