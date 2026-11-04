@@ -1,0 +1,111 @@
+{
+  "probes": {
+    "admin": {
+      "Mission Control": ["escopo", "prioridade"],
+      "Solicitações": [],
+      "Clientes e projetos": [],
+      "Comercial": ["contrato", "escopo"],
+      "Economia": []
+    },
+    "manager": {
+      "Mission Control": ["prioridade"],
+      "Solicitações": [],
+      "Clientes e projetos": [],
+      "Comercial": ["contrato", "escopo"],
+      "Economia": []
+    },
+    "commercial": {
+      "Mission Control": ["escopo", "prioridade"],
+      "Solicitações": [],
+      "Clientes e projetos": [],
+      "Comercial": ["contrato", "escopo"],
+      "Economia": ["estimativa", "planejamento"]
+    },
+    "po": {
+      "Mission Control": ["escopo", "prioridade"],
+      "Solicitações": [],
+      "Clientes e projetos": [],
+      "Comercial": ["contrato", "escopo"],
+      "Economia": ["estimativa", "planejamento"]
+    },
+    "dev": {
+      "Mission Control": ["prioridade"],
+      "Solicitações": [],
+      "Clientes e projetos": [],
+      "Comercial": ["contrato", "escopo"],
+      "Economia": []
+    },
+    "dev2": {
+      "Mission Control": ["prioridade"],
+      "Solicitações": [],
+      "Clientes e projetos": [],
+      "Comercial": ["contrato", "escopo"],
+      "Economia": []
+    }
+  },
+  "effort": {
+    "registrar": {
+      "clicks": 6,
+      "fields": 3,
+      "ms": 370,
+      "prazo_registrado": false
+    },
+    "localizar": {
+      "clicks": 9,
+      "fields": 0,
+      "ms": 302,
+      "cartoes_para_ler": 5,
+      "sinais_na_tela": {
+        "sem_responsavel": true,
+        "bloqueada": true,
+        "sem_cobertura": true,
+        "parada": false,
+        "vencida": false,
+        "atraso_cliente": false
+      },
+      "prazo_na_tela": false
+    },
+    "bloquear": {
+      "clicks": 8,
+      "fields": 1,
+      "ms": 889,
+      "motivo_estruturado": false,
+      "retorno_estruturado": false
+    },
+    "atribuir": {
+      "clicks": 4,
+      "fields": 0,
+      "ms": 212
+    },
+    "ciclo_completo": {
+      "clicks": 24,
+      "fields": 4,
+      "ms": 5798,
+      "etapas_manuais": 4
+    }
+  },
+  "routes": {
+    "followup": 404,
+    "sla": 404,
+    "incidents": 404,
+    "qa": 404,
+    "notifications": 404
+  },
+  "columns": [
+    "id",
+    "interaction_id",
+    "title",
+    "description",
+    "status",
+    "owner",
+    "next_action",
+    "version",
+    "created_at",
+    "updated_at",
+    "organization_id",
+    "owner_user_id",
+    "origin_proposal_id",
+    "suggested_acceptance_criteria",
+    "scope_item_id"
+  ]
+}

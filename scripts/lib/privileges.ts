@@ -45,6 +45,9 @@ const grants: Record<string, string> = {
   extraction_jobs: 'SELECT,INSERT',
   ai_proposals: 'SELECT,UPDATE',
   proposal_reviews: 'SELECT,INSERT',
+  request_events: 'SELECT,INSERT',
+  automation_jobs: 'SELECT,INSERT,UPDATE',
+  demand_alerts: 'SELECT,INSERT,UPDATE',
 };
 export const tables = [...Object.keys(grants), 'schema_migrations'];
 export async function applyGrants(
@@ -67,7 +70,7 @@ export async function applyGrants(
   for (const [name, columns] of Object.entries({
     users: 'subject',
     requests:
-      'status,owner_user_id,next_action,version,updated_at,origin_proposal_id,suggested_acceptance_criteria,scope_item_id',
+      'status,owner_user_id,next_action,version,updated_at,origin_proposal_id,suggested_acceptance_criteria,scope_item_id,follow_up_on,blocked_reason,waiting_on',
     sessions: 'last_seen_at,revoked_at',
   })) {
     if (
@@ -83,6 +86,7 @@ export async function applyGrants(
     'oidc_transactions',
     'rate_limits',
     'idempotency_keys',
+    'automation_jobs',
   ])
     if (
       (await c.query('SELECT to_regclass($1) present', ['public.' + name]))

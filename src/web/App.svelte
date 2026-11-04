@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import type { Component } from 'svelte';
   import {
+    dayFromText,
     dayText,
     instantFromText,
     statuses,
@@ -10,6 +11,7 @@
     transitions,
   } from '../shared/domain';
   import type { Snapshot, Status, WorkRequest } from '../shared/domain';
+  import { nextStep } from '../shared/followup';
   import './ui/tokens.css';
   import './style.css';
   import {
@@ -24,10 +26,12 @@
   import type { Location, RouteId } from './routes';
   import { roleLabels } from '../shared/identity';
   import type { SessionView, Member } from '../shared/identity';
-  import type { Overview as OverviewData } from '../shared/overview';
+  import type { OverviewWithFollowup as OverviewData } from '../shared/overview';
   // Module screens load on first visit (separate chunks), then stay mounted while
   // hidden so drafts, selections and scroll survive switching between modules.
   const loaders = {
+    overview: () => import('./Overview.svelte'),
+    queue: () => import('./DemandQueue.svelte'),
     comercial: () => import('./CommercialControl.svelte'),
     economia: () => import('./EconomicsControl.svelte'),
     'atendimento-inteligente': () => import('./IntelligentIntake.svelte'),
@@ -35,24 +39,26 @@
     auditoria: () => import('./AuditLog.svelte'),
     entrega: () => import('./DeliveryControl.svelte'),
   };
-  // Role reading of the Mission Control. Awaited with the first data load so the page
-  // does not shift when it appears; separate chunk to keep the initial bundle small.
-  const loadOverview = () => import('./Overview.svelte');
-  let Reading = $state.raw<Component<any> | null>(null);
-  let readingFailed = $state(false);
-  async function ensureReading() {
-    if (Reading) return;
+  // A failed chunk is null, so the screen can say so. The Mission Control reading is awaited
+  // with the first data load, so the page does not shift when it appears.
+  let mods = $state.raw<
+    Partial<Record<keyof typeof loaders, Component<any> | null>>
+  >({});
+  async function fetchMod(name: keyof typeof loaders) {
+    if (mods[name]) return;
+    let mod = null;
     try {
-      Reading = (await loadOverview()).default as Component<any>;
-      readingFailed = false;
+      mod = (await loaders[name]()).default as Component<any>;
     } catch {
-      readingFailed = true;
+      // Shown by chunkFailed where the module would be.
     }
+    mods = { ...mods, [name]: mod };
   }
+  const ensureReading = () => fetchMod('overview');
   let overview = $state<OverviewData | null>(null);
   let overviewError = $state('');
-  type LazyId = keyof typeof loaders;
-  const lazyIds = Object.keys(loaders) as LazyId[];
+  type LazyId = Exclude<keyof typeof loaders, 'overview' | 'queue'>;
+  const lazyIds = Object.keys(loaders).slice(2) as LazyId[];
   /** Props per module screen; identical to the former single-page wiring. */
   function moduleProps(id: LazyId, s: SessionView): Record<string, unknown> {
     const role = s.role;
@@ -110,20 +116,8 @@
         return { api, data, role };
     }
   }
-  const chunks = new Map<LazyId, Promise<unknown>>();
-  function load(id: LazyId) {
-    let chunk = chunks.get(id);
-    if (!chunk) {
-      chunk = loaders[id]().catch((e: unknown) => {
-        chunks.delete(id);
-        throw e;
-      });
-      chunks.set(id, chunk);
-    }
-    return chunk as Promise<{ default: unknown }>;
-  }
   function prefetch(id: RouteId) {
-    if (id in loaders) load(id as LazyId).catch(() => {});
+    if (id in loaders) void fetchMod(id as LazyId);
   }
   let session = $state<SessionView | null>(null);
   let members = $state<Member[]>([]);
@@ -146,17 +140,17 @@
   let kind = $state('meeting');
   let summary = $state('');
   let occurred = $state('');
-  let interactionId = $state('');
-  let title = $state('');
-  let description = $state('');
-  let owner = $state('');
-  let nextAction = $state('');
   let filter = $state('');
   let ownerFilter = $state('');
   let editing = $state<WorkRequest | null>(null);
   let editStatus = $state<Status>('new');
   let editOwner = $state('');
   let editAction = $state('');
+  let editFollowUp = $state('');
+  let changes = $state(0);
+  let editInQueue = $state(false);
+  let editReason = $state('');
+  let editWaiting = $state('client');
   const labels = statusLabels;
   const kindLabels: Record<string, string> = {
     meeting: 'Reunião',
@@ -197,12 +191,6 @@
       )
       .sort((a, b) => urgency[a.status] - urgency[b.status]),
   );
-  let blocked = $derived(data.requests.filter((r) => r.status === 'blocked'));
-  let uncovered = $derived(
-    data.requests.filter(
-      (r) => r.status !== 'done' && r.commercial_coverage !== 'covered',
-    ).length,
-  );
   // Navigation is role-aware but never a security boundary: the API authorizes every call.
   let route = $state<Location>(parse(location.hash));
   let visited = $state<Partial<Record<RouteId, boolean>>>({});
@@ -241,9 +229,12 @@
       filter = (statuses as readonly string[]).includes(estado) ? estado : '';
       ownerFilter = next.query.get('responsavel') ?? '';
     }
-    if (next.id && session && allowed(next.id, session.role))
+    if (next.id && session && allowed(next.id, session.role)) {
       visited[next.id] = true;
+      if (next.id in loaders) void fetchMod(next.id as LazyId);
+    }
     if (next.id === 'mission-control' && session) void ensureReading();
+    if (next.id === 'solicitacoes' && session) void fetchMod('queue');
   }
   async function navigated() {
     if (route.id) scrollTops.set(route.id, window.scrollY);
@@ -251,6 +242,7 @@
     error = notice = '';
     // Decisions taken in other modules must show here without a manual refresh.
     if (route.id === 'mission-control' && session) void refreshOverview();
+    if (route.id === 'solicitacoes' && session) void refresh();
     await tick();
     window.scrollTo({
       top: (route.id && scrollTops.get(route.id)) || 0,
@@ -381,11 +373,6 @@
       clientId =
       projectId =
       summary =
-      interactionId =
-      title =
-      description =
-      owner =
-      nextAction =
       editOwner =
       editAction =
         '';
@@ -455,23 +442,26 @@
       notice = `Registro salvo. ${next}`;
     });
   }
+  async function openEdit(item: WorkRequest, to?: Status) {
+    // The queue is read fresher than this snapshot, and covers demands past its 500.
+    await execute(refresh);
+    const r = data.requests.find((x) => x.id === item.id) ?? item;
+    edit(r);
+    editInQueue = true;
+    if (to) editStatus = to;
+  }
   function edit(r: WorkRequest) {
+    editInQueue = false;
     editing = r;
     editStatus = r.status;
     editOwner = r.owner_user_id ?? '';
     editAction = r.next_action;
+    editFollowUp = dayText(r.follow_up_on);
+    editReason = r.blocked_reason ?? '';
+    editWaiting = r.waiting_on ?? 'client';
   }
-  // The usual way forward, one click from the card. Blocking is left out on purpose:
-  // it needs a new next action, so it stays in the form.
-  const forward: Partial<Record<Status, Status>> = {
-    new: 'triage',
-    triage: 'ready',
-    ready: 'in_progress',
-    in_progress: 'done',
-    blocked: 'in_progress',
-  };
   function nextState(r: WorkRequest) {
-    const to = forward[r.status];
+    const to = nextStep(r.status, r.template ?? null)?.to;
     if (!to || !r.owner_user_id) return;
     if (session?.role === 'developer') {
       if (r.owner_user_id !== session.user.id) return;
@@ -486,12 +476,26 @@
     action = editAction,
   ) {
     if (!r) return;
+    // Closing from the card has no form: only what the form shows is sent.
+    const fromForm = r === editing;
+    const followUp = fromForm && editFollowUp ? dayFromText(editFollowUp) : '';
+    if (followUp === null) {
+      error = 'Informe o compromisso em DD/MM/AAAA.';
+      return;
+    }
     await execute(async () => {
       try {
         await api(`requests/${r.id}`, 'PATCH', {
           status,
           owner_user_id: owner,
           next_action: action,
+          ...(status === 'blocked'
+            ? { blocked_reason: editReason, waiting_on: editWaiting }
+            : {}),
+          // Untouched, the server keeps it or renews one that lapsed when the stage moves.
+          ...(followUp && followUp !== r.follow_up_on
+            ? { follow_up_on: followUp }
+            : {}),
           version: r.version,
         });
       } catch (e) {
@@ -509,11 +513,71 @@
       }
       editing = null;
       await refresh();
+      changes++;
       notice = 'Solicitação atualizada.';
     });
   }
 </script>
 
+{#snippet editForm()}{#if editing}<section
+      class="edit"
+      aria-label="Editar solicitação"
+      use:focusFirst
+    >
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <label
+          >Estado<select bind:value={editStatus}
+            ><option value={editing.status}>{labels[editing.status]}</option
+            >{#each [...transitions[editing.status], ...(editing.status === 'new' && editing.template === 'manutencao' ? (['ready'] as const) : [])].filter((s) => session?.role !== 'developer' || ['in_progress', 'blocked', 'done'].includes(s)) as s}<option
+                value={s}>{labels[s]}</option
+              >{/each}</select
+          ></label
+        ><label
+          >Responsável<select
+            bind:value={editOwner}
+            required
+            disabled={session?.role === 'developer'}
+            ><option value="">Vincule um membro</option
+            >{#each members as m}<option value={m.id}
+                >{m.name} · {m.email}</option
+              >{/each}</select
+          ></label
+        ><label
+          >Próxima ação<textarea
+            bind:value={editAction}
+            required
+            maxlength="2000"
+          ></textarea></label
+        ><label
+          >Compromisso (DD/MM/AAAA)<input
+            bind:value={editFollowUp}
+            inputmode="numeric"
+            autocomplete="off"
+          /></label
+        >{#if editStatus === 'blocked'}<label
+            >Motivo do bloqueio<input
+              bind:value={editReason}
+              required
+              maxlength="2000"
+            /></label
+          ><label
+            >Depende de<select bind:value={editWaiting}
+              ><option value="client">Cliente</option><option value="internal"
+                >Equipe interna</option
+              ><option value="third_party">Terceiro</option></select
+            ></label
+          >{/if}<button disabled={busy}>Salvar atualização</button><button
+          type="button"
+          class="secondary"
+          onclick={() => (editing = null)}>Cancelar</button
+        >
+      </form>
+    </section>{/if}{/snippet}
 {#snippet chunkFailed()}<div class="panel route-message" role="alert">
     <h2>Não foi possível carregar este módulo</h2>
     <p class="muted">A conexão falhou ou o Catus OS foi atualizado.</p>
@@ -535,43 +599,6 @@
         }
       }}>Avançar: {labels[to]}</button
     >{/if}{/snippet}
-{#snippet editForm(current: WorkRequest)}<section
-    class="edit"
-    aria-label="Editar solicitação"
-    use:focusFirst
-  >
-    <form
-      onsubmit={(e) => {
-        e.preventDefault();
-        void save();
-      }}
-    >
-      <label
-        >Estado<select bind:value={editStatus}
-          ><option value={current.status}>{labels[current.status]}</option
-          >{#each transitions[current.status].filter((s) => session?.role !== 'developer' || ['in_progress', 'blocked', 'done'].includes(s)) as s}<option
-              value={s}>{labels[s]}</option
-            >{/each}</select
-        ></label
-      ><label
-        >Responsável<select
-          bind:value={editOwner}
-          required
-          disabled={session?.role === 'developer'}
-          ><option value="">Vincule um membro</option
-          >{#each members as m}<option value={m.id}>{m.name} · {m.email}</option
-            >{/each}</select
-        ></label
-      ><label
-        >Próxima ação<textarea bind:value={editAction} required maxlength="2000"
-        ></textarea></label
-      ><button disabled={busy}>Salvar atualização</button><button
-        type="button"
-        class="secondary"
-        onclick={() => (editing = null)}>Cancelar</button
-      >
-    </form>
-  </section>{/snippet}
 {#snippet logo()}<a class="brand" href="#/" aria-label="Catus OS"
     ><svg class="logo" viewBox="0 0 191 61" aria-hidden="true"
       ><use href="#catus-logo" /></svg
@@ -686,13 +713,16 @@
       {/if}
       {#if show('mission-control')}
         <!-- Ready before the first paint (see initialize), so nothing shifts when it appears. -->
-        {#if Reading}<Reading
+        {#if mods.overview}<mods.overview
             {overview}
             error={overviewError}
             requests={data.requests}
             userId={session.user.id}
-          />{:else if readingFailed}{@render chunkFailed()}{/if}
-
+          />{:else if mods.overview === null}{@render chunkFailed()}{/if}
+        {#if overview?.followup?.for_me}<p class="attention">
+            <strong>{overview.followup.for_me}</strong>
+            na sua <a href={href('solicitacoes')}>fila de ações</a>
+          </p>{/if}
         <div class="overview">
           <section class="panel" aria-labelledby="mc-mine">
             <div class="section-heading">
@@ -728,67 +758,16 @@
                           })}>Apontar horas nesta demanda</a
                         >
                       </p>
-                      {#if editing?.id === r.id}{@render editForm(editing)}{/if}
+                      {#if editing?.id === r.id && !editInQueue}{@render editForm()}{/if}
                     </div>
                   </li>{/each}
               </ol>
-              {#if priorities.length > 5}<p class="muted">
-                  E mais {priorities.length - 5} em aberto.
-                </p>{/if}
             {:else}<div class="empty compact">
                 <h3>Nada atribuído a você</h3>
-                {#if session.role === 'developer'}<p>
-                    O PO atribuirá as próximas solicitações a você.
-                  </p>{:else if !data.clients.length}<p>
-                    Comece cadastrando o primeiro cliente e registrando um
-                    atendimento.
-                  </p>
-                  <a class="button-link" href={href('clientes')}
-                    >Registrar atendimento</a
-                  >{:else}<p>
-                    Distribua o trabalho e acompanhe a equipe em Solicitações.
-                  </p>
-                  <a class="button-link secondary" href={href('solicitacoes')}
-                    >Ver solicitações</a
-                  >{/if}
+                <a class="button-link secondary" href={href('solicitacoes')}
+                  >Ver solicitações</a
+                >
               </div>{/if}
-          </section>
-          <section class="panel" aria-labelledby="mc-attention">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">ATENÇÃO</p>
-                <h2 id="mc-attention">Bloqueios</h2>
-              </div>
-              {#if blocked.length}<a
-                  class="text-link"
-                  href={href('solicitacoes', { estado: 'blocked' })}
-                  >Ver bloqueadas</a
-                >{/if}
-            </div>
-            {#if blocked.length}<ol class="work-list">
-                {#each blocked.slice(0, 5) as r (r.id)}<li>
-                    <span class="status" data-status={r.status}
-                      >{labels[r.status]}</span
-                    >
-                    <div>
-                      <strong>{r.title}</strong>
-                      <p class="muted">{r.owner} · {r.project_name}</p>
-                      <p>
-                        <span class="muted">Próxima ação:</span>
-                        {r.next_action}
-                      </p>
-                    </div>
-                  </li>{/each}
-              </ol>{:else}<p class="muted">
-                Nenhuma solicitação bloqueada.
-              </p>{/if}
-            {#if uncovered && session.role !== 'developer'}<p class="attention">
-                <strong>{uncovered}</strong>
-                {uncovered === 1
-                  ? 'solicitação em aberto aguarda'
-                  : 'solicitações em aberto aguardam'} análise de cobertura comercial.
-                <a href={href('comercial')}>Revisar no Comercial</a>
-              </p>{/if}
           </section>
         </div>
         <section class="stats" aria-label="Resumo operacional">
@@ -806,11 +785,39 @@
             <span>Atribuídas a mim (abertas)</span><strong>{mine}</strong>
           </div>
           <div>
-            <span>Bloqueadas</span><strong>{blocked.length}</strong>
+            <span>Bloqueadas</span><strong
+              >{data.requests.filter((r) => r.status === 'blocked')
+                .length}</strong
+            >
           </div>
         </section>
       {/if}
       {#if show('solicitacoes')}
+        {#if mods.queue}<mods.queue
+            {api}
+            {session}
+            {members}
+            {changes}
+            interactions={data.interactions}
+            projects={data.projects}
+            editingId={editInQueue ? editing?.id : undefined}
+            form={editForm}
+            onedit={openEdit}
+            {busy}
+            run={(done: string, action: () => Promise<unknown>) =>
+              execute(async () => {
+                try {
+                  await action();
+                } finally {
+                  // Also after a failure: a lost race must show the current data.
+                  if (done) changes++;
+                }
+                if (done) {
+                  await refresh();
+                  notice = done;
+                }
+              })}
+          />{:else if mods.queue === null}{@render chunkFailed()}{/if}
         <section class="panel" id="solicitacoes" aria-label="Solicitações">
           <div class="section-heading">
             <div>
@@ -835,19 +842,13 @@
               >
             </div>
           </div>
-          <p class="muted">Até 500 solicitações mais recentes.</p>
+          {#if data.requests.length >= 500}<p class="muted">
+              Mostrando as 500 mais recentes. A fila de ações cobre todas as
+              abertas.
+            </p>{/if}
           {#if !visible.length}<div class="empty">
               <h3>Nenhuma solicitação neste recorte</h3>
-              <p>
-                {#if data.requests.length}Ajuste os filtros para ver as demais
-                  solicitações.{:else if session.role === 'developer'}Nenhum
-                  trabalho registrado ainda; o PO atribuirá solicitações a você.{:else}Registre
-                  um atendimento e sua primeira solicitação para começar.{/if}
-              </p>
-              {#if !data.requests.length && session.role !== 'developer'}<a
-                  class="button-link"
-                  href={href('clientes')}>Registrar atendimento</a
-                >{/if}
+              <p>Ajuste os filtros ou registre uma demanda acima.</p>
             </div>{:else}<div class="cards">
               {#each visible as r (r.id)}<article
                   class="request"
@@ -886,8 +887,6 @@
                     <dd>
                       {r.owner}{#if r.owner_user_id === session.user.id}<span
                           class="mine-tag">· você</span
-                        >{/if}{#if !r.owner_user_id}<span class="muted">
-                          · legado, vinculação pendente</span
                         >{/if}
                     </dd>
                     {#if r.status !== 'done'}<dt>Próxima ação</dt>
@@ -898,17 +897,13 @@
                         ?.summary ?? r.interaction_id}
                     </dd>
                   </dl>
-                  {#if editing?.id === r.id}{@render editForm(
-                      editing,
-                    )}{:else}{@render advance(r)}<button
+                  {#if editing?.id === r.id && !editInQueue}{@render editForm()}{:else}{@render advance(
+                      r,
+                    )}<button
                       class="secondary"
                       disabled={busy ||
                         (session.role === 'developer' &&
                           r.owner_user_id !== session.user.id)}
-                      title={session.role === 'developer' &&
-                      r.owner_user_id !== session.user.id
-                        ? 'Somente o responsável atribuído pode atualizar'
-                        : undefined}
                       onclick={() => edit(r)}>Atualizar solicitação</button
                     >{/if}
                 </article>{/each}
@@ -923,17 +918,9 @@
                 <p class="eyebrow">ENTRADA MANUAL</p>
                 <h2>Registrar contexto</h2>
               </div>
-              <span class="muted"
-                >Cliente → Projeto → Atendimento → Solicitação</span
-              >
             </div>
             <p class="next-step" role="note">
-              <strong>Próximo passo:</strong>
-              {#if !data.clients.length}cadastre o cliente em 01.{:else if !data.projects.length}crie
-                o projeto em 02.{:else if !data.interactions.length}registre o
-                atendimento em 03.{:else if !data.requests.length}crie a
-                solicitação em 04.{:else}para nova demanda, use 04; preencha
-                01–03 só se algo for novo.{/if}
+              Depois do atendimento, registre a demanda em Solicitações.
             </p>
             <div class="forms">
               <form
@@ -946,7 +933,7 @@
                       clientName = '';
                       clientId = id;
                     },
-                    'Próximo passo: 02 · Projeto.',
+                    '',
                   );
                 }}
               >
@@ -969,7 +956,7 @@
                       projectName = '';
                       projectId = id;
                     },
-                    'Próximo passo: 03 · Atendimento.',
+                    '',
                   );
                 }}
               >
@@ -1008,11 +995,10 @@
                       summary,
                       occurred_at: occurredAt,
                     },
-                    (id) => {
+                    () => {
                       summary = '';
-                      interactionId = id;
                     },
-                    'Próximo passo: 04 · Solicitação.',
+                    '',
                   );
                 }}
               >
@@ -1046,69 +1032,6 @@
                   ></textarea></label
                 ><button disabled={busy || !data.projects.length}
                   >Registrar atendimento</button
-                >
-              </form>
-              <form
-                onsubmit={(e) => {
-                  e.preventDefault();
-                  void create(
-                    'requests',
-                    {
-                      interaction_id: interactionId,
-                      title,
-                      description,
-                      owner_user_id: owner,
-                      next_action: nextAction,
-                    },
-                    () => {
-                      title = '';
-                      description = '';
-                      owner = '';
-                      nextAction = '';
-                    },
-                    'Agora vincule a cobertura em Comercial e estime em Economia.',
-                  );
-                }}
-              >
-                <h3>04 · Solicitação</h3>
-                <label
-                  >Atendimento de origem<select
-                    bind:value={interactionId}
-                    required
-                    ><option value="">Selecione</option
-                    >{#each data.interactions as i}<option value={i.id}
-                        >{data.projects.find((p) => p.id === i.project_id)
-                          ?.name} ·
-                        {i.summary.slice(0, 60)}</option
-                      >{/each}</select
-                  ></label
-                ><label
-                  >Título<input
-                    bind:value={title}
-                    required
-                    maxlength="200"
-                  /></label
-                ><label
-                  >Descrição<textarea
-                    bind:value={description}
-                    required
-                    maxlength="10000"
-                  ></textarea></label
-                ><label
-                  >Responsável<select bind:value={owner} required
-                    ><option value="">Selecione um membro</option
-                    >{#each members as m}<option value={m.id}
-                        >{m.name} · {m.email}</option
-                      >{/each}</select
-                  ></label
-                ><label
-                  >Próxima ação<textarea
-                    bind:value={nextAction}
-                    required
-                    maxlength="2000"
-                  ></textarea></label
-                ><button disabled={busy || !data.interactions.length}
-                  >Criar solicitação</button
                 >
               </form>
             </div>
@@ -1182,12 +1105,14 @@
             class="route-view"
             hidden={!show(id)}
           >
-            {#await load(id)}<p class="loading" role="status">
-                Carregando módulo…
-              </p>{:then mod}{@const Screen =
-                mod.default as Component<any>}<Screen
+            {#if mods[id]}{@const Screen = mods[id]}<Screen
                 {...moduleProps(id, session)}
-              />{:catch}{@render chunkFailed()}{/await}
+              />{:else if mods[id] === null}{@render chunkFailed()}{:else}<p
+                class="loading"
+                role="status"
+              >
+                Carregando módulo…
+              </p>{/if}
           </div>{/if}{/each}
       {@render feedback()}
     </main>

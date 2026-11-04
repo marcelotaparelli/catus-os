@@ -149,3 +149,6 @@ export const healthOrder: ProjectHealth[] = [
   'unmeasured',
   'positive',
 ];
+export type OverviewWithFollowup = Overview & {
+  followup?: import('./followup').FollowupSummary;
+};

@@ -1,0 +1,45 @@
+{
+  "registrar": {
+    "clicks": 3,
+    "fields": 1,
+    "ms": 466,
+    "prazo_registrado": true
+  },
+  "reatribuir": {
+    "clicks": 4,
+    "fields": 0
+  },
+  "ciclo_completo": {
+    "clicks": 7,
+    "fields": 2,
+    "ms": 1149,
+    "etapas_manuais": 3
+  },
+  "atribuir": {
+    "clicks": 1,
+    "fields": 0,
+    "ms": 164
+  },
+  "bloquear": {
+    "clicks": 5,
+    "fields": 1,
+    "ms": 1021,
+    "motivo_estruturado": true,
+    "retorno_estruturado": true
+  },
+  "localizar": {
+    "clicks": 1,
+    "fields": 0,
+    "ms": 321,
+    "cartoes_para_ler": 5,
+    "sinais_na_tela": {
+      "sem_responsavel": true,
+      "bloqueada": true,
+      "sem_cobertura": true,
+      "parada": true,
+      "vencida": true,
+      "atraso_cliente": true
+    },
+    "prazo_na_tela": true
+  }
+}

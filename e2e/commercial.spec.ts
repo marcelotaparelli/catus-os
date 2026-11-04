@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { login } from './login';
 import { open } from './nav';
+import { registerDemand } from './support-ops/form';
 async function selectVersion(page: Page, n: number) {
   const control = page.getByRole('region', { name: 'Controle comercial' });
   const select = control.getByRole('combobox', {
@@ -189,31 +190,13 @@ test('M3 PO prepares V1, manager approves, explicit coverage, change V2 preserve
     await commercial
       .getByRole('button', { name: 'Atualizar comercial', exact: true })
       .click();
-    await open(page, 'Clientes e projetos');
-    for (const title of ['M3 Checkout coberto', 'M3 Cupom fora do escopo']) {
-      const select = page.getByRole('combobox', {
-        name: 'Atendimento de origem',
-        exact: true,
+    for (const title of ['M3 Checkout coberto', 'M3 Cupom fora do escopo'])
+      await registerDemand(page, {
+        origin: 'SYNTHETIC M3 reunião de checkout',
+        title,
+        description: 'Solicitação sintética M3',
+        action: 'Revisar cobertura',
       });
-      const option = select
-        .locator('option')
-        .filter({ hasText: 'SYNTHETIC M3 reunião de checkout' });
-      await select.selectOption((await option.getAttribute('value'))!);
-      await page.getByLabel('Título', { exact: true }).fill(title);
-      await page
-        .getByLabel('Descrição', { exact: true })
-        .fill('Solicitação sintética M3');
-      await page
-        .getByRole('combobox', { name: 'Responsável', exact: true })
-        .selectOption({ label: 'Dev Browser · dev@browser.test' });
-      await page
-        .getByLabel('Próxima ação', { exact: true })
-        .fill('Revisar cobertura');
-      await page
-        .getByRole('button', { name: 'Criar solicitação', exact: true })
-        .click();
-      await expect(page.getByRole('status')).toContainText('Registro salvo');
-    }
     await open(page, 'Solicitações');
     for (const title of ['M3 Checkout coberto', 'M3 Cupom fora do escopo'])
       await expect(

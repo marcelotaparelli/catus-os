@@ -3,6 +3,7 @@ import { pool } from './db';
 import { loadConfig } from './config';
 import { webHandler } from './http';
 import { assertRuntimePrivileges } from '../../scripts/lib/privileges';
+import { startFollowupAutomation } from './followup/automation';
 if (
   !process.env.RUNTIME_DATABASE_URL ||
   process.env.DATABASE_URL ||
@@ -25,6 +26,11 @@ if (config.secureCookies && (!cert || !key))
 if (!config.secureCookies && (cert || key))
   throw new Error('TLS files require an HTTPS APP_ORIGIN');
 await assertRuntimePrivileges(pool);
+// Deterministic and local: no external service. FOLLOWUP_AUTOMATION=off stops only the alerts.
+const stopAutomation =
+  process.env.FOLLOWUP_AUTOMATION === 'off'
+    ? () => undefined
+    : startFollowupAutomation(pool);
 const handler = webHandler(createApp(config), config);
 const server = Bun.serve({
   hostname: '127.0.0.1',
@@ -39,6 +45,7 @@ console.log(
 );
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.on(signal, async () => {
+    stopAutomation();
     await server.stop();
     await pool.end();
     process.exit(0);

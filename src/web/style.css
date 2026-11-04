@@ -660,7 +660,7 @@ label.check-option {
 }
 .forms {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
   margin-top: 16px;
 }
@@ -802,12 +802,6 @@ dd {
   display: block;
   font-size: 22px;
   letter-spacing: -0.02em;
-}
-.overview {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 var(--gap);
-  align-items: start;
 }
 .work-list,
 .action-list,
@@ -1280,23 +1274,11 @@ label.kind-option:has(:checked) {
 
 /* Responsive */
 @media (max-width: 1200px) {
-  .forms {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .forms form + form {
-    padding-left: 0;
-    border-left: 0;
-  }
   .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 1000px) {
-  .overview {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 760px) {
