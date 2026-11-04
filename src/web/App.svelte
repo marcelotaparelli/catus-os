@@ -875,7 +875,6 @@
                 <p class="eyebrow">ENTRADA MANUAL</p>
                 <h2>Registrar contexto</h2>
               </div>
-              <span class="muted">Cliente → Projeto → Atendimento</span>
             </div>
             <p class="next-step" role="note">
               <strong>Próximo passo:</strong>

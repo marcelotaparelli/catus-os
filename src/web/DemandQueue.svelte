@@ -181,7 +181,7 @@
 <section class="panel" aria-label="Fila de ações">
   <div class="section-heading">
     <div>
-      <p class="eyebrow">NENHUMA DEMANDA ESQUECIDA</p>
+      <p class="eyebrow">O QUE FAZER AGORA</p>
       <h2>Fila de ações</h2>
     </div>
     <div class="queue-actions">
