@@ -152,4 +152,24 @@ Resultados em `docs/quality/ops-followup/antes/as-is.json` e `depois/depois.json
 4. Priorização explícita pelo gestor.
 5. Exibir o histórico (`GET /api/followup/:id/events`) e o tempo por etapa, já disponíveis na API.
 6. Modelo de implantação com descoberta, briefing e proposta.
+7. | Feriados e fuso da organização nos compromissos. | Tarefa                | Antes                    | Depois           | Tempo automatizado                                      | O que mudou além dos cliques |
+   | ------------------------------------------------ | --------------------- | ------------------------ | ---------------- | ------------------------------------------------------- | ---------------------------- |
+   | Registrar demanda                                | 6 + 3                 | **3 + 1**                | 370 → 491 ms     | Agora nasce com compromisso                             |
+   | Localizar o que precisa de ação                  | 9 + 0, 3 de 6 sinais  | **1 + 0, 6 de 6 sinais** | 302 → 295 ms     | Parada, vencida e atraso de cliente passam a existir    |
+   | Bloquear por causa do cliente                    | 8 + 1, em texto livre | **5 + 1, estruturado**   | 889 → 1.878 ms   | Motivo, dependência e data de cobrança                  |
+   | Dar dono a demanda sem responsável               | 4 + 0                 | **1 + 0**                | 212 → 141 ms     |                                                         |
+   | Levar uma demanda até o fim                      | 24 + 4                | **7 + 2**                | 5.798 → 1.867 ms | 4 passagens manuais viram 3, com a próxima ação revista |
+
+Dois tempos pioraram. Registrar e bloquear têm menos passos, mas agora recarregam a fila e os dados depois de salvar, e bloquear passa também pela liberação e pela sessão de outra pessoa.
+
+Resultados em `docs/quality/ops-followup/antes/as-is.json` e `depois/depois.json`.
+
+## 5. Backlog enxuto
+
+1. Etapas de revisão, QA e aceite com evidência, sem obrigar a manutenção.
+2. Variação Emergência: urgência, relógio de SLA e registro de comunicação.
+3. Notificação externa a partir de `automation_jobs`, sem bloquear transações.
+4. Priorização explícita pelo gestor.
+5. Exibir o histórico (`GET /api/followup/:id/events`) e o tempo por etapa, já disponíveis na API.
+6. Modelo de implantação com descoberta, briefing e proposta.
 7. Feriados e fuso da organização nos compromissos.

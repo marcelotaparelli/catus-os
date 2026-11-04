@@ -135,7 +135,10 @@
       <dt>Responsável</dt>
       <dd>{i.owner}</dd>
       <dt>Compromisso</dt>
-      <dd>{i.follow_up_on ? dayText(i.follow_up_on) : 'Sem data'}</dd>
+      <dd>
+        {#if i.follow_up_on}<time>{dayText(i.follow_up_on)}</time>{:else}Sem
+          data{/if}
+      </dd>
       {#if i.waiting_on}<dt>Depende de</dt>
         <dd>{waitingLabels[i.waiting_on]}</dd>{/if}
     </dl>
