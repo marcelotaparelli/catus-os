@@ -1,0 +1,28 @@
+name: Verify fonts on the Docker stack
+# Temporary verification branch; never merged. Real stack, HTTPS, CSP, three browser engines.
+on:
+  push:
+    branches: ['verify/fonts-**']
+permissions:
+  contents: read
+jobs:
+  fonts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Real install (same command as the homologation host)
+        run: deploy/catus.sh install
+      - name: Fonts over HTTPS through the edge, under the server's CSP
+        run: node .github/verify-fonts.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: font-evidence
+          path: font-evidence/
+          retention-days: 30
