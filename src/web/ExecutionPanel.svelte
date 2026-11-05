@@ -120,18 +120,20 @@
           Bloqueios só são contados por status mapeado aqui, sem adivinhar pelo
           nome.
         </p>
-        {#each e.unmapped_statuses as s (s.status)}
+        {#each e.unmapped_statuses as s (s.list_id + s.status)}
           <form
             onsubmit={(ev) => {
               ev.preventDefault();
               void post('status-mappings', {
                 status: s.status,
+                list_id: s.list_id,
                 state: new FormData(ev.currentTarget).get('state'),
               });
             }}
           >
             <label>
-              “{s.status}” ({s.tasks} tarefa(s))
+              “{s.status}” em {s.list_name ?? s.list_id ?? 'todas as listas'}
+              ({s.tasks} tarefa(s))
               <select name="state" required>
                 <option value="">Escolha</option>
                 {#each managerialStates as m}<option value={m}

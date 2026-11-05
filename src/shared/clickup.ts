@@ -90,6 +90,13 @@ export interface ExecutionAttention {
   owners: string[];
   reasons: ('overdue' | 'blocked' | 'waiting_client')[];
 }
+/** An open status without meaning. list_id null: the mapping saved from it is organization-wide. */
+export interface ExecutionUnmapped {
+  status: string;
+  tasks: number;
+  list_id: string | null;
+  list_name: string | null;
+}
 export interface ProjectExecution {
   freshness: ExecutionFreshness;
   /** Oldest successful read among the linked lists: the age of the whole picture. */
@@ -100,7 +107,7 @@ export interface ProjectExecution {
   owners: ExecutionOwner[];
   attention: ExecutionAttention[];
   /** Open tasks whose status has no explicit mapping; blocked figures are partial then. */
-  unmapped_statuses: { status: string; tasks: number }[];
+  unmapped_statuses: ExecutionUnmapped[];
   removed_from_lists: number;
   data_warnings: number;
 }

@@ -6,6 +6,7 @@ import type {
   ExecutionLink,
   ExecutionOwner,
   ExecutionSituation,
+  ExecutionUnmapped,
   ManagerialState,
   ProjectExecution,
 } from '../../shared/clickup';
@@ -23,8 +24,33 @@ export interface TaskRow {
   waiting_on: string[] | null;
   due_at: string | Date | null;
   due_has_time: boolean;
+  /**
+   * Lists whose workflow may define the status: the home list when known, otherwise every
+   * linked list of the project the task was read through.
+   */
+  status_lists: string[];
+}
+export interface StatusMappings {
+  organization: Map<string, ManagerialState>;
+  /** list id → status key → state. Wins over the organization-wide mapping. */
+  lists: Map<string, Map<string, ManagerialState>>;
 }
 export const statusKey = (status: string) => status.trim().toLowerCase();
+/**
+ * The same name can mean different things in two lists. A list mapping wins over the
+ * organization one; when the home list is unknown and the candidate lists disagree, the
+ * status stays unmapped instead of picking one.
+ */
+export function stateFor(t: TaskRow, m: StatusMappings) {
+  const key = statusKey(t.status_raw);
+  const states = new Set(
+    (t.status_lists.length ? t.status_lists : [null]).map(
+      (l) =>
+        (l !== null && m.lists.get(l)?.get(key)) || m.organization.get(key),
+    ),
+  );
+  return states.size === 1 ? [...states][0] : undefined;
+}
 const isClosed = (t: TaskRow) => ['closed', 'done'].includes(t.status_type);
 /**
  * A due date without a time has no known timezone in the data, so it only counts as late
@@ -51,7 +77,7 @@ export function freshnessOf(links: ExecutionLink[], now: Date) {
 export function summarize(
   links: ExecutionLink[],
   tasks: TaskRow[],
-  mappings: Map<string, ManagerialState>,
+  mappings: StatusMappings,
   people: Map<string, string>,
   extra: { removed_from_lists: number; data_warnings: number },
   now: Date,
@@ -76,11 +102,23 @@ export function summarize(
       data_warnings: 0,
     };
   const open = tasks.filter((t) => !isClosed(t));
-  const stateOf = (t: TaskRow) => mappings.get(statusKey(t.status_raw));
-  const unmapped = new Map<string, number>();
+  const stateOf = (t: TaskRow) => stateFor(t, mappings);
+  // Grouped by the list that would own the mapping; null when that list is ambiguous.
+  const listNames = new Map(links.map((l) => [l.list_id, l.list_name]));
+  const unmapped = new Map<string, ExecutionUnmapped>();
   for (const t of open)
-    if (!stateOf(t))
-      unmapped.set(t.status_raw, (unmapped.get(t.status_raw) ?? 0) + 1);
+    if (!stateOf(t)) {
+      const list = t.status_lists.length === 1 ? t.status_lists[0]! : null;
+      const id = list + '\u0000' + t.status_raw;
+      const u = unmapped.get(id) ?? {
+        status: t.status_raw,
+        tasks: 0,
+        list_id: list,
+        list_name: list && (listNames.get(list) ?? null),
+      };
+      u.tasks++;
+      unmapped.set(id, u);
+    }
   const known = new Map(tasks.map((t) => [t.task_id, t]));
   const countState = (state: ManagerialState) => {
     const n = open.filter((t) => stateOf(t) === state).length;
@@ -171,9 +209,12 @@ export function summarize(
         a.name.localeCompare(b.name),
     ),
     attention,
-    unmapped_statuses: [...unmapped]
-      .map(([status, n]) => ({ status, tasks: n }))
-      .sort((a, b) => b.tasks - a.tasks || a.status.localeCompare(b.status)),
+    unmapped_statuses: [...unmapped.values()].sort(
+      (a, b) =>
+        b.tasks - a.tasks ||
+        a.status.localeCompare(b.status) ||
+        (a.list_id ?? '').localeCompare(b.list_id ?? ''),
+    ),
     ...extra,
   };
 }

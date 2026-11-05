@@ -1118,8 +1118,10 @@ const row = (extra = {}) => ({
   waiting_on: [],
   due_at: null,
   due_has_time: false,
+  status_lists: ['1'],
   ...extra,
 });
+const noMappings = () => ({ organization: new Map(), lists: new Map() });
 test('overdue: a dated-only deadline gets the whole day; closed or undated tasks are never late', () => {
   const now = new Date('2026-11-05T12:00:00Z');
   expect(
@@ -1158,7 +1160,7 @@ test('freshness turns stale by age, and stale data keeps its real numbers, not z
   const s = summarize(
     [l(at(600))],
     [row()],
-    new Map(),
+    noMappings(),
     new Map(),
     { removed_from_lists: 0, data_warnings: 0 },
     now,
@@ -1169,7 +1171,7 @@ test('freshness turns stale by age, and stale data keeps its real numbers, not z
   const none = summarize(
     [],
     [],
-    new Map(),
+    noMappings(),
     new Map(),
     { removed_from_lists: 0, data_warnings: 0 },
     now,
@@ -1239,7 +1241,7 @@ test('dependencies the provider did not send are unknown, not zero', async () =>
   expect((await execution(projectId)).counts!.waiting_dependency).toBeNull();
 });
 test('blocked exists only through an explicit mapping, per organization and audited', async () => {
-  const { projectId } = await linked([
+  const { projectId, listId } = await linked([
     task('m1', { status: { status: 'Travado Agora', type: 'custom' } }),
     task('m2', { status: { status: 'Fazendo Agora', type: 'custom' } }),
   ]);
@@ -1254,7 +1256,14 @@ test('blocked exists only through an explicit mapping, per organization and audi
   e = await execution(projectId);
   expect(e.counts!.blocked).toBe(1);
   expect(e.situation).toBe('blocked');
-  expect(e.unmapped_statuses).toEqual([{ status: 'Fazendo Agora', tasks: 1 }]);
+  expect(e.unmapped_statuses).toEqual([
+    {
+      status: 'Fazendo Agora',
+      tasks: 1,
+      list_id: listId,
+      list_name: 'Lista ' + listId,
+    },
+  ]);
   await call('admin', 'clickup/status-mappings', 'POST', {
     status: 'fazendo agora',
     state: 'in_progress',
@@ -1281,6 +1290,166 @@ test('blocked exists only through an explicit mapping, per organization and audi
       })
     ).status,
   ).toBe(422);
+});
+
+test('the same status name can mean different things per list: a list mapping wins over the organization one', async () => {
+  const a = await linked([
+    task('sa', { status: { status: 'Em Espera Escopo', type: 'custom' } }),
+  ]);
+  const b = await linked([
+    task('sb', { status: { status: 'Em Espera Escopo', type: 'custom' } }),
+  ]);
+  await sync();
+  // Unmapped is reported per list, so a mapping saved from the panel stays in that list.
+  expect((await execution(b.projectId)).unmapped_statuses).toEqual([
+    {
+      status: 'Em Espera Escopo',
+      tasks: 1,
+      list_id: b.listId,
+      list_name: 'Lista ' + b.listId,
+    },
+  ]);
+  await call('manager', 'clickup/status-mappings', 'POST', {
+    status: 'em espera escopo',
+    state: 'waiting_client',
+  });
+  for (const p of [a, b])
+    expect((await execution(p.projectId)).counts).toMatchObject({
+      waiting_client: 1,
+      blocked: 0,
+    });
+  await call('manager', 'clickup/status-mappings', 'POST', {
+    status: 'Em Espera Escopo',
+    list_id: b.listId,
+    state: 'blocked',
+  });
+  expect((await execution(a.projectId)).counts).toMatchObject({
+    waiting_client: 1,
+    blocked: 0,
+  });
+  const eb = await execution(b.projectId);
+  expect(eb.counts).toMatchObject({ waiting_client: 0, blocked: 1 });
+  expect(eb.situation).toBe('blocked');
+  // The organization row is untouched: the list rule is a separate row.
+  expect(
+    (
+      await db.query(
+        "SELECT managerial_state FROM clickup_status_mappings WHERE organization_id=$1 AND status_key='em espera escopo'",
+        [org],
+      )
+    ).rows,
+  ).toEqual([{ managerial_state: 'waiting_client' }]);
+  expect(
+    Number(
+      (
+        await db.query(
+          "SELECT count(*) FROM audit_events WHERE entity_type='clickup_list_status_mapping' AND organization_id=$1 AND actor_user_id=$2",
+          [org, users.manager],
+        )
+      ).rows[0].count,
+    ),
+  ).toBe(1);
+  for (const list_id of ['abc', '', 12, '999999999'])
+    expect(
+      (
+        await raw('manager', 'clickup/status-mappings', 'POST', {
+          status: 'x',
+          list_id,
+          state: 'blocked',
+        })
+      ).status,
+    ).toBe(422);
+  for (const [who, status] of [
+    ['po', 403],
+    ['dev', 403],
+    ['foreign', 404],
+  ] as const)
+    expect(
+      (
+        await raw(who, 'clickup/status-mappings', 'POST', {
+          status: 'Em Espera Escopo',
+          list_id: b.listId,
+          state: 'done',
+        })
+      ).status,
+    ).toBe(status);
+  expect((await execution(b.projectId)).counts!.blocked).toBe(1);
+});
+test('the home list owns the status; without it, lists that disagree leave it unmapped', async () => {
+  const one = await linked([
+    task('h1', { status: { status: 'Status Duplo', type: 'custom' } }),
+  ]);
+  const second = String(nextList++);
+  lists.set(second, lists.get(one.listId)!);
+  mine.push((await link(one.projectId, second)).id);
+  await sync();
+  let e = await execution(one.projectId);
+  // One task, read through two lists, with no home list in the answer.
+  expect(e.counts!.tasks_open).toBe(1);
+  expect(e.unmapped_statuses).toEqual([
+    { status: 'Status Duplo', tasks: 1, list_id: null, list_name: null },
+  ]);
+  await call('manager', 'clickup/status-mappings', 'POST', {
+    status: 'status duplo',
+    list_id: one.listId,
+    state: 'blocked',
+  });
+  e = await execution(one.projectId);
+  expect(e.counts!.blocked).toBeNull();
+  expect(e.unmapped_statuses).toHaveLength(1);
+  await call('manager', 'clickup/status-mappings', 'POST', {
+    status: 'status duplo',
+    list_id: second,
+    state: 'blocked',
+  });
+  expect((await execution(one.projectId)).counts!.blocked).toBe(1);
+  await call('manager', 'clickup/status-mappings', 'POST', {
+    status: 'status duplo',
+    list_id: second,
+    state: 'in_progress',
+  });
+  expect((await execution(one.projectId)).counts!.blocked).toBeNull();
+  // The provider now says where the task lives: only that list's rule applies.
+  const homed = [
+    task('h1', {
+      status: { status: 'Status Duplo', type: 'custom' },
+      list: { id: one.listId, name: 'Lista' },
+      date_updated: '1767225700000',
+    }),
+  ];
+  lists.set(one.listId, homed);
+  lists.set(second, homed);
+  await makeDue();
+  await sync();
+  expect(
+    (
+      await db.query(
+        "SELECT home_list_id FROM clickup_tasks WHERE organization_id=$1 AND task_id='h1'",
+        [org],
+      )
+    ).rows[0].home_list_id,
+  ).toBe(one.listId);
+  e = await execution(one.projectId);
+  expect(e.counts!.blocked).toBe(1);
+  expect(e.unmapped_statuses).toEqual([]);
+});
+test('the home list is read from an object or a bare id, and a malformed one is a warning', () => {
+  for (const [list, expected, warned] of [
+    [{ id: '901', name: 'x' }, '901', 0],
+    [902, '902', 0],
+    ['903', '903', 0],
+    [undefined, null, 0],
+    [null, null, 0],
+    [{ id: 'x/../1' }, null, 1],
+    [{}, null, 1],
+    [1.5, null, 1],
+  ] as const) {
+    const warnings = { count: 0 };
+    expect(parseTask(task('pl', { list }), WORKSPACE, warnings).homeList).toBe(
+      expected,
+    );
+    expect(warnings.count).toBe(warned);
+  }
 });
 
 // ---- Access ----
@@ -1464,6 +1633,7 @@ test('database accounts: worker reaches only its tables, web cannot write what t
     'sessions',
     'audit_events',
     'clickup_status_mappings',
+    'clickup_list_status_mappings',
   ])
     await denied(workerDb, `SELECT 1 FROM ${table} LIMIT 1`);
   await denied(workerDb, 'UPDATE clickup_project_links SET active=false');
