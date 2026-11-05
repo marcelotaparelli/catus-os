@@ -331,7 +331,7 @@ if (opts.workspace && !/^\d{1,20}$/.test(opts.workspace)) {
   add(
     'fail',
     'Workspace ID',
-    'só dígitos, como na URL app.clickup.com/<workspace>/',
+    'só dígitos: o primeiro número no endereço do ClickUp aberto no navegador',
   );
 } else if (envStat) {
   const wanted: Record<string, string> = {
@@ -357,7 +357,7 @@ if (!workspace)
   add(
     'pending',
     'Workspace ID do ClickUp',
-    'rode de novo com --workspace <id> (dígitos da URL app.clickup.com/<id>/)',
+    'rode de novo com --workspace <id> (o primeiro número no endereço do ClickUp aberto no navegador)',
   );
 
 // ---- 5. Panel authentication ---------------------------------------------------------
