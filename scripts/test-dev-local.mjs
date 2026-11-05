@@ -202,7 +202,7 @@ let s = run({ viaBun: true });
 check(
   (await ready(s)) && !s.exited,
   'bun run dev:local fica pronto',
-  s.exited ? s.out.slice(-400) : '',
+  s.exited ? s.out.slice(-1800) : '',
 );
 let ports = portsOf(s);
 check(
@@ -339,7 +339,7 @@ section('Porta 3000 ocupada por outro programa');
   check(
     (await ready(s)) && !s.exited,
     'fica pronta mesmo assim',
-    s.exited ? s.out.slice(-300) : '',
+    s.exited ? s.out.slice(-1800) : '',
   );
   ports = portsOf(s);
   check(ports.api === 3001, 'API na porta alternativa', String(ports.api));
@@ -382,7 +382,7 @@ section('Portas 3000, 5173 e 5432 ocupadas ao mesmo tempo');
   check(
     (await ready(s)) && !s.exited,
     'fica pronta mesmo assim',
-    s.exited ? s.out.slice(-300) : '',
+    s.exited ? s.out.slice(-1800) : '',
   );
   ports = portsOf(s);
   check(
@@ -431,6 +431,57 @@ ctrlC(s);
 await finish(s);
 await sleep(300);
 
+section('Porta tomada por outro programa depois de conferida');
+{
+  // Vite loads its config right before listening: the only moment this race can be staged.
+  const config = join(dir, 'vite.config.ts');
+  const original = readFileSync(config, 'utf8');
+  const taker = join(dir, '.taker-pid');
+  writeFileSync(
+    config,
+    `import { spawn as spawnTaker } from 'node:child_process';
+import { connect as probe } from 'node:net';
+import { existsSync as seen, writeFileSync as note } from 'node:fs';
+if (!seen(${JSON.stringify(taker)})) {
+  const c = spawnTaker(process.execPath, ['-e', "require('net').createServer().listen(5173,'127.0.0.1')"], { detached: true, stdio: 'ignore', cwd: '/' });
+  c.unref();
+  note(${JSON.stringify(taker)}, String(c.pid));
+  for (let up = false; !up; ) up = await new Promise((r) => { const s = probe(5173, '127.0.0.1'); s.once('connect', () => (s.destroy(), r(true))); s.once('error', () => setTimeout(() => r(false), 30)); });
+}
+` + original,
+  );
+  s = run();
+  check(
+    (await ready(s)) && !s.exited,
+    'tenta outra porta sozinho',
+    s.exited ? s.out.slice(-1800) : '',
+  );
+  ports = portsOf(s);
+  check(ports.web === 5174, 'Vite na porta seguinte', String(ports.web));
+  check(
+    (await proxied(5174)).configured === false,
+    'proxy funciona depois da nova tentativa',
+  );
+  check(
+    (s.out.match(/Catus listening/g)?.length ?? 0) === 2,
+    'API reiniciada com a origem certa',
+  );
+  ctrlC(s);
+  await finish(s);
+  await sleep(300);
+  const takerPid = Number(readFileSync(taker, 'utf8'));
+  let takerAlive = true;
+  try {
+    process.kill(takerPid, 0);
+  } catch {
+    takerAlive = false;
+  }
+  check(takerAlive, 'quem tomou a porta continua intacto');
+  process.kill(takerPid, 'SIGKILL');
+  writeFileSync(config, original);
+  while (await portOpen(5173)) await sleep(30);
+}
+
 section('Execução morta de forma abrupta');
 s = run();
 await ready(s);
@@ -441,7 +492,7 @@ s = run();
 check(
   (await ready(s)) && !s.exited,
   'a execução seguinte recupera sozinha',
-  s.exited ? s.out.slice(-300) : '',
+  s.exited ? s.out.slice(-1800) : '',
 );
 check(
   s.out.includes('deixado por uma execução interrompida') &&

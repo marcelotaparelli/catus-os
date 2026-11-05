@@ -72,8 +72,8 @@ function holderOf(port) {
   return r.status === 0 ? holderFromSs(r.stdout) : undefined;
 }
 /** Picks a port and says why when it is not the usual one. Only ever reads who holds it. */
-async function takePort(what, range, preferred) {
-  const port = await chooseFreePort(preferred, range, portFree);
+async function takePort(what, range, preferred, isFree = portFree) {
+  const port = await chooseFreePort(preferred, range, isFree);
   if (port !== preferred[0]) {
     const holder = holderOf(preferred[0]);
     say(
@@ -202,10 +202,12 @@ async function runningClusterPort(adminUrl) {
     );
   return undefined; // the pid was reused by another program: a stale lock
 }
-function prefixed(name, stream) {
-  createInterface({ input: stream }).on('line', (line) =>
-    console.log(`[${name}] ${line}`),
-  );
+function prefixed(entry, stream) {
+  createInterface({ input: stream }).on('line', (line) => {
+    // Colors, if forced by the environment, must not hide the line we wait for.
+    entry.log += line.replace(/\x1b\[[0-9;]*m/g, '') + '\n';
+    console.log(`[${entry.name}] ${line}`);
+  });
 }
 function start(name, command, args, env) {
   const child = spawn(command, args, {
@@ -213,19 +215,55 @@ function start(name, command, args, env) {
     detached: true, // own group: order and waiting at shutdown stay in our hands
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  prefixed(name, child.stdout);
-  prefixed(name, child.stderr);
-  children.push({ name, process: child });
+  const entry = { name, process: child, log: '', launching: false };
+  prefixed(entry, child.stdout);
+  prefixed(entry, child.stderr);
+  children.push(entry);
   savePids();
   child.once('exit', (code, signal) => {
-    if (!stopping) {
+    entry.exited = true;
+    if (!stopping && !entry.launching) {
       console.error(
         `[dev] ${name} terminou sozinho (${signal ?? `código ${code}`}). Encerrando o restante; os dados continuam em .local/postgres.`,
       );
       void shutdown(1);
     }
   });
-  return child;
+  return entry;
+}
+/**
+ * Starts a service and waits for its own "listening" line. Another program can take a port
+ * after it was found free; that comes back as 'taken', so another port can be tried.
+ */
+async function launch(name, command, args, env, listening, ms = 30000) {
+  const entry = start(name, command, args, env);
+  entry.launching = true;
+  const until = Date.now() + ms;
+  while (Date.now() < until && !stopping) {
+    if (listening.test(entry.log)) {
+      entry.launching = false;
+      if (entry.exited) break;
+      return 'up';
+    }
+    if (/EADDRINUSE|already in use|in use\?/i.test(entry.log) || entry.exited)
+      break;
+    await sleep(100);
+  }
+  if (stopping) return 'up';
+  const taken = /EADDRINUSE|already in use|in use\?/i.test(entry.log);
+  await discard(entry);
+  if (taken) return 'taken';
+  throw new DevLocalError(
+    entry.exited
+      ? `${name} terminou ao iniciar. Veja as linhas acima.`
+      : `${name} não respondeu em ${ms / 1000} s.`,
+  );
+}
+async function discard(entry) {
+  entry.launching = true;
+  await stopGroup(entry.process.pid, entry.name);
+  children.splice(children.indexOf(entry), 1);
+  savePids();
 }
 async function shutdown(code) {
   if (stopping) return;
@@ -341,8 +379,6 @@ async function main() {
   const base = cleanChildEnvironment(process.env);
 
   const adopted = await recoverOrphans();
-  const webPort = await takePort('o Vite', PORT_RANGES.web, [settings.webPort]);
-  const apiPort = await takePort('a API', PORT_RANGES.api, [settings.apiPort]);
 
   // ---- PostgreSQL: this checkout's cluster if it is up, started otherwise.
   const usualDbPort = Number(new URL(fileEnv.DATABASE_URL).port || 5432);
@@ -404,29 +440,50 @@ async function main() {
   }
 
   // ---- API (same launcher and checks as production) and Vite, both with hot reload.
-  const origin = `http://${settings.host}:${webPort}`;
-  start('api', process.execPath, ['scripts/runtime.mjs', '--watch'], {
-    ...base,
-    PORT: String(apiPort),
-    APP_ORIGIN: origin,
-  });
-  await waitUntil(
-    () =>
-      fetch(`http://127.0.0.1:${apiPort}/api/auth/config`).then(
-        (r) => r.ok,
-        () => false,
-      ),
-    'A API',
-    30000,
-  );
-  if (stopping) return;
-  start(
-    'web',
-    resolve('node_modules/.bin/vite'),
-    ['--host', '127.0.0.1', '--port', String(webPort), '--strictPort'],
-    { ...base, CATUS_DEV_API_PORT: String(apiPort) },
-  );
-  await waitUntil(() => portFree(webPort).then((f) => !f), 'O Vite', 30000);
+  const taken = new Set();
+  const free = async (port) => !taken.has(port) && (await portFree(port));
+  let apiPort, webPort, origin;
+  for (let attempt = 1; ; attempt++) {
+    if (attempt > 5)
+      throw new DevLocalError(
+        'As portas continuam sendo ocupadas assim que ficam livres. Tente de novo em instantes.',
+      );
+    webPort = await takePort(
+      'o Vite',
+      PORT_RANGES.web,
+      [settings.webPort],
+      free,
+    );
+    apiPort = await takePort(
+      'a API',
+      PORT_RANGES.api,
+      [settings.apiPort],
+      free,
+    );
+    origin = `http://${settings.host}:${webPort}`;
+    const api = await launch(
+      'api',
+      process.execPath,
+      ['scripts/runtime.mjs', '--watch'],
+      { ...base, PORT: String(apiPort), APP_ORIGIN: origin },
+      /Catus listening on loopback port/,
+    );
+    if (api === 'taken') {
+      taken.add(apiPort);
+      continue;
+    }
+    const web = await launch(
+      'web',
+      resolve('node_modules/.bin/vite'),
+      ['--host', '127.0.0.1', '--port', String(webPort), '--strictPort'],
+      { ...base, CATUS_DEV_API_PORT: String(apiPort) },
+      /ready in \d+/,
+    );
+    if (web === 'up') break;
+    // The API was told this origin, so it starts again with the next one.
+    taken.add(webPort);
+    await discard(children.find((c) => c.name === 'api'));
+  }
   if (stopping) return; // a child died while waiting: shutdown already explained why
   say(`pronto: ${origin}`);
   say(`API na porta ${apiPort}; PostgreSQL na porta ${dbPort}`);

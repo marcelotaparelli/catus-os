@@ -48,6 +48,7 @@ Uma porta ocupada nunca é motivo para mexer em quem a ocupa. O `dev:local` esco
 | PostgreSQL | A de `DATABASE_URL`, 5432 | 5433 a 5499  | `.local/database.env` acompanha a porta; senhas e dados não mudam |
 
 - **Só neste computador:** os três escutam apenas em `127.0.0.1`. A porta alternativa vale só para esta execução, sem mudar a configuração de produção.
+- **Se outro programa tomar a porta logo depois da conferência,** o serviço tenta a próxima sozinho.
 - **A porta pode mudar entre execuções.** Use sempre o endereço de `pronto:`, e a linha seguinte mostra as portas da API e do banco.
 - **Outros comandos do banco:** `bun run migrate` e `bun run bootstrap:admin` usam a porta atual, por `.local/database.env`. Quem lê `DATABASE_URL` do `.env` continua apontando para a porta escrita lá.
 
