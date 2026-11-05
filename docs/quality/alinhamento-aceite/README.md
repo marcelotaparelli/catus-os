@@ -44,7 +44,7 @@ Build de produção, `scripts/perf-budget.mjs`, em bytes:
 | Medida          | `f1067b8` | Este PR | Limite  |
 | --------------- | --------- | ------- | ------- |
 | JS inicial      | 75.625    | 75.669  | 90.000  |
-| JS inicial gzip | 27.630    |         | 33.000  |
+| JS inicial gzip | 27.630    | 27.650  | 33.000  |
 | JS total        | 214.424   | 218.028 | 218.500 |
 | JS total gzip   | 76.009    | 77.449  | 80.000  |
 | CSS             | 19.527    | 19.527  | 20.000  |
