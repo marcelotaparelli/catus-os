@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { parseEnv } from 'node:util';
 import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { readSecretFile } from './lib/secret-file.mjs';
 export function runtimeEnvironment(base, local, roles) {
   const env = { ...local, ...base };
   env.RUNTIME_DATABASE_URL =
@@ -37,6 +38,7 @@ export function runtimeEnvironment(base, local, roles) {
     'CODEX_UPSTREAM_KEY',
     'DELIVERY_RUNNER_TOKEN',
     'CLICKUP_API_TOKEN',
+    'CLICKUP_API_TOKEN_FILE',
   ])
     delete env[key];
   return Object.fromEntries(
@@ -68,6 +70,7 @@ export function workerEnvironment(base, local, roles) {
     'CODEX_UPSTREAM_KEY',
     'DELIVERY_RUNNER_TOKEN',
     'CLICKUP_API_TOKEN',
+    'CLICKUP_API_TOKEN_FILE',
   ])
     delete env[key];
   return Object.fromEntries(
@@ -101,6 +104,18 @@ export function clickupWorkerEnvironment(base, local, roles) {
     'OIDC_CLIENT_SECRET',
   ])
     delete env[key];
+  // A token file is read here, as data: never sourced by a shell. It must be outside the
+  // repository and writable only by this user (scripts/lib/secret-file.mjs).
+  if (env.CLICKUP_API_TOKEN_FILE) {
+    if (env.CLICKUP_API_TOKEN)
+      throw new Error(
+        'Use CLICKUP_API_TOKEN or CLICKUP_API_TOKEN_FILE, not both',
+      );
+    env.CLICKUP_API_TOKEN = readSecretFile(env.CLICKUP_API_TOKEN_FILE, {
+      repository: process.cwd(),
+    });
+    delete env.CLICKUP_API_TOKEN_FILE;
+  }
   return Object.fromEntries(
     Object.entries(env).filter(([, v]) => v !== undefined),
   );

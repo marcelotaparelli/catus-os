@@ -32,6 +32,8 @@
     "ai:check": "bun scripts/check-ai.ts",
     "clickup:role": "bun --env-file=.local/database.env scripts/clickup-role.ts",
     "clickup:worker": "node scripts/runtime.mjs --clickup-worker",
+    "clickup:token": "node scripts/clickup-token.mjs",
+    "clickup:homolog": "bun --no-env-file scripts/clickup-homolog.ts",
     "delivery:runner": "node scripts/delivery-runner.mjs",
     "delivery:gateway": "node scripts/delivery-runner.mjs --gateway",
     "delivery:token": "bun --env-file=.local/database.env scripts/delivery-runner-token.ts",
