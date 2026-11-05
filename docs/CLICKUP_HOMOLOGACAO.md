@@ -26,7 +26,7 @@ bun run dev:local          # anota as portas que ele imprimir
 Antes de continuar, confirme que o banco é o novo (troque `<porta>` pela porta impressa):
 
 ```sh
-psql "postgres://catus:catus_local_only@127.0.0.1:<porta>/catus" -Atc "SHOW data_directory"
+bun -e "import pg from 'pg'; const c = new pg.Client('postgres://catus:catus_local_only@127.0.0.1:<porta>/catus'); await c.connect(); console.log((await c.query('SHOW data_directory')).rows[0]); await c.end()"
 # precisa terminar em ~/catus-homolog-clickup/.local/postgres
 ```
 
@@ -35,6 +35,18 @@ Se o caminho for outro, pare: o procedimento está apontando para um banco que n
 O login usa o OIDC configurado no `.env` desse checkout (ver `docs/DEV_LOCAL.md`). Sem OIDC, a API sobe com login desligado e o painel não abre; a comparação ainda pode ser feita pelas consultas da seção 6.
 
 **Descartar:** encerrar o `dev:local` (Ctrl+C) e apagar `~/catus-homolog-clickup`. Isso remove banco, contas de banco e dados lidos do ClickUp.
+
+### Ensaio deste ambiente (05/11/2026, sem ClickUp)
+
+Executado numa VM descartável, sem rede externa, com um clone novo da branch (`540d86d`) e um usuário sem privilégios:
+
+- O `dev:local` encontrou a porta 5432 ocupada por outro PostgreSQL, não mexeu nele e criou um cluster novo na 5433. `SHOW data_directory` apontou para `.local/postgres` do clone, e as migrations foram de 001 a 013.
+- `bun run clickup:role` sem `DATABASE_URL` **falhou**, porque o `dev:local` não grava a URL administrativa. O comando da seção 5 já foi corrigido e funcionou.
+- Conta do worker: sem leitura de `economic_records`, `contracts`, `requests`, `users` e das duas tabelas de mapeamento; INSERT em `clickup_tasks` sim, DELETE não; nenhum atributo elevado.
+- O worker sem token terminou com `missing_token`. Com um token canário em arquivo 0600 fora do clone e nenhuma lista vinculada, processou 0 listas, sem chamada de rede. O canário não apareceu na saída, em `.local`, no `.env` nem no log do `dev:local`.
+- Ao encerrar, nenhum processo do cluster ficou vivo, e o clone e o arquivo do token foram apagados.
+
+Não foi possível ensaiar aqui: login real (sem OIDC), leitura do ClickUp real (proibida nesta fase) e a recusa da conta forte pelo launcher (coberta por `tests/clickup.test.ts` chamando o worker diretamente).
 
 ## 3. Conta de serviço e token
 
@@ -68,9 +80,10 @@ Os identificadores reais ficam só no arquivo de ambiente da máquina de homolog
 No checkout de homologação:
 
 ```sh
-# Conta de banco do worker (sem acesso a contratos, economia ou demandas)
-bun run clickup:role
-bun run migrate            # aplica 012 e 013 com os privilégios
+# Conta de banco do worker (sem acesso a contratos, economia ou demandas). O dev:local não
+# grava a URL administrativa, então ela é passada só neste comando (cluster descartável):
+DATABASE_URL="postgres://catus:catus_local_only@127.0.0.1:<porta>/catus" bun run clickup:role
+bun run migrate            # o dev:local já aplicou 012 e 013; aqui só reaplica os privilégios
 
 # Configuração não secreta: no .env do checkout
 #   CLICKUP_ENABLED=true

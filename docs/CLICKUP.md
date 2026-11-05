@@ -75,7 +75,7 @@ O proprietário precisa decidir ou fornecer:
 Depois, no ambiente escolhido e fora deste repositório:
 
 ```sh
-bun run clickup:role     # cria a conta de banco do worker
+DATABASE_URL=<URL administrativa local> bun run clickup:role   # cria a conta de banco do worker
 bun run migrate          # aplica a 012 e a 013
 # no ambiente privado: CLICKUP_ENABLED=true, CLICKUP_API_TOKEN, CLICKUP_ORGANIZATION_ID, CLICKUP_WORKSPACE_ID
 # reiniciar a API para ela enxergar CLICKUP_ENABLED e CLICKUP_ORGANIZATION_ID
