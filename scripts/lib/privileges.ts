@@ -55,6 +55,7 @@ const grants: Record<string, string> = {
   clickup_tasks: 'SELECT',
   clickup_list_tasks: 'SELECT',
   clickup_status_mappings: 'SELECT,INSERT,UPDATE',
+  clickup_list_status_mappings: 'SELECT,INSERT,UPDATE',
 };
 export const tables = [...Object.keys(grants), 'schema_migrations'];
 /** Only its own tables: the ClickUp worker cannot read economics, contracts or demands. */

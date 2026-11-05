@@ -61,10 +61,11 @@ test('partners see real figures, and old or absent data says so instead of showi
   await fresh.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${EVIDENCE}/panel-1280.png`, fullPage: true });
 
-  // Explicit mapping turns "not available" into a count, on the same screen.
+  // Explicit mapping turns "not available" into a count, on the same screen. It is
+  // saved for the list where the status appears: another list may mean something else.
   await fresh.getByText('Status sem significado definido (2)').click();
   await fresh
-    .getByLabel('“Travado por Terceiro” (1 tarefa(s))')
+    .getByLabel('“Travado por Terceiro” em Lista sintética 9001 (1 tarefa(s))')
     .selectOption('blocked');
   await fresh
     .locator('form', { hasText: 'Travado por Terceiro' })

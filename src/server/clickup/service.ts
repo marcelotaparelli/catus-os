@@ -12,7 +12,7 @@ import type {
 } from '../../shared/clickup';
 import type { FinancialOverview, Overview } from '../../shared/overview';
 import { statusKey, summarize } from './summary';
-import type { TaskRow } from './summary';
+import type { StatusMappings, TaskRow } from './summary';
 
 const available = (ctx: Context, organizationId: string | undefined) =>
   !!organizationId && ctx.organizationId === organizationId;
@@ -30,13 +30,14 @@ async function executionByProject(ctx: Context, now: Date) {
   const byProject = new Map<string, Map<string, TaskRow>>();
   const removed = new Map<string, Set<string>>();
   const { rows: tasks } = await ctx.db.query(
-    `SELECT l.project_id,m.missing_since,t.task_id,t.name,t.url,t.parent_task_id,t.status_raw,t.status_type,t.assignee_ids,t.waiting_on,t.due_at,t.due_has_time
+    `SELECT l.project_id,l.list_id,t.home_list_id,m.missing_since,t.task_id,t.name,t.url,t.parent_task_id,t.status_raw,t.status_type,t.assignee_ids,t.waiting_on,t.due_at,t.due_has_time
  FROM clickup_list_tasks m JOIN clickup_project_links l ON l.id=m.link_id AND l.organization_id=m.organization_id
  JOIN clickup_tasks t ON t.organization_id=m.organization_id AND t.task_id=m.task_id
  WHERE m.organization_id=$1 AND l.active`,
     [org],
   );
-  // A task in two lists of one project is one task.
+  // A task in two lists of one project is one task. Its status belongs to its home list;
+  // without one, to every linked list it was read through.
   for (const t of tasks) {
     if (t.missing_since) {
       if (!removed.has(t.project_id)) removed.set(t.project_id, new Set());
@@ -44,16 +45,37 @@ async function executionByProject(ctx: Context, now: Date) {
       continue;
     }
     if (!byProject.has(t.project_id)) byProject.set(t.project_id, new Map());
-    byProject.get(t.project_id)!.set(t.task_id, t);
+    const live = byProject.get(t.project_id)!,
+      seen = live.get(t.task_id)?.status_lists ?? [];
+    live.set(t.task_id, {
+      ...t,
+      status_lists: t.home_list_id
+        ? [t.home_list_id]
+        : [...new Set([...seen, t.list_id])].sort(),
+    });
   }
-  const mappings = new Map<string, ManagerialState>(
-    (
-      await ctx.db.query(
-        'SELECT status_key,managerial_state FROM clickup_status_mappings WHERE organization_id=$1',
-        [org],
-      )
-    ).rows.map((m) => [m.status_key, m.managerial_state]),
-  );
+  const mappings: StatusMappings = {
+    organization: new Map(),
+    lists: new Map(),
+  };
+  for (const m of (
+    await ctx.db.query(
+      'SELECT NULL list_id,status_key,managerial_state FROM clickup_status_mappings WHERE organization_id=$1 UNION ALL SELECT list_id,status_key,managerial_state FROM clickup_list_status_mappings WHERE organization_id=$1',
+      [org],
+    )
+  ).rows as {
+    list_id: string | null;
+    status_key: string;
+    managerial_state: ManagerialState;
+  }[]) {
+    if (m.list_id === null)
+      mappings.organization.set(m.status_key, m.managerial_state);
+    else {
+      if (!mappings.lists.has(m.list_id))
+        mappings.lists.set(m.list_id, new Map());
+      mappings.lists.get(m.list_id)!.set(m.status_key, m.managerial_state);
+    }
+  }
   const people = new Map<string, string>(
     (
       await ctx.db.query(
@@ -133,12 +155,35 @@ async function setMapping(ctx: Context, body: Record<string, unknown>) {
   if (!key || key.length > 200) throw new InputError('Status inválido');
   if (!managerialStates.includes(body.state as ManagerialState))
     throw new InputError('Estado gerencial inválido');
-  const { rows } = await ctx.db.query(
-    `INSERT INTO clickup_status_mappings(organization_id,status_key,managerial_state,updated_by) VALUES($1,$2,$3,$4)
+  // Without a list: organization-wide, the fallback for every list (the M6.1 behaviour).
+  if (body.list_id === undefined || body.list_id === null) {
+    const { rows } = await ctx.db.query(
+      `INSERT INTO clickup_status_mappings(organization_id,status_key,managerial_state,updated_by) VALUES($1,$2,$3,$4)
  ON CONFLICT(organization_id,status_key) DO UPDATE SET managerial_state=excluded.managerial_state,updated_by=excluded.updated_by,updated_at=now() RETURNING id`,
-    [ctx.organizationId, key, body.state, ctx.userId],
+      [ctx.organizationId, key, body.state, ctx.userId],
+    );
+    await audit(ctx, 'clickup_status_mapping', rows[0].id, 'set:' + body.state);
+    return { status: 'ok' };
+  }
+  // Only a list this organization knows: a linked one or the home list of a stored task.
+  if (typeof body.list_id !== 'string' || !/^\d{1,20}$/.test(body.list_id))
+    throw new InputError('Lista inválida');
+  const known = await ctx.db.query(
+    'SELECT 1 FROM clickup_project_links WHERE organization_id=$1 AND list_id=$2 UNION ALL SELECT 1 FROM clickup_tasks WHERE organization_id=$1 AND home_list_id=$2 LIMIT 1',
+    [ctx.organizationId, body.list_id],
   );
-  await audit(ctx, 'clickup_status_mapping', rows[0].id, 'set:' + body.state);
+  if (!known.rowCount) throw new InputError('Lista não vinculada');
+  const { rows } = await ctx.db.query(
+    `INSERT INTO clickup_list_status_mappings(organization_id,list_id,status_key,managerial_state,updated_by) VALUES($1,$2,$3,$4,$5)
+ ON CONFLICT(organization_id,list_id,status_key) DO UPDATE SET managerial_state=excluded.managerial_state,updated_by=excluded.updated_by,updated_at=now() RETURNING id`,
+    [ctx.organizationId, body.list_id, key, body.state, ctx.userId],
+  );
+  await audit(
+    ctx,
+    'clickup_list_status_mapping',
+    rows[0].id,
+    'set:' + body.state,
+  );
   return { status: 'ok' };
 }
 /** undefined: not one of these routes. Off or another tenant: as if they did not exist. */

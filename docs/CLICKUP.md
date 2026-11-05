@@ -14,15 +14,16 @@ flowchart LR
   A --> P[Painel: gestor e administrador]
 ```
 
-| Peça                                     | Responsabilidade                                                       |
-| ---------------------------------------- | ---------------------------------------------------------------------- |
-| `src/server/clickup/client.ts`           | Única saída de rede, só GET; ritmo, limite de corpo e erros por código |
-| `src/server/clickup/parse.ts`            | Valida a resposta e guarda só os campos necessários                    |
-| `src/server/clickup/sync.ts`             | Reserva, leitura completa, gravação em transação e reconciliação       |
-| `src/server/clickup/summary.ts`          | Regras puras do painel                                                 |
-| `src/server/clickup/service.ts`          | Rotas web e dados de execução no `/api/overview`                       |
-| `scripts/clickup-worker.ts`              | Processo que detém o token                                             |
-| `db/migrations/012_clickup_readonly.sql` | Tabelas novas, somente aditivas                                        |
+| Peça                                         | Responsabilidade                                                       |
+| -------------------------------------------- | ---------------------------------------------------------------------- |
+| `src/server/clickup/client.ts`               | Única saída de rede, só GET; ritmo, limite de corpo e erros por código |
+| `src/server/clickup/parse.ts`                | Valida a resposta e guarda só os campos necessários                    |
+| `src/server/clickup/sync.ts`                 | Reserva, leitura completa, gravação em transação e reconciliação       |
+| `src/server/clickup/summary.ts`              | Regras puras do painel                                                 |
+| `src/server/clickup/service.ts`              | Rotas web e dados de execução no `/api/overview`                       |
+| `scripts/clickup-worker.ts`                  | Processo que detém o token                                             |
+| `db/migrations/012_clickup_readonly.sql`     | Tabelas novas, somente aditivas                                        |
+| `db/migrations/013_clickup_status_scope.sql` | Lista principal da tarefa e mapeamento por lista, somente aditivos     |
 
 ### Decisões
 
@@ -32,7 +33,7 @@ flowchart LR
 - **Token só no worker.** O lançador da web o remove do ambiente. A conta de banco do worker não lê economia, contratos, demandas nem usuários; a conta da web não grava as tabelas que o worker preenche.
 - **Uma organização e um workspace por token.** O worker só atende `CLICKUP_ORGANIZATION_ID` e recusa a leitura inteira se uma tarefa vier de outro workspace. A API web esconde as rotas das demais organizações.
 - **Dados mínimos.** Não guarda descrição, comentários, campos personalizados, e-mail nem a resposta bruta. Erros registram só um código e o status HTTP.
-- **Status explícitos.** O status original é preservado. Bloqueio e espera do cliente só contam por mapeamento feito por um sócio, por organização; nada é deduzido do nome.
+- **Status explícitos, por lista.** O status original é preservado. Bloqueio e espera do cliente só contam por mapeamento feito por um sócio; nada é deduzido do nome. Ver "Escopo do mapeamento de status".
 - **Sem invenção.** Não há percentual de conclusão nem previsão de entrega. Contagem que não se pode saber sai como "Não disponível".
 
 ### Regras do painel
@@ -49,6 +50,20 @@ flowchart LR
 
 O painel lê `status.type` para separar abertas de concluídas: `closed` e `done` são concluídas, e qualquer outro tipo conta como aberta.
 
+### Escopo do mapeamento de status
+
+No ClickUp, os status são definidos por espaço, pasta ou lista. O mesmo nome, como "em espera", pode significar "bloqueada" numa lista e "aguardando cliente" em outra. Um mapeamento só por organização aplicaria o sentido de uma lista às outras sem aviso.
+
+| Regra                        | Como funciona                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lista que define o status    | A lista principal da tarefa (`list.id` da resposta, em `clickup_tasks.home_list_id`). Sem ela, as listas vinculadas do projeto em que a tarefa foi lida |
+| Precedência                  | Mapeamento da lista (`clickup_list_status_mappings`) e, na falta dele, o da organização (`clickup_status_mappings`)                                     |
+| Listas candidatas discordam  | Sem lista principal conhecida e com sentidos diferentes: o status fica sem mapeamento e a contagem sai como "Não disponível"                            |
+| Mapeamento salvo pelo painel | Vale só para a lista indicada ao lado do status. Só sai como "todas as listas" (organização) quando a lista é ambígua                                   |
+| Dados do M6.1                | Mapeamentos por organização continuam valendo como padrão. Tarefas sem lista principal recebem o campo na próxima leitura                               |
+
+A API aceita `list_id` opcional em `POST /api/clickup/status-mappings`. A lista precisa estar vinculada na organização ou ser a lista principal de uma tarefa guardada. A alteração é auditada como `clickup_list_status_mapping`.
+
 ## O que falta para conectar um projeto real
 
 O proprietário precisa decidir ou fornecer:
@@ -60,13 +75,15 @@ O proprietário precisa decidir ou fornecer:
 Depois, no ambiente escolhido e fora deste repositório:
 
 ```sh
-bun run clickup:role     # cria a conta de banco do worker
-bun run migrate          # aplica a 012
+DATABASE_URL=<URL administrativa local> bun run clickup:role   # cria a conta de banco do worker
+bun run migrate          # aplica a 012 e a 013
 # no ambiente privado: CLICKUP_ENABLED=true, CLICKUP_API_TOKEN, CLICKUP_ORGANIZATION_ID, CLICKUP_WORKSPACE_ID
 # reiniciar a API para ela enxergar CLICKUP_ENABLED e CLICKUP_ORGANIZATION_ID
 # vincular a lista no painel: projeto > Execução no ClickUp > Listas vinculadas
 bun run clickup:worker -- --once   # uma leitura, para conferir
 ```
+
+Procedimento completo, com ambiente descartável, token fora do repositório, comparação de dados, critérios de aceite e rollback: [`CLICKUP_HOMOLOGACAO.md`](CLICKUP_HOMOLOGACAO.md).
 
 `clickup:role` segue a mesma guarda de `db:roles` e só aceita banco em loopback. A VPS precisará de um caminho próprio, ainda não escrito, assim como um serviço supervisionado para o worker.
 
@@ -82,7 +99,6 @@ bun run clickup:worker -- --once   # uma leitura, para conferir
 - A leitura completa consome uma chamada por página a cada 15 minutos por lista.
 - Limite de 200 páginas (20.000 tarefas) por lista; acima disso a leitura falha, visivelmente, sem gravar.
 - Prazo sem horário usa a tolerância de um dia porque o fuso do workspace não é lido.
-- O mapeamento de status vale para a organização inteira, embora o ClickUp permita o mesmo nome com sentidos diferentes por lista.
 - `clickup_people.user_id` existe, mas ainda não há tela para ligar uma pessoa do ClickUp a um usuário do Catus OS.
 - `clickup_sync_runs` cresce sem limpeza automática: cerca de 35 mil linhas por ano e por lista.
 - Tarefas arquivadas saem da leitura e aparecem como removidas da lista.

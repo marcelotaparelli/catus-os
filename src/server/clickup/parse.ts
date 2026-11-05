@@ -12,6 +12,8 @@ export interface ParsedTask {
   name: string;
   url: string | null;
   parent: string | null;
+  /** The list whose workflow defines the status; null when the provider does not say. */
+  homeList: string | null;
   status: string;
   statusType: string;
   assignees: ParsedPerson[];
@@ -135,11 +137,22 @@ export function parseTask(
     parent = value.parent;
   else if (value.parent !== null && value.parent !== undefined)
     warnings.count++;
+  // Documented as {id,name,...}; a bare id is accepted too.
+  let homeList: string | null = null;
+  const list = isObject(value.list) ? value.list.id : value.list;
+  const listId =
+    typeof list === 'number' && Number.isSafeInteger(list)
+      ? String(list)
+      : list;
+  if (typeof listId === 'string' && /^\d{1,20}$/.test(listId))
+    homeList = listId;
+  else if (value.list !== null && value.list !== undefined) warnings.count++;
   return {
     id: value.id,
     name,
     url: safeUrl(value.url, warnings),
     parent,
+    homeList,
     status: statusText ?? '(sem status)',
     statusType: statusType ?? 'unknown',
     assignees: parsePeople(value.assignees, warnings),

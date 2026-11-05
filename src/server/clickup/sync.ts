@@ -104,15 +104,15 @@ async function applyRead(
   // Same stored content is not rewritten, and an older answer never replaces a newer one
   // (a task in two lists is read twice, at different moments).
   const written = await db.query<{ inserted: boolean }>(
-    `INSERT INTO clickup_tasks AS c(organization_id,task_id,name,url,parent_task_id,status_raw,status_type,assignee_ids,waiting_on,due_at,due_has_time,start_at,closed_at,source_created_at,source_updated_at)
- SELECT $1,x.id,x.name,x.url,x.parent,x.status,x."statusType",ARRAY(SELECT jsonb_array_elements(x.assignees)->>'id'),
+    `INSERT INTO clickup_tasks AS c(organization_id,task_id,name,url,parent_task_id,home_list_id,status_raw,status_type,assignee_ids,waiting_on,due_at,due_has_time,start_at,closed_at,source_created_at,source_updated_at)
+ SELECT $1,x.id,x.name,x.url,x.parent,x."homeList",x.status,x."statusType",ARRAY(SELECT jsonb_array_elements(x.assignees)->>'id'),
   CASE WHEN x."waitingOn" IS NULL OR x."waitingOn"='null'::jsonb THEN NULL ELSE ARRAY(SELECT jsonb_array_elements_text(x."waitingOn")) END,
   x."dueAt",x."dueHasTime",x."startAt",x."closedAt",x."createdAt",x."updatedAt"
- FROM jsonb_to_recordset($2::jsonb) AS x(id text,name text,url text,parent text,status text,"statusType" text,assignees jsonb,"waitingOn" jsonb,"dueAt" timestamptz,"dueHasTime" boolean,"startAt" timestamptz,"closedAt" timestamptz,"createdAt" timestamptz,"updatedAt" timestamptz)
- ON CONFLICT(organization_id,task_id) DO UPDATE SET name=excluded.name,url=excluded.url,parent_task_id=excluded.parent_task_id,status_raw=excluded.status_raw,status_type=excluded.status_type,assignee_ids=excluded.assignee_ids,waiting_on=excluded.waiting_on,due_at=excluded.due_at,due_has_time=excluded.due_has_time,start_at=excluded.start_at,closed_at=excluded.closed_at,source_created_at=excluded.source_created_at,source_updated_at=excluded.source_updated_at,synced_at=now()
+ FROM jsonb_to_recordset($2::jsonb) AS x(id text,name text,url text,parent text,"homeList" text,status text,"statusType" text,assignees jsonb,"waitingOn" jsonb,"dueAt" timestamptz,"dueHasTime" boolean,"startAt" timestamptz,"closedAt" timestamptz,"createdAt" timestamptz,"updatedAt" timestamptz)
+ ON CONFLICT(organization_id,task_id) DO UPDATE SET name=excluded.name,url=excluded.url,parent_task_id=excluded.parent_task_id,home_list_id=excluded.home_list_id,status_raw=excluded.status_raw,status_type=excluded.status_type,assignee_ids=excluded.assignee_ids,waiting_on=excluded.waiting_on,due_at=excluded.due_at,due_has_time=excluded.due_has_time,start_at=excluded.start_at,closed_at=excluded.closed_at,source_created_at=excluded.source_created_at,source_updated_at=excluded.source_updated_at,synced_at=now()
  WHERE (c.source_updated_at IS NULL OR excluded.source_updated_at IS NULL OR excluded.source_updated_at>=c.source_updated_at)
- AND (c.name,c.url,c.parent_task_id,c.status_raw,c.status_type,c.assignee_ids,c.waiting_on,c.due_at,c.due_has_time,c.start_at,c.closed_at,c.source_updated_at)
- IS DISTINCT FROM (excluded.name,excluded.url,excluded.parent_task_id,excluded.status_raw,excluded.status_type,excluded.assignee_ids,excluded.waiting_on,excluded.due_at,excluded.due_has_time,excluded.start_at,excluded.closed_at,excluded.source_updated_at)
+ AND (c.name,c.url,c.parent_task_id,c.home_list_id,c.status_raw,c.status_type,c.assignee_ids,c.waiting_on,c.due_at,c.due_has_time,c.start_at,c.closed_at,c.source_updated_at)
+ IS DISTINCT FROM (excluded.name,excluded.url,excluded.parent_task_id,excluded.home_list_id,excluded.status_raw,excluded.status_type,excluded.assignee_ids,excluded.waiting_on,excluded.due_at,excluded.due_has_time,excluded.start_at,excluded.closed_at,excluded.source_updated_at)
  RETURNING (xmax=0) inserted`,
     [org, JSON.stringify(read.tasks)],
   );
