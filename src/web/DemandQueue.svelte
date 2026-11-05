@@ -59,7 +59,26 @@
   let origin = $state('');
   let owner = $state('');
 
+  // One small form per card: which answer is being recorded, and on which demand.
+  type Step = 'agreement' | 'confirmation' | 'accepted' | 'rejected';
+  let acting = $state<{ id: string; step: Step } | null>(null);
+  let criteria = $state('');
+  let highRisk = $state(false);
+  let reason = $state('');
+  let said = $state('');
+  let trail = $state<Record<string, { text: string }[]>>({});
+
+  const stepLabels: Record<Step, string> = {
+    agreement: 'Salvar combinado',
+    confirmation: 'Registrar confirmação',
+    accepted: 'Registrar aceite',
+    rejected: 'Registrar recusa',
+  };
+
   const developer = $derived(session.role === 'developer');
+  const authorizer = $derived(
+    session.role === 'manager' || session.role === 'administrator',
+  );
   const mine = $derived(queue?.items.filter((i) => i.for_me) ?? []);
   const team = $derived(queue?.items.filter((i) => !i.for_me) ?? []);
   const today = $derived(queue?.as_of ?? new Date().toISOString().slice(0, 10));
@@ -79,8 +98,127 @@
       version: i.version,
       ...changes,
     });
+  const align = (i: QueueItem, body: Record<string, unknown>) =>
+    api(`requests/${i.id}/alignment`, 'POST', {
+      version: i.version,
+      ...body,
+    });
+  /** What can stand as the client's answer: an acceptance must come after the delivery. */
+  const answers = (i: QueueItem, step: Step) =>
+    interactions
+      .filter(
+        (x) =>
+          x.project_id === i.project_id &&
+          (step === 'confirmation' ||
+            (!!i.alignment?.delivered_at &&
+              x.occurred_at >= i.alignment.delivered_at)),
+      )
+      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
+  function act(i: QueueItem, step: Step) {
+    acting = { id: i.id, step };
+    criteria = i.alignment?.criteria ?? i.suggested_criteria ?? '';
+    highRisk = !!i.alignment?.high_risk;
+    reason = said = '';
+  }
+  function submit(e: SubmitEvent, i: QueueItem, step: Step) {
+    e.preventDefault();
+    void run(`${i.title}: ${stepLabels[step]} ok.`, async () => {
+      if (step === 'agreement')
+        await align(i, {
+          kind: step,
+          criteria,
+          high_risk: highRisk,
+          reason: i.alignment ? reason : undefined,
+        });
+      else {
+        const id = said
+          ? (
+              await api<{ id: string }>('interactions', 'POST', {
+                project_id: i.project_id,
+                kind: 'service',
+                summary: said,
+                occurred_at: new Date().toISOString(),
+              })
+            ).id
+          : answers(i, step)[0]?.id;
+        await align(i, { kind: step, evidence_interaction_id: id, reason });
+      }
+      acting = null;
+    });
+  }
   const lacksOwner = (i: QueueItem) =>
     i.signals.some((s) => s.kind === 'no_owner');
+  /** Every button of a card, in order: [label, what it does, is it secondary]. */
+  function actions(i: QueueItem) {
+    const al = i.alignment,
+      running = i.status === 'in_progress',
+      delivered = !!al?.delivered_at && running,
+      step = al && running ? null : nextStep(i.status, i.template),
+      told = (done: string, what: () => Promise<unknown>) => () =>
+        run(`${i.title}: ${done}.`, what),
+      edit = (to?: Status) => () => onedit(i as unknown as WorkRequest, to);
+    const list: [string, () => void, boolean?][] = [];
+    const add = (when: unknown, ...b: (typeof list)[number]) => {
+      if (when) list.push(b);
+    };
+    add(
+      al?.high_risk && !al.authorized && authorizer,
+      'Autorizar alto risco',
+      told('alto risco autorizado', () =>
+        align(i, { kind: 'risk_authorization' }),
+      ),
+    );
+    if (!developer && delivered) {
+      list.push(
+        ['Registrar aceite', () => act(i, 'accepted')],
+        ['Registrar recusa', () => act(i, 'rejected'), true],
+        [
+          'Concluir sem aceite',
+          told('concluída sem aceite', () => patch(i, { status: 'done' })),
+          true,
+        ],
+      );
+    }
+    add(
+      al && running && !delivered,
+      'Marcar como entregue',
+      told('entregue, aguardando o cliente', () =>
+        align(i, { kind: 'delivered' }),
+      ),
+    );
+    add(
+      lacksOwner(i) && !developer,
+      'Assumir',
+      told('assumida', () => patch(i, { owner_user_id: session.user.id })),
+    );
+    add(
+      step && (!developer || ['in_progress', 'done'].includes(step.to)),
+      step?.label ?? '',
+      () => advance(i, step!.to),
+      lacksOwner(i),
+    );
+    add(
+      ['triage', 'ready', 'in_progress'].includes(i.status),
+      'Bloquear',
+      edit('blocked'),
+      true,
+    );
+    list.push(['Atualizar', edit(), true]);
+    if (!developer && !delivered) {
+      list.push([
+        al ? 'Mudar combinado' : 'Combinado',
+        () => act(i, 'agreement'),
+        true,
+      ]);
+      add(
+        al && !al.confirmed,
+        'Cliente confirmou',
+        () => act(i, 'confirmation'),
+        true,
+      );
+    }
+    return list;
+  }
   function advance(i: QueueItem, to: Status) {
     // Closing has no next action. Any other stage shows it first: it may no longer apply.
     if (to === 'done')
@@ -105,7 +243,7 @@
 </script>
 
 {#snippet card(i: QueueItem)}
-  {@const step = nextStep(i.status, i.template)}
+  {@const al = i.alignment}
   <li class="request">
     <span class="status" data-status={i.status}>{statusLabels[i.status]}</span>
     <p class="eyebrow">{i.client_name} / {i.project_name}</p>
@@ -126,35 +264,81 @@
       </dd>
       {#if i.waiting_on}<dt>Depende de</dt>
         <dd>{waitingLabels[i.waiting_on]}</dd>{/if}
+      {#if al}<dt>Critérios de aceite · v{al.version}</dt>
+        <dd>
+          {al.criteria}<br /><span class="muted"
+            >{al.confirmed
+              ? 'Confirmado pelo cliente'
+              : 'Sem confirmação do cliente'}{al.high_risk
+              ? ' · Alto risco'
+              : ''}</span
+          >
+        </dd>{/if}
     </dl>
-    {#if editingId === i.id}{@render form()}{:else}
-      <div class="row-actions">
-        {#if lacksOwner(i) && !developer}<button
-            disabled={busy}
-            onclick={() =>
-              run(`${i.title}: assumida.`, () =>
-                patch(i, { owner_user_id: session.user.id }),
-              )}>Assumir</button
+    {#if al}<details
+        ontoggle={(e) => {
+          if ((e.currentTarget as HTMLDetailsElement).open)
+            api<{ text: string }[]>(`requests/${i.id}/alignment`).then(
+              (rows) => (trail[i.id] = rows),
+            );
+        }}
+      >
+        <summary>Histórico do combinado</summary>
+        <ul>
+          {#each trail[i.id] ?? [] as t}<li>{t.text}</li>{/each}
+        </ul>
+      </details>{/if}
+    {#if acting?.id === i.id}
+      {@const s = acting.step}
+      {@const known = answers(i, s)}
+      <form
+        class="edit"
+        aria-label={stepLabels[s]}
+        onsubmit={(e) => submit(e, i, s)}
+      >
+        {#if s === 'agreement'}
+          <label
+            >Critérios de aceite<textarea
+              bind:value={criteria}
+              required
+              maxlength="4000"
+            ></textarea></label
+          >
+          <label
+            ><input type="checkbox" bind:checked={highRisk} /> Alto risco: exige autorização
+            de um gestor</label
+          >
+        {:else}
+          <label
+            >{known[0]
+              ? `Evidência: ${known[0].summary.slice(0, 60)}. Se houver resposta mais nova, escreva aqui`
+              : 'O que o cliente disse'}<input
+              bind:value={said}
+              required={!known[0]}
+              maxlength="2000"
+            /></label
+          >
+        {/if}
+        {#if s === 'rejected' || (al && s === 'agreement')}<label
+            >Motivo {s === 'rejected' ? 'da recusa' : 'da mudança'}<input
+              bind:value={reason}
+              required
+              maxlength="2000"
+            /></label
           >{/if}
-        {#if step && (!developer || ['in_progress', 'done'].includes(step.to))}<button
-            class:secondary={lacksOwner(i)}
-            disabled={busy}
-            aria-label={`${step.label}: ${i.title}`}
-            onclick={() => advance(i, step.to)}>{step.label}</button
-          >{/if}
-        {#if ['triage', 'ready', 'in_progress'].includes(i.status)}<button
-            class="secondary"
-            disabled={busy}
-            aria-label={`Bloquear: ${i.title}`}
-            onclick={() => onedit(i as unknown as WorkRequest, 'blocked')}
-            >Bloquear</button
-          >{/if}
-        <button
-          class="secondary"
-          disabled={busy}
-          aria-label={`Atualizar: ${i.title}`}
-          onclick={() => onedit(i as unknown as WorkRequest)}>Atualizar</button
+        <button disabled={busy}>{stepLabels[s]}</button>
+        <button type="button" class="secondary" onclick={() => (acting = null)}
+          >Cancelar</button
         >
+      </form>
+    {:else if editingId === i.id}{@render form()}{:else}
+      <div class="row-actions">
+        {#each actions(i) as [label, onclick, secondary] (label)}<button
+            class:secondary
+            disabled={busy}
+            aria-label={`${label}: ${i.title}`}
+            {onclick}>{label}</button
+          >{/each}
         {#if !developer && i.signals.some((s) => s.kind === 'no_coverage')}<a
             class="button-link secondary"
             href={href('comercial', { demanda: i.id })}>Analisar cobertura</a

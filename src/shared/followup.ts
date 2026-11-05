@@ -34,7 +34,12 @@ export type SignalKind =
   | 'no_coverage'
   | 'stalled'
   | 'blocked'
-  | 'no_follow_up';
+  | 'no_follow_up'
+  | 'no_agreement'
+  | 'unconfirmed'
+  | 'awaiting_acceptance'
+  | 'repeated_change'
+  | 'risk_unauthorized';
 export interface Signal {
   kind: SignalKind;
   /** Lower comes first in the queue. */
@@ -43,6 +48,19 @@ export interface Signal {
   reason: string;
   /** An alert exists for this episode and nobody acknowledged it yet. */
   is_new?: boolean;
+}
+/** The current agreement of a demand. Absent means nobody recorded one, not that it is fine. */
+export interface Alignment {
+  version: number;
+  criteria: string;
+  high_risk: boolean;
+  /** The client confirmed this version. */
+  confirmed: boolean;
+  /** A manager or administrator authorized this version. */
+  authorized: boolean;
+  /** Set while the delivery waits for the client's answer. */
+  delivered_at: string | null;
+  rejections: number;
 }
 export interface QueueItem {
   id: string;
@@ -59,6 +77,9 @@ export interface QueueItem {
   blocked_reason: string | null;
   waiting_on: WaitingOn | null;
   version: number;
+  alignment: Alignment | null;
+  /** Criteria that already exist for this demand. Never sent to a developer. */
+  suggested_criteria?: string | null;
   for_me: boolean;
   signals: Signal[];
 }

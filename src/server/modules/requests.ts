@@ -15,6 +15,7 @@ import type { TemplateId, WaitingOn } from '../../shared/followup';
 import { authorize, audit } from '../auth/policy';
 import type { Context } from '../auth/policy';
 import { HttpError } from '../errors';
+import { guardStage } from '../followup/alignment';
 const utcToday = () => new Date().toISOString().slice(0, 10);
 /** A commitment is a calendar day from today on; a past date would be born overdue. */
 function followUp(value: unknown): string {
@@ -133,6 +134,7 @@ export async function updateRequest(
   const assigned = await owner(ctx, body.owner_user_id);
   const today = utcToday(),
     moved = current.status !== next;
+  if (moved) await guardStage(ctx, requestId, current.template, next);
   let commitment = current.follow_up_on;
   if (body.follow_up_on !== undefined) commitment = followUp(body.follow_up_on);
   else if (moved && (!commitment || commitment < today))

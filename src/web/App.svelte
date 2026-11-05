@@ -462,7 +462,7 @@
   }
   function nextState(r: WorkRequest) {
     const to = nextStep(r.status, r.template ?? null)?.to;
-    if (!to || !r.owner_user_id) return;
+    if (!to || !r.owner_user_id || (to === 'done' && r.has_agreement)) return;
     if (session?.role === 'developer') {
       if (r.owner_user_id !== session.user.id) return;
       if (to !== 'in_progress' && to !== 'done') return;

@@ -163,7 +163,7 @@ test('nothing is forgotten: full journey, right people, failure and effort', asy
     await shot(po, 'po-sem-responsavel-1280');
     const m = new Meter(),
       t0 = Date.now();
-    await m.click(item.getByRole('button', { name: 'Assumir', exact: true }));
+    await m.click(item.getByRole('button', { name: /^Assumir/ }));
     await expect(itemOf(po, 'Órfã da manutenção')).not.toContainText(
       'Sem responsável',
     );
