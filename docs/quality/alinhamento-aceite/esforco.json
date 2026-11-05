@@ -1,0 +1,26 @@
+{
+  "combinado_preenchido": {
+    "clicks": 2,
+    "fields": 0
+  },
+  "confirmacao_com_atendimento": {
+    "clicks": 2,
+    "fields": 0
+  },
+  "marcar_entregue": {
+    "clicks": 1,
+    "fields": 0
+  },
+  "recusa_sem_atendimento": {
+    "clicks": 2,
+    "fields": 2
+  },
+  "aceite_sem_atendimento": {
+    "clicks": 2,
+    "fields": 1
+  },
+  "aceite_com_atendimento": {
+    "clicks": 2,
+    "fields": 0
+  }
+}
