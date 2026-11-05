@@ -1,5 +1,9 @@
 # Progresso
 
+## M6.1 fluxo assistido de homologação — branch `feat/m6-1-homologation-assist` · 05/11/2026
+
+Status: **pré-requisitos de homologação prontos; HOLD para ClickUp real, merge, deploy, produção e M6.2.** Empilhada sobre o PR #21, que fica intacto. `clickup:homolog` (init, verificação, report) prepara e confere clone, banco, migrations, conta e privilégios do worker, OIDC, administrador, token e vínculo, e para antes do ClickUp. `clickup:token` captura o token sem eco, só em terminal interativo, e grava 0600 fora do repositório. O launcher lê `CLICKUP_API_TOKEN_FILE` como dado, nunca com `source`. Ensaio com login OIDC real, por um emissor HTTPS de ensaio, painel e vínculo pelo navegador: [docs/CLICKUP_HOMOLOGACAO.md](docs/CLICKUP_HOMOLOGACAO.md). Nenhum orçamento alterado e nenhuma mudança de interface.
+
 ## M6.1 preparação da homologação — branch `feat/m6-1-homologation-prep` · 05/11/2026
 
 Status: **GO para preparar a homologação isolada; HOLD para merge, deploy, ClickUp real e M6.2.** Empilhada sobre o PR #20 (`0fa16ef`), que fica intacto. Corrige o risco de mapeamento de status entre listas: migration 013 aditiva (`clickup_tasks.home_list_id` e `clickup_list_status_mappings`), precedência lista > organização, status ambíguo fica sem mapeamento. `tests/clickup-upgrade.test.ts` aplica 012 com dados do M6.1 e depois 013 pelo executor real: colunas e linhas antigas iguais, mesmo painel, SQL do M6.1 ainda funciona (rollback sem migration de reversão). Procedimento do primeiro projeto real em [docs/CLICKUP_HOMOLOGACAO.md](docs/CLICKUP_HOMOLOGACAO.md); condição de corrida do `dev:local` em [docs/quality/DEV_LOCAL_RACE.md](docs/quality/DEV_LOCAL_RACE.md). Orçamento de JS: exceção de 222.500 bytes aprovada provisoriamente só para o M6.1, medido 221.901, nenhum limite alterado.

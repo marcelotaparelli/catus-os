@@ -2,7 +2,7 @@
 
 Procedimento para a primeira leitura real, de um único projeto, num ambiente isolado e descartável. Nada aqui é executado sem autorização explícita do proprietário. Este documento é público: identificadores reais, nomes de clientes e tokens nunca são escritos nele, em issues, PRs ou chat.
 
-**Estado atual:** ensaiado só com dados sintéticos e um ClickUp simulado. Nenhuma chamada ao ClickUp real foi feita. Merge, deploy e início do M6.2 continuam em HOLD.
+**Estado atual:** ensaiado com dados sintéticos, um ClickUp simulado e login OIDC real contra um emissor de ensaio. Nenhuma chamada ao ClickUp real foi feita. Merge, deploy e início do M6.2 continuam em HOLD.
 
 ## 1. Pré-condições
 
@@ -11,42 +11,45 @@ Procedimento para a primeira leitura real, de um único projeto, num ambiente is
 3. Um projeto piloto com uma única lista do ClickUp, de preferência com status personalizados, responsáveis, subtarefas, prazos e pelo menos uma dependência, para exercitar todas as leituras.
 4. O proprietário escolhe a máquina. Ela não pode ser a instalação do Arch em uso nem a VPS de produção.
 
-## 2. Ambiente isolado
+## 2. Fluxo assistido
 
-O ambiente é um checkout novo, num diretório novo, com o PostgreSQL embutido do `dev:local`. Ele cria um cluster próprio em `.local/postgres` desse diretório, escolhe portas livres e nunca reutiliza, reinicia ou apaga o que já existe.
+O ambiente é um clone novo, num diretório novo, com o PostgreSQL embutido do `dev:local`. O cluster fica em `.local/postgres` desse clone, as portas são escolhidas livres, e nada do que já existe é reutilizado, reiniciado ou apagado. O fluxo `clickup:homolog` faz as verificações e preparações e **para antes de qualquer conexão ao ClickUp**.
 
 ```sh
 git clone https://github.com/marcelotaparelli/catus-os.git ~/catus-homolog-clickup
 cd ~/catus-homolog-clickup
-git switch --detach <SHA revisado da branch de homologação>
+git switch --detach <SHA revisado>
 bun install --frozen-lockfile
-bun run dev:local          # anota as portas que ele imprimir
+bun run clickup:homolog init        # marca este clone; recusa qualquer diretório com .local ou .env
+bun run dev:local                   # deixe rodando neste terminal
 ```
 
-Antes de continuar, confirme que o banco é o novo (troque `<porta>` pela porta impressa):
+Em outro terminal, no mesmo diretório, rode `bun run clickup:homolog` quantas vezes quiser. Cada execução mostra `OK`, `PENDENTE` (depende do proprietário) ou `FALHA`, e diz o próximo passo:
 
-```sh
-bun -e "import pg from 'pg'; const c = new pg.Client('postgres://catus:catus_local_only@127.0.0.1:<porta>/catus'); await c.connect(); console.log((await c.query('SHOW data_directory')).rows[0]); await c.end()"
-# precisa terminar em ~/catus-homolog-clickup/.local/postgres
-```
-
-Se o caminho for outro, pare: o procedimento está apontando para um banco que não é descartável.
-
-O login usa o OIDC configurado no `.env` desse checkout (ver `docs/DEV_LOCAL.md`). Sem OIDC, a API sobe com login desligado e o painel não abre; a comparação ainda pode ser feita pelas consultas da seção 6.
+| Verificação                 | O que o fluxo faz                                                                                                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clone de homologação        | Exige a marca do `init`. Sem ela, para antes de tocar em qualquer banco                                                                                                                             |
+| Banco isolado               | Só continua se o `data_directory` do PostgreSQL conectado for o `.local/postgres` deste clone                                                                                                       |
+| Migrations                  | Confere que todas as do repositório foram aplicadas                                                                                                                                                 |
+| Conta do worker             | Cria a conta, se faltar, reaplica os privilégios e confere 22 regras: sem economia, contratos, escopo, demandas, pessoas, sessões, auditoria ou mapeamentos; sem DELETE; sem atributos elevados     |
+| Worker recusa contas fortes | Roda o worker real, pelo launcher, com as contas da web, das migrações e do administrador: todas recusadas. A própria é aceita e processa 0 listas. Só roda sem lista vinculada e com proxy fechado |
+| `.env` protegido            | 0600, ignorado e fora do Git; recusa token em texto no `.env`                                                                                                                                       |
+| Configuração do ClickUp     | Grava só chaves não secretas: organização, ritmo de 30 chamadas por minuto, caminho do arquivo do token e, com `--workspace`, o workspace e `CLICKUP_ENABLED=true`                                  |
+| Login OIDC                  | Confere `OIDC_*` sem exibir o segredo, mostra a URI de redirecionamento a cadastrar, testa o emissor e se a API está com login ativo                                                                |
+| Administrador               | Com `--admin-email`, autoriza o primeiro administrador (`bootstrap:admin`)                                                                                                                          |
+| Token e vínculo             | Valida o arquivo do token sem exibi-lo e mostra qual lista está vinculada a qual projeto                                                                                                            |
 
 **Descartar:** encerrar o `dev:local` (Ctrl+C) e apagar `~/catus-homolog-clickup`. Isso remove banco, contas de banco e dados lidos do ClickUp.
 
-### Ensaio deste ambiente (05/11/2026, sem ClickUp)
+### Login no painel
 
-Executado numa VM descartável, sem rede externa, com um clone novo da branch (`540d86d`) e um usuário sem privilégios:
+O painel usa o mesmo login OIDC de produção, com um cliente Google **só de desenvolvimento** (`docs/DEV_LOCAL.md`, seção "Login Google de desenvolvimento"). O fluxo imprime a URI de redirecionamento a cadastrar, normalmente `http://127.0.0.1:5173/api/auth/callback`. O ID e o segredo do cliente vão para o `.env` do clone, que fica em 0600 e fora do Git. Depois de reiniciar o `dev:local`:
 
-- O `dev:local` encontrou a porta 5432 ocupada por outro PostgreSQL, não mexeu nele e criou um cluster novo na 5433. `SHOW data_directory` apontou para `.local/postgres` do clone, e as migrations foram de 001 a 013.
-- `bun run clickup:role` sem `DATABASE_URL` **falhou**, porque o `dev:local` não grava a URL administrativa. O comando da seção 5 já foi corrigido e funcionou.
-- Conta do worker: sem leitura de `economic_records`, `contracts`, `requests`, `users` e das duas tabelas de mapeamento; INSERT em `clickup_tasks` sim, DELETE não; nenhum atributo elevado.
-- O worker sem token terminou com `missing_token`. Com um token canário em arquivo 0600 fora do clone e nenhuma lista vinculada, processou 0 listas, sem chamada de rede. O canário não apareceu na saída, em `.local`, no `.env` nem no log do `dev:local`.
-- Ao encerrar, nenhum processo do cluster ficou vivo, e o clone e o arquivo do token foram apagados.
+```sh
+bun run clickup:homolog --workspace <workspace> --admin-email <seu e-mail> --admin-name "<seu nome>"
+```
 
-Não foi possível ensaiar aqui: login real (sem OIDC), leitura do ClickUp real (proibida nesta fase) e a recusa da conta forte pelo launcher (coberta por `tests/clickup.test.ts` chamando o worker diretamente).
+Reinicie o `dev:local` mais uma vez para a API ver a integração ligada. O painel fica em Mission Control > Visão executiva > projeto > Execução no ClickUp.
 
 ## 3. Conta de serviço e token
 
@@ -54,60 +57,61 @@ Credenciais nunca passam pelo chat, por e-mail ou pelo repositório. O propriet�
 
 1. No ClickUp, criar um usuário de serviço (por exemplo `catus-leitura@<domínio da agência>`) com acesso **somente** à lista do piloto. Se o plano permitir, papel convidado com permissão de visualização.
 2. Entrar como esse usuário e gerar o token pessoal (Settings > Apps > API Token).
-3. Gravar o token num arquivo fora do repositório, sem eco no terminal e sem histórico de shell:
+3. No clone de homologação, num terminal interativo:
 
 ```sh
-install -d -m 700 ~/.config/catus-homolog
-( umask 077; read -rs -p 'Token ClickUp: ' t; echo; printf 'CLICKUP_API_TOKEN=%s\n' "$t" > ~/.config/catus-homolog/clickup.env; unset t )
+bun run clickup:token
 ```
 
-O token não vai para o `.env` do checkout, porque esse arquivo é lido também pela API. O launcher já remove `CLICKUP_API_TOKEN` do ambiente da API, mas o arquivo separado evita que ele sequer seja lido ali.
+Isso pede o token sem mostrá-lo na tela e aceita apenas um terminal interativo, nunca pipe, argumento ou arquivo, então o token não fica no histórico do shell. O valor é validado e gravado atomicamente em `~/.config/catus-homolog/clickup-token`: arquivo 0600, diretório 0700, fora do repositório. Nada é impresso de volta.
+
+O launcher do worker lê esse arquivo **como dado**, nunca com `source`. Ele recusa link simbólico, outro dono, permissões abertas, diretório gravável por outros, caminho dentro do repositório e qualquer conteúdo que não seja uma única linha no formato de token. A API e o worker de IA nunca recebem o token nem o caminho dele.
 
 4. Ao final da homologação, aprovada ou não, regerar o token no ClickUp. Isso invalida o anterior.
 
 ## 4. Identificadores
 
-| Identificador        | Onde obter                                                  | Validação pelo sistema                                                                                                                          | Validação humana                                             |
-| -------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Workspace ID         | URL `app.clickup.com/<workspace>/...`                       | só dígitos, senão a integração fica desligada (`invalid_config`). Tarefa de outro workspace faz a leitura falhar inteira (`workspace_mismatch`) | o nome do workspace no ClickUp é o esperado                  |
-| List ID              | URL da lista, `.../v/li/<lista>`                            | só dígitos, senão o vínculo é recusado                                                                                                          | depois da 1ª leitura, o nome da lista no painel é o esperado |
-| Organização no Catus | `SELECT id,name FROM organizations` no banco de homologação | UUID, senão a integração fica desligada                                                                                                         | o nome é o da agência criada para o teste                    |
+| Identificador        | Onde obter                                                    | Validação pelo sistema                                                                                                                        | Validação humana                                             |
+| -------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Workspace ID         | URL `app.clickup.com/<workspace>/...`                         | só dígitos, senão o fluxo recusa e a integração fica desligada. Tarefa de outro workspace faz a leitura falhar inteira (`workspace_mismatch`) | o nome do workspace no ClickUp é o esperado                  |
+| List ID              | URL da lista, `.../v/li/<lista>`                              | só dígitos, senão o vínculo é recusado                                                                                                        | depois da 1ª leitura, o nome da lista no painel é o esperado |
+| Organização no Catus | gravada pelo fluxo: a organização padrão do banco descartável | UUID, senão a integração fica desligada                                                                                                       | o projeto piloto aparece no painel                           |
 
-Os identificadores reais ficam só no arquivo de ambiente da máquina de homologação.
+Os identificadores reais ficam só no `.env` da máquina de homologação.
 
-## 5. Ativação
+## 5. Primeira leitura (exige autorização)
 
-No checkout de homologação:
-
-```sh
-# Conta de banco do worker (sem acesso a contratos, economia ou demandas). O dev:local não
-# grava a URL administrativa, então ela é passada só neste comando (cluster descartável):
-DATABASE_URL="postgres://catus:catus_local_only@127.0.0.1:<porta>/catus" bun run clickup:role
-bun run migrate            # o dev:local já aplicou 012 e 013; aqui só reaplica os privilégios
-
-# Configuração não secreta: no .env do checkout
-#   CLICKUP_ENABLED=true
-#   CLICKUP_ORGANIZATION_ID=<uuid da organização de homologação>
-#   CLICKUP_WORKSPACE_ID=<workspace>
-#   CLICKUP_REQUESTS_PER_MINUTE=30      # metade do padrão na primeira leitura
-# Reiniciar o dev:local para a API ver CLICKUP_ENABLED e a organização.
-```
-
-No painel, como gestor ou administrador: projeto piloto > Execução no ClickUp > Listas vinculadas > informar o List ID.
-
-Primeira leitura, uma única vez e com o token só nesse processo:
+Com todos os itens em `OK`, a lista vinculada no painel ao projeto piloto, e só depois da sua autorização explícita:
 
 ```sh
-( set -a; . ~/.config/catus-homolog/clickup.env; set +a; bun run clickup:worker -- --once )
+bun run clickup:worker -- --once
+bun run clickup:homolog report
 ```
 
 O worker confere a própria conta de banco antes de qualquer chamada e para se ela tiver privilégios a mais. A saída esperada é `ClickUp sync cycle: 1 list(s) processed`. Em caso de erro, aparece só a classe do erro (`unauthorized`, `not_found`, `rate_limited`, `workspace_mismatch`...), nunca o token ou a resposta do ClickUp.
+
+`report` mostra, sem gravar nada, as contagens por status, por responsável, sem responsável, atrasadas e sem lista principal. São esses números que se comparam com o ClickUp na seção 6.
+
+### Ensaio (05/11/2026, sem ClickUp)
+
+Feito numa VM descartável sem rede externa, com um clone novo e um usuário sem privilégios. O emissor OIDC foi um provedor HTTPS local de ensaio, com certificado de uma CA própria confiada pela API; ele não faz parte do repositório.
+
+1. `init` recusou o checkout de trabalho, que tem `.local`, e marcou o clone novo.
+2. O `dev:local` encontrou a 5432 ocupada, não mexeu nela e criou um cluster na 5433. O fluxo confirmou o `data_directory` do clone e as 12 migrations até a 013.
+3. Conta do worker criada, 22 regras de privilégio conferidas. O worker real recusou as contas da web, das migrações e do administrador, e aceitou a própria com 0 listas.
+4. Sem OIDC, o fluxo apontou o que faltava e a URI de redirecionamento. Com OIDC no `.env`, confirmou o emissor e o login ativo e autorizou o administrador. Com `--workspace`, ligou a integração.
+5. `clickup:token` num terminal real: o token não apareceu na tela, e o arquivo ficou 0600 num diretório 0700.
+6. Login real no navegador, pela troca completa de código com PKCE e assinatura verificada, como o administrador autorizado. Vínculo da lista pelo painel, que mostrou "nenhuma leitura concluída".
+7. Uma leitura simulada, gravada com a própria conta do worker e sem ClickUp, apareceu no painel: nome da lista, abertas, concluídas, subtarefas, atrasada, prazos, responsáveis e status sem significado no escopo da lista. O mapeamento salvo pelo painel mudou a situação para "Com bloqueios". `report` mostrou as mesmas contagens.
+8. O token canário e o segredo OIDC não apareceram em `.env`, `.local`, logs ou evidências. O worker nunca rodou com o token. No descarte, nenhum processo ficou vivo e o clone foi apagado.
+
+Fica para o proprietário: o login com o cliente Google real, que depende de rede e da conta dele, e a leitura real do ClickUp.
 
 ## 6. Comparação com o ClickUp
 
 A leitura inclui tarefas fechadas e subtarefas e exclui tarefas arquivadas. No ClickUp, use a visualização de lista com "Mostrar fechadas" e "Subtarefas: expandidas", sem filtros.
 
-Consultas somente leitura no banco de homologação:
+`bun run clickup:homolog report` já mostra as contagens. Para conferir tarefa a tarefa, as consultas somente leitura abaixo rodam no banco de homologação:
 
 ```sql
 -- Última leitura
@@ -142,7 +146,7 @@ Depois do mapeamento de status no painel, conferir: as contagens de "bloqueadas"
 
 **Mudança controlada:** o proprietário muda o status de uma tarefa e o prazo de outra no ClickUp. Na leitura seguinte, só essas duas aparecem em `tasks_updated`, e o painel reflete a mudança.
 
-**Erro controlado:** com um token propositalmente inválido no arquivo, rodar `--once`. Esperado: `unauthorized` em `clickup_sync_runs`, o painel mostra "falhando" e mantém os números anteriores. Restaurar o token correto depois.
+**Erro controlado:** grave um token propositalmente inválido com `bun run clickup:token -- --replace` e rode `bun run clickup:worker -- --once`. Esperado: `unauthorized` em `clickup_sync_runs`, o painel mostra "falhando" e mantém os números anteriores. Depois, grave o token correto da mesma forma.
 
 ## 7. Critérios para considerar o primeiro projeto homologado
 
@@ -168,7 +172,7 @@ Do mais leve ao completo. Nenhum passo apaga dados do Catus OS fora do ambiente 
 1. **Desvincular a lista** no painel. O worker para de ler essa lista, e o projeto volta a "não vinculado". O histórico fica guardado.
 2. **Desligar a integração:** `CLICKUP_ENABLED=false` e reiniciar. O painel some e as rotas `/api/clickup/*` respondem 404.
 3. **Revogar o token** no ClickUp (regerar). Nenhuma leitura volta a funcionar com o anterior.
-4. **Descartar o ambiente:** encerrar o `dev:local` e apagar o diretório do checkout de homologação e `~/.config/catus-homolog`.
+4. **Descartar o ambiente:** encerrar o `dev:local` e apagar o diretório do clone de homologação e `~/.config/catus-homolog`.
 
 ## 9. O que não acontece nesta homologação
 
