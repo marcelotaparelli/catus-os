@@ -13,6 +13,7 @@ import {
 import type { Evaluate } from '../src/server/followup/automation';
 import { addBusinessDays, nextStep } from '../src/shared/followup';
 import type { FollowupQueue } from '../src/shared/followup';
+import { runBaseline } from '../scripts/lib/baseline';
 import { provisionRoles } from '../scripts/lib/provision-roles';
 import { ident } from '../scripts/lib/privileges';
 import { dropDisposableDatabase } from './support/disposable';
@@ -198,6 +199,16 @@ const facts = (over: Partial<DemandFacts> = {}): DemandFacts => ({
   ...over,
 });
 const NOW = new Date('2026-11-05T12:00:00Z');
+// An implantation with its agreement confirmed: nothing to warn about the alignment.
+const agreed = {
+  version: 1,
+  criteria: 'Critério',
+  high_risk: false,
+  confirmed: true,
+  authorized: false,
+  delivered_at: null,
+  rejections: 0,
+};
 const on = (f: Partial<DemandFacts>) =>
   assess(facts(f), '2026-11-05', NOW).map((s) => s.kind);
 
@@ -236,6 +247,7 @@ test('rules: each condition is detected and a healthy demand is silent', () => {
   expect(
     on({
       template: 'implantacao',
+      alignment: agreed,
       updated_at: new Date('2026-11-02T12:00:00Z'),
     }),
   ).toEqual([]);
@@ -246,7 +258,12 @@ test('rules: maintenance does not ask for coverage before work starts', () => {
     'no_coverage',
   ]);
   expect(
-    on({ status: 'ready', covered: false, template: 'implantacao' }),
+    on({
+      status: 'ready',
+      covered: false,
+      template: 'implantacao',
+      alignment: agreed,
+    }),
   ).toEqual(['no_coverage']);
   // Work outside a contract is the first thing in the queue.
   const first = assess(
@@ -992,4 +1009,512 @@ test('summary travels with the overview without an extra start-up call', async (
   expect(typeof o.followup.new_alerts).toBe('number');
   expect(JSON.stringify(o.followup)).not.toContain('minutes');
   expect(today).toBeTruthy();
+});
+
+// Alinhamento e Aceite: the same real database and API, one rule per test.
+const align = (who: Who, r: any, body: Record<string, unknown>) =>
+  raw(who, `requests/${r.id}/alignment`, 'POST', {
+    version: r.version,
+    ...body,
+  });
+const fresh = async (id: string) =>
+  (await db.query('SELECT * FROM requests WHERE id=$1', [id])).rows[0];
+async function ok(who: Who, r: any, body: Record<string, unknown>) {
+  const res = await align(who, r, body);
+  if (!res.ok)
+    throw new Error(`${body.kind}: ${res.status} ${await res.text()}`);
+  return fresh(r.id);
+}
+/** Walks a new demand to a stage through the API, as the PO. */
+async function at(
+  title: string,
+  to: string,
+  template = 'manutencao',
+  owner: Who = 'dev',
+) {
+  let r = await demand(title, owner, { template });
+  for (const s of ['triage', 'ready', 'in_progress']) {
+    if (s === 'triage' && template === 'manutencao') continue;
+    r = await call(
+      'po',
+      `requests/${r.id}`,
+      'PATCH',
+      patchOf(r, { status: s }),
+    );
+    if (s === to) break;
+  }
+  return fresh(r.id);
+}
+const answer = async (summary = 'Cliente respondeu', project?: string) =>
+  (
+    await call('po', 'interactions', 'POST', {
+      project_id:
+        project ??
+        (
+          await db.query('SELECT project_id FROM interactions WHERE id=$1', [
+            interaction,
+          ])
+        ).rows[0].project_id,
+      kind: 'service',
+      summary,
+      occurred_at: new Date().toISOString(),
+    })
+  ).id as string;
+const trailOf = (id: string) =>
+  db.query(
+    'SELECT * FROM request_alignment WHERE request_id=$1 ORDER BY recorded_at',
+    [id],
+  );
+const audited = async (id: string, action: string) =>
+  (
+    await db.query(
+      'SELECT 1 FROM audit_events WHERE entity_id=$1 AND action=$2',
+      [id, action],
+    )
+  ).rowCount;
+const delivered = async (title: string, template = 'implantacao') => {
+  let r = await at(title, 'in_progress', template);
+  r = await ok('po', r, {
+    kind: 'agreement',
+    criteria: 'Frete calculado na vitrine',
+  });
+  return ok('dev', r, { kind: 'delivered' });
+};
+
+test('maintenance without an agreement works exactly as before', async () => {
+  const r = await at('Manutenção simples', 'in_progress');
+  expect(kinds(await queue('po'), r.id)).not.toContain('no_agreement');
+  expect(item(await queue('dev'), r.id)!.alignment).toBeNull();
+  const done = await call(
+    'dev',
+    `requests/${r.id}`,
+    'PATCH',
+    patchOf(r, { status: 'done' }),
+  );
+  expect(done.status).toBe('done');
+  expect((await trailOf(r.id)).rowCount).toBe(0);
+});
+
+test('implantation without confirmation warns and audits, and never stops the work', async () => {
+  const r = await at('Implantação sem combinado', 'ready', 'implantacao');
+  expect(kinds(await queue('po'), r.id)).toContain('no_agreement');
+  const started = await call(
+    'po',
+    `requests/${r.id}`,
+    'PATCH',
+    patchOf(r, { status: 'in_progress' }),
+  );
+  expect(started.status).toBe('in_progress');
+  expect(await audited(r.id, 'started_without_confirmation')).toBe(1);
+  const agreed = await ok('po', await fresh(r.id), {
+    kind: 'agreement',
+    criteria: 'Critério',
+  });
+  const q = await queue('po');
+  expect(kinds(q, r.id)).toContain('unconfirmed');
+  expect(kinds(q, r.id)).not.toContain('no_agreement');
+  const confirmed = await ok('po', agreed, {
+    kind: 'confirmation',
+    evidence_interaction_id: await answer('Cliente confirmou por telefone'),
+  });
+  expect(kinds(await queue('po'), r.id)).not.toContain('unconfirmed');
+  expect(confirmed.status).toBe('in_progress');
+});
+
+test('a PO accepts with the client evidence; a developer cannot attest their own delivery', async () => {
+  const r = await delivered('Entrega com aceite');
+  const seen = item(await queue('po'), r.id)!;
+  expect(seen.alignment!.delivered_at).toBeTruthy();
+  expect(seen.signals.map((s) => s.kind)).toContain('awaiting_acceptance');
+  expect(seen.for_me).toBe(true);
+  const evidence = await answer('Cliente aprovou por e-mail');
+  // The developer who delivered cannot close nor accept it, by either route.
+  expect(
+    (
+      await align('dev', r, {
+        kind: 'accepted',
+        evidence_interaction_id: evidence,
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await raw(
+        'dev',
+        `requests/${r.id}`,
+        'PATCH',
+        patchOf(r, { status: 'done' }),
+      )
+    ).status,
+  ).toBe(403);
+  expect((await fresh(r.id)).status).toBe('in_progress');
+  const done = await ok('po', r, {
+    kind: 'accepted',
+    evidence_interaction_id: evidence,
+  });
+  expect(done.status).toBe('done');
+  expect(done.follow_up_on).toBeNull();
+  const rows = (await trailOf(r.id)).rows;
+  expect(rows.map((x) => x.kind)).toEqual([
+    'agreement',
+    'delivered',
+    'accepted',
+  ]);
+  expect(rows[2].evidence_interaction_id).toBe(evidence);
+  expect(rows[2].recorded_by).toBe(ids.po);
+  expect(rows[2].recorded_by_executor).toBe(false);
+  expect(await audited(r.id, 'alignment:accepted')).toBe(1);
+});
+
+test('acceptance needs evidence from the same project, after the delivery', async () => {
+  const before = await answer('Resposta antiga');
+  const r = await delivered('Evidência');
+  const accept = (evidence?: unknown) =>
+    align('po', r, { kind: 'accepted', evidence_interaction_id: evidence });
+  expect((await accept()).status).toBe(422);
+  expect((await accept(before)).status).toBe(422);
+  const other = await call('po', 'projects', 'POST', {
+    client_id: (
+      await db.query('SELECT id FROM clients WHERE organization_id=$1', [org])
+    ).rows[0].id,
+    name: `Outro ${crypto.randomUUID()}`,
+  });
+  expect((await accept(await answer('Outro projeto', other.id))).status).toBe(
+    422,
+  );
+  expect((await trailOf(r.id)).rows.map((x) => x.kind)).not.toContain(
+    'accepted',
+  );
+  expect((await fresh(r.id)).status).toBe('in_progress');
+});
+
+test('silence is never acceptance: an overdue delivery stays open through every sweep', async () => {
+  const r = await delivered('Cliente em silêncio');
+  await db.query(
+    "UPDATE requests SET follow_up_on=CURRENT_DATE-30,updated_at=now()-interval '60 days' WHERE id=$1",
+    [r.id],
+  );
+  await enqueueSweeps(runtime, new Date(Date.now() + 864e5));
+  await drain();
+  const after = await fresh(r.id);
+  expect(after.status).toBe('in_progress');
+  expect((await trailOf(r.id)).rows.map((x) => x.kind)).toEqual([
+    'agreement',
+    'delivered',
+  ]);
+  expect(kinds(await queue('po'), r.id)).toContain('awaiting_acceptance');
+  const open = await db.query(
+    "SELECT 1 FROM demand_alerts WHERE request_id=$1 AND kind='awaiting_acceptance' AND resolved_at IS NULL",
+    [r.id],
+  );
+  expect(open.rowCount).toBe(1);
+});
+
+test('a refusal goes back to execution with its reason, and repeating it raises one signal', async () => {
+  let r = await delivered('Recusas');
+  r = await ok('po', r, {
+    kind: 'rejected',
+    evidence_interaction_id: await answer('Cliente recusou'),
+    reason: 'Frete errado no Norte',
+  });
+  expect(r.status).toBe('in_progress');
+  expect(r.next_action).toBe('Corrigir: Frete errado no Norte');
+  expect((await align('po', r, { kind: 'rejected', reason: 'x' })).status).toBe(
+    409,
+  );
+  expect(kinds(await queue('po'), r.id)).not.toContain('repeated_change');
+  r = await ok('dev', r, { kind: 'delivered' });
+  r = await ok('po', r, {
+    kind: 'rejected',
+    evidence_interaction_id: await answer('Recusou de novo'),
+    reason: 'Ainda errado',
+  });
+  await drain();
+  await drain();
+  expect(kinds(await queue('po'), r.id)).toContain('repeated_change');
+  expect(
+    (
+      await db.query(
+        "SELECT 1 FROM demand_alerts WHERE request_id=$1 AND kind='repeated_change'",
+        [r.id],
+      )
+    ).rowCount,
+  ).toBe(1);
+  const refused = await align('po', r, {
+    kind: 'rejected',
+    evidence_interaction_id: await answer('x'),
+  });
+  expect(refused.status).toBe(409);
+});
+
+test('high risk stops until a person authorizes, and a new version asks again', async () => {
+  let r = await at('Migrar dados de produção', 'ready', 'implantacao');
+  r = await ok('po', r, {
+    kind: 'agreement',
+    criteria: 'Migração conferida',
+    high_risk: true,
+  });
+  const start = (who: Who, x: any) =>
+    raw(
+      who,
+      `requests/${x.id}`,
+      'PATCH',
+      patchOf(x, { status: 'in_progress' }),
+    );
+  expect((await start('po', r)).status).toBe(403);
+  expect((await start('admin', r)).status).toBe(403);
+  expect(kinds(await queue('manager'), r.id)).toContain('risk_unauthorized');
+  // Neither the PO nor the developer can authorize, and the PO cannot drop the mark.
+  expect((await align('po', r, { kind: 'risk_authorization' })).status).toBe(
+    403,
+  );
+  expect((await align('dev', r, { kind: 'risk_authorization' })).status).toBe(
+    403,
+  );
+  expect(
+    (
+      await align('po', r, {
+        kind: 'agreement',
+        criteria: 'Sem risco',
+        high_risk: false,
+        reason: 'Tentativa',
+      })
+    ).status,
+  ).toBe(403);
+  r = await ok('manager', r, { kind: 'risk_authorization' });
+  expect(kinds(await queue('manager'), r.id)).not.toContain(
+    'risk_unauthorized',
+  );
+  // Changing what was authorized needs a new authorization.
+  r = await ok('po', r, {
+    kind: 'agreement',
+    criteria: 'Migração maior',
+    high_risk: true,
+    reason: 'Cliente pediu mais tabelas',
+  });
+  expect((await start('po', r)).status).toBe(403);
+  r = await ok('admin', r, { kind: 'risk_authorization' });
+  expect((await start('po', r)).status).toBe(200);
+  expect(
+    (await trailOf(r.id)).rows.filter((x) => x.kind === 'risk_authorization')
+      .length,
+  ).toBe(2);
+});
+
+test('a mark added during execution stops the delivery and the closing too', async () => {
+  let r = await at('Risco descoberto depois', 'in_progress');
+  r = await ok('po', r, {
+    kind: 'agreement',
+    criteria: 'Critério',
+    high_risk: true,
+  });
+  expect((await align('dev', r, { kind: 'delivered' })).status).toBe(403);
+  expect(
+    (
+      await raw(
+        'po',
+        `requests/${r.id}`,
+        'PATCH',
+        patchOf(r, { status: 'done' }),
+      )
+    ).status,
+  ).toBe(403);
+});
+
+test('closing without acceptance is allowed for a PO and stays on record as what it is', async () => {
+  const r = await delivered('Fecha sem aceite');
+  await call('po', `requests/${r.id}`, 'PATCH', patchOf(r, { status: 'done' }));
+  const rows = (await trailOf(r.id)).rows.map((x) => x.kind);
+  expect(rows).toContain('closed_without_acceptance');
+  expect(rows).not.toContain('accepted');
+  expect(await audited(r.id, 'alignment:closed_without_acceptance')).toBe(1);
+  // Reopened, it does not come back as waiting for an answer.
+  const back = await call(
+    'po',
+    `requests/${r.id}`,
+    'PATCH',
+    patchOf(await fresh(r.id), { status: 'triage' }),
+  );
+  expect(item(await queue('po'), back.id)!.alignment!.delivered_at).toBeNull();
+});
+
+test('who executed may record the client evidence, and the trail says so', async () => {
+  const r = await delivered('PO que também trabalhou');
+  await db.query(
+    "INSERT INTO time_entries(id,organization_id,project_id,request_id,user_id,work_date,minutes,comment,fingerprint) SELECT gen_random_uuid(),r.organization_id,i.project_id,r.id,$2,CURRENT_DATE,30,'Revisão','f'||r.id FROM requests r JOIN interactions i ON i.id=r.interaction_id WHERE r.id=$1",
+    [r.id, ids.po],
+  );
+  await ok('po', r, {
+    kind: 'accepted',
+    evidence_interaction_id: await answer('Aprovado'),
+  });
+  const row = (await trailOf(r.id)).rows.at(-1);
+  expect(row.recorded_by_executor).toBe(true);
+  expect(await audited(r.id, 'alignment:accepted;by_executor')).toBe(1);
+});
+
+test('two people answering at once: exactly one wins', async () => {
+  const r = await delivered('Dois aceites');
+  const evidence = await answer('Aprovado');
+  const results = await Promise.all(
+    (['po', 'manager'] as Who[]).map((w) =>
+      align(w, r, { kind: 'accepted', evidence_interaction_id: evidence }),
+    ),
+  );
+  expect(results.map((x) => x.status).sort()).toEqual([200, 409]);
+  expect(
+    (await trailOf(r.id)).rows.filter((x) => x.kind === 'accepted').length,
+  ).toBe(1);
+});
+
+test('reading and writing stay inside the owner and the organization', async () => {
+  const r = await delivered('Fronteiras');
+  expect((await raw('dev', `requests/${r.id}/alignment`)).status).toBe(200);
+  expect((await raw('dev2', `requests/${r.id}/alignment`)).status).toBe(403);
+  expect((await raw('foreign', `requests/${r.id}/alignment`)).status).toBe(404);
+  expect((await align('dev2', r, { kind: 'delivered' })).status).toBe(403);
+  expect(
+    (await align('foreign', r, { kind: 'agreement', criteria: 'x' })).status,
+  ).toBe(404);
+  expect(
+    (await align('dev', r, { kind: 'agreement', criteria: 'x' })).status,
+  ).toBe(403);
+  expect((await raw('', `requests/${r.id}/alignment`)).status).toBe(401);
+  const stale = await align(
+    'po',
+    { ...r, version: r.version - 1 },
+    {
+      kind: 'agreement',
+      criteria: 'x',
+    },
+  );
+  expect(stale.status).toBe(409);
+});
+
+test('an old agreement stays readable and the trail cannot be rewritten', async () => {
+  let r = await at('Versões', 'ready');
+  r = await ok('po', r, { kind: 'agreement', criteria: 'Primeira versão' });
+  expect(
+    (await align('po', r, { kind: 'agreement', criteria: 'Segunda' })).status,
+  ).toBe(422);
+  r = await ok('po', r, {
+    kind: 'agreement',
+    criteria: 'Segunda versão',
+    reason: 'Cliente mudou',
+  });
+  const text = (
+    await call<{ text: string }[]>('po', `requests/${r.id}/alignment`)
+  ).map((t) => t.text);
+  expect(text[0]).toContain('Combinado v1 · Primeira versão');
+  expect(text[1]).toContain('Combinado v2 · Segunda versão · Cliente mudou');
+  expect(item(await queue('dev'), r.id)!.alignment!.criteria).toBe(
+    'Segunda versão',
+  );
+  const client = await runtime.connect();
+  try {
+    await expect(
+      client.query(
+        "UPDATE request_alignment SET reason='x' WHERE request_id=$1",
+        [r.id],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      client.query('DELETE FROM request_alignment WHERE request_id=$1', [r.id]),
+    ).rejects.toThrow();
+  } finally {
+    client.release();
+  }
+  await expect(
+    db.query("UPDATE request_alignment SET reason='x' WHERE request_id=$1", [
+      r.id,
+    ]),
+  ).rejects.toThrow('append-only');
+  await expect(
+    db.query('DELETE FROM request_alignment WHERE request_id=$1', [r.id]),
+  ).rejects.toThrow('append-only');
+});
+
+test('recording needs no worker, and suggested criteria never reach a developer', async () => {
+  const r = await at('Sem automação', 'in_progress');
+  await db.query(
+    'UPDATE requests SET suggested_acceptance_criteria=$2::jsonb WHERE id=$1',
+    [
+      r.id,
+      JSON.stringify([{ text: 'Sugerido', quote: 'q', start: 0, end: 1 }]),
+    ],
+  );
+  expect(item(await queue('po'), r.id)!.suggested_criteria).toBe('Sugerido');
+  expect('suggested_criteria' in item(await queue('dev'), r.id)!).toBe(false);
+  const failing: Evaluate = () => Promise.reject(new Error('worker down'));
+  const after = await ok('po', await fresh(r.id), {
+    kind: 'agreement',
+    criteria: 'Critério',
+  });
+  await drain(failing);
+  expect(item(await queue('po'), after.id)!.alignment!.version).toBe(1);
+});
+
+test('baseline: exact numbers for a known history, and it cannot write', async () => {
+  // The other organization has no demand of its own: every number below comes from this one.
+  const c = await call('foreign', 'clients', 'POST', { name: 'Base' });
+  const p = await call('foreign', 'projects', 'POST', {
+    client_id: c.id,
+    name: 'Base',
+  });
+  const origin = await call('foreign', 'interactions', 'POST', {
+    project_id: p.id,
+    kind: 'service',
+    summary: 'Pedido',
+    occurred_at: new Date().toISOString(),
+  });
+  let r = await call('foreign', 'requests', 'POST', {
+    interaction_id: origin.id,
+    title: 'Título que não pode sair no relatório',
+    description: 'x',
+    owner_user_id: ids.foreign,
+    next_action: 'Primeira',
+  });
+  for (const status of [
+    'ready',
+    'in_progress',
+    'done',
+    'triage',
+    'ready',
+    'in_progress',
+    'done',
+  ])
+    r = await call(
+      'foreign',
+      `requests/${r.id}`,
+      'PATCH',
+      patchOf(r, { status }),
+    );
+  await db.query(
+    "INSERT INTO time_entries(id,organization_id,project_id,request_id,user_id,work_date,minutes,comment,fingerprint) VALUES(gen_random_uuid(),$1,$2,$3,$4,CURRENT_DATE,90,'x','base')",
+    [foreignOrg, p.id, r.id, ids.foreign],
+  );
+  const scratch = await db.connect();
+  try {
+    const out = (await runBaseline(scratch, today)) as any;
+    const m = out[foreignOrg].por_modelo.manutencao;
+    expect(m.demandas).toBe(1);
+    expect(m.concluidas).toBe(1);
+    expect(m.reaberturas).toBe(1);
+    expect(m.taxa_retrabalho).toBe(1);
+    expect(m.amostra_pequena).toBe(true);
+    // One action at each of the 7 moves, by a person whose role is PO; created too.
+    expect(m.acoes_do_po_por_demanda_mediana).toBe(8);
+    expect(m.horas_do_po_por_demanda_mediana).toBe(1.5);
+    expect(m.horas_por_demanda_mediana).toBe(1.5);
+    expect(m.ciclo_horas_mediana).toBeGreaterThanOrEqual(0);
+    expect(JSON.stringify(out)).not.toContain('Título que não pode');
+    // The guarantee is the database's: the same kind of transaction refuses a write.
+    await scratch.query('BEGIN TRANSACTION READ ONLY');
+    await expect(
+      scratch.query("UPDATE requests SET title='x' WHERE id=$1", [r.id]),
+    ).rejects.toThrow('read-only');
+    await scratch.query('ROLLBACK');
+  } finally {
+    scratch.release();
+  }
 });

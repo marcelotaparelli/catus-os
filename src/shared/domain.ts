@@ -83,6 +83,8 @@ export interface WorkRequest {
   follow_up_on?: string | null;
   blocked_reason?: string | null;
   waiting_on?: import('./followup').WaitingOn | null;
+  /** Closing it goes through delivery and acceptance, in the action queue. */
+  has_agreement?: boolean;
   version: number;
   client_name: string;
   project_name: string;

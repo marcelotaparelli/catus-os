@@ -46,6 +46,7 @@ const grants: Record<string, string> = {
   ai_proposals: 'SELECT,UPDATE',
   proposal_reviews: 'SELECT,INSERT',
   request_events: 'SELECT,INSERT',
+  request_alignment: 'SELECT,INSERT',
   automation_jobs: 'SELECT,INSERT,UPDATE',
   demand_alerts: 'SELECT,INSERT,UPDATE',
 };

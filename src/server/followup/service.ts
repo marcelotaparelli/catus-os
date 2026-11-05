@@ -12,6 +12,13 @@ import { audit, authorize } from '../auth/policy';
 import type { Context } from '../auth/policy';
 import { allRecords, current, times } from '../economics/service';
 import { HttpError } from '../errors';
+import {
+  alignmentColumns,
+  alignmentJoin,
+  alignmentOf,
+  alignmentTrail,
+  recordAlignment,
+} from './alignment';
 import { assess, concerns, visibleTo, WIP_LIMIT } from './rules';
 import type { DemandFacts } from './rules';
 
@@ -24,6 +31,7 @@ export type Row = DemandFacts & {
   project_id: string;
   project_name: string;
   client_name: string;
+  suggested_criteria: string | null;
 };
 
 /** Every open demand, or one demand in any state, with approved estimates and hours. Never capped: callers take this as the whole set. */
@@ -36,11 +44,13 @@ export async function loadFacts(
   const { rows } = await db.query(
     `SELECT r.id,r.title,r.status,r.template,r.owner_user_id,COALESCE(u.display_name,r.owner) owner,r.next_action,r.version,r.updated_at,r.follow_up_on::text,r.blocked_reason,r.waiting_on,
  p.id project_id,p.name project_name,c.name client_name,
- COALESCE(u.active AND m.active,false) owner_active,
+ COALESCE(u.active AND m.active,false) owner_active,${alignmentColumns},
+ COALESCE(si.acceptance_criteria,(SELECT string_agg(g->>'text',E'\n') FROM jsonb_array_elements(r.suggested_acceptance_criteria) g)) suggested_criteria,
  COALESCE(s.state='approved' AND ct.state='active' AND (now() AT TIME ZONE 'UTC')::date BETWEEN ct.valid_from AND ct.valid_until,false) covered
  FROM requests r JOIN interactions i ON i.id=r.interaction_id AND i.organization_id=r.organization_id JOIN projects p ON p.id=i.project_id AND p.organization_id=i.organization_id JOIN clients c ON c.id=p.client_id AND c.organization_id=p.organization_id
  LEFT JOIN users u ON u.id=r.owner_user_id LEFT JOIN memberships m ON m.user_id=r.owner_user_id AND m.organization_id=r.organization_id
  LEFT JOIN scope_items si ON si.id=r.scope_item_id AND si.organization_id=r.organization_id LEFT JOIN scope_versions s ON s.id=si.scope_id AND s.organization_id=si.organization_id AND s.project_id=p.id LEFT JOIN contracts ct ON ct.id=s.contract_id AND ct.organization_id=s.organization_id
+ ${alignmentJoin}
  WHERE r.organization_id=$1 AND ($2::uuid IS NOT NULL AND r.id=$2 OR $2::uuid IS NULL AND r.status<>'done')
  ORDER BY r.updated_at,r.id`,
     [organizationId, requestId ?? null],
@@ -60,6 +70,7 @@ export async function loadFacts(
       base = own.filter((e) => e.valid_until === latest);
     return {
       ...r,
+      alignment: alignmentOf(r),
       planned_minutes: base.length
         ? base.reduce((a, e) => a + Number(e.payload.planned_minutes), 0)
         : null,
@@ -115,6 +126,10 @@ function buildItems(
       blocked_reason: r.blocked_reason,
       waiting_on: r.waiting_on,
       version: r.version,
+      alignment: r.alignment ?? null,
+      ...(ctx.role === 'developer'
+        ? {}
+        : { suggested_criteria: r.suggested_criteria }),
       for_me: forMe,
       signals,
     });
@@ -243,7 +258,8 @@ async function acknowledge(ctx: Context) {
   return { acknowledged: ids.length };
 }
 
-async function timeline(ctx: Context, id: string) {
+/** Same reading boundary for the events and the agreement versions of a demand. */
+async function readable(ctx: Context, id: string) {
   const requestId = uuid(id);
   const owner = (
     await ctx.db.query(
@@ -254,6 +270,10 @@ async function timeline(ctx: Context, id: string) {
   if (!owner) throw new HttpError(404, 'Solicitação não encontrada');
   if (ctx.role === 'developer' && owner.owner_user_id !== ctx.userId)
     throw new HttpError(403, 'Operação não permitida');
+  return requestId;
+}
+async function timeline(ctx: Context, id: string) {
+  const requestId = await readable(ctx, id);
   return (
     await ctx.db.query(
       `SELECT e.changes,e.from_status,e.to_status,e.follow_up_on::text,e.version,e.occurred_at,o.display_name owner,a.display_name actor
@@ -268,6 +288,7 @@ export async function followupRoute(
   ctx: Context,
   path: string,
   method: string,
+  body?: Record<string, unknown>,
 ): Promise<unknown | undefined> {
   if (path === '/api/followup' && method === 'GET') return followupQueue(ctx);
   if (path === '/api/followup/alerts/ack') {
@@ -280,5 +301,12 @@ export async function followupRoute(
     authorize(ctx, 'read');
     return timeline(ctx, events[1]!);
   }
+  const alignment = /^\/api\/requests\/([^/]+)\/alignment$/.exec(path);
+  if (alignment && method === 'GET') {
+    authorize(ctx, 'read');
+    return alignmentTrail(ctx, await readable(ctx, alignment[1]!));
+  }
+  if (alignment && method === 'POST')
+    return recordAlignment(ctx, alignment[1]!, body ?? {});
   return undefined;
 }

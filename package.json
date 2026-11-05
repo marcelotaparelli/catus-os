@@ -36,7 +36,8 @@
     "delivery:diagnose": "node --experimental-strip-types runner/src/readiness.ts",
     "test:sdk-contract": "node scripts/check-sdk-contract.mjs",
     "test:quality": "playwright test --project=quality",
-    "perf:budget": "node scripts/perf-budget.mjs"
+    "perf:budget": "node scripts/perf-budget.mjs",
+    "baseline:alinhamento": "bun --env-file=.local/database.env scripts/baseline-alinhamento.ts"
   },
   "dependencies": {
     "openid-client": "6.8.8",

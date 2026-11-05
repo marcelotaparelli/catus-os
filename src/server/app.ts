@@ -327,7 +327,7 @@ export function createApp(
             body,
             creationKey,
           );
-          const followupWrite = await followupRoute(ctx, path, method);
+          const followupWrite = await followupRoute(ctx, path, method, body);
           if (followupWrite !== undefined) result = response(followupWrite);
           else if (deliveryWrite) result = deliveryWrite;
           else if (economicWrite) result = economicWrite;

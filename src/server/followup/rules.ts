@@ -4,6 +4,7 @@ import type {
   SignalKind,
   TemplateId,
   WaitingOn,
+  Alignment,
 } from '../../shared/followup';
 import type { Status } from '../../shared/domain';
 import type { Role } from '../../shared/identity';
@@ -21,6 +22,7 @@ export interface DemandFacts {
   updated_at: Date;
   planned_minutes: number | null;
   logged_minutes: number;
+  alignment?: Alignment | null;
 }
 /** Starting parameters of the workflow, not targets. */
 const limits: Record<
@@ -110,6 +112,49 @@ export function assess(f: DemandFacts, today: string, now: Date): Signal[] {
       label: 'Sem compromisso',
       reason: 'Falta uma data para a próxima verificação.',
     });
+  const a = f.alignment;
+  if (a?.high_risk && !a.authorized)
+    out.push({
+      kind: 'risk_unauthorized',
+      rank: 0,
+      label: 'Alto risco sem autorização',
+      reason: 'Só começa ou é entregue depois que um gestor autorizar.',
+    });
+  if (a?.delivered_at && f.status === 'in_progress')
+    out.push({
+      kind: 'awaiting_acceptance',
+      rank: 3,
+      label: 'Aguardando aceite',
+      reason: 'Entregue. O silêncio do cliente não conta como aceite.',
+    });
+  if (a && a.version - 1 + a.rejections >= 2)
+    out.push({
+      kind: 'repeated_change',
+      rank: 5,
+      label: 'Mudança repetida',
+      reason: `${a.version - 1} mudanças no combinado e ${a.rejections} recusas. Vale rever se é escopo novo.`,
+    });
+  if (
+    f.template === 'implantacao' &&
+    ['ready', 'in_progress'].includes(f.status)
+  ) {
+    if (!a)
+      out.push({
+        kind: 'no_agreement',
+        rank: 5,
+        label: 'Sem combinado',
+        reason:
+          'Faltam os critérios de aceite. Isto é um aviso e não impede seguir.',
+      });
+    else if (!a.confirmed && f.status === 'in_progress')
+      out.push({
+        kind: 'unconfirmed',
+        rank: 5,
+        label: 'Executando sem confirmação',
+        reason:
+          'O cliente não confirmou o combinado. Isto é um aviso e fica registrado.',
+      });
+  }
   return out.sort((a, b) => a.rank - b.rank);
 }
 
@@ -123,6 +168,11 @@ const audience: Record<SignalKind, readonly (Role | 'owner')[]> = {
   blocked: ['owner', 'manager'],
   stalled: ['owner'],
   no_follow_up: ['owner'],
+  no_agreement: ['po', 'manager'],
+  unconfirmed: ['po', 'manager'],
+  awaiting_acceptance: ['po', 'manager'],
+  repeated_change: ['po', 'manager'],
+  risk_unauthorized: ['manager', 'administrator'],
 };
 export function concerns(
   kind: SignalKind,
