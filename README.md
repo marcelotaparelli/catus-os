@@ -7,8 +7,8 @@ Monólito modular para operação de uma agência de e-commerce: clientes → pr
 ## Desenvolvimento local
 
 ```sh
-npm ci
-npm run dev:local
+bun install --frozen-lockfile
+bun run dev:local
 ```
 
 Um comando, sem Docker: PostgreSQL em `.local/postgres`, permissões, migrations, API e Vite com recarga. Login Google e problemas comuns em [docs/DEV_LOCAL.md](docs/DEV_LOCAL.md).

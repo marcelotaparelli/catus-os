@@ -1,7 +1,62 @@
-// Pure rules of `npm run dev:local`, separate so they can be tested without a database.
+// Rules of `bun run dev:local`, separate so they can be tested without a database.
+import { existsSync, lstatSync, readFileSync, symlinkSync } from 'node:fs';
+import { dirname, relative, resolve, sep } from 'node:path';
 const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]', '::1'];
 
 export class DevLocalError extends Error {}
+
+const validPort = (port) =>
+  Number.isInteger(port) && port >= 1024 && port <= 65535;
+
+/** Where each service may go when its port is taken. Loopback only, and never overlapping. */
+export const PORT_RANGES = {
+  api: [3001, 3099],
+  web: [5174, 5199],
+  db: [5433, 5499],
+};
+
+/** The first free port: the preferred ones in order, then the service's own range. */
+export async function chooseFreePort(preferred, [from, to], isFree) {
+  const seen = new Set();
+  for (const port of preferred)
+    if (validPort(port) && !seen.has(port)) {
+      seen.add(port);
+      if (await isFree(port)) return port;
+    }
+  for (let port = from; port <= to; port++)
+    if (!seen.has(port) && (await isFree(port))) return port;
+  throw new DevLocalError(
+    `Nenhuma porta livre entre ${from} e ${to}. Libere alguma e tente de novo.`,
+  );
+}
+
+/** The same credentials on another local port. The password and the role never change. */
+export function databaseUrlAt(value, port) {
+  const url = new URL(value);
+  url.port = String(port);
+  return url.href;
+}
+
+/** A role file with its database URLs moved to `port`; every other line stays as it is. */
+export function roleFileAtPort(text, port) {
+  return text
+    .split('\n')
+    .map((line) => {
+      const match = /^([A-Z_]*DATABASE_URL)=(.+)$/.exec(line);
+      return match ? `${match[1]}=${databaseUrlAt(match[2], port)}` : line;
+    })
+    .join('\n');
+}
+
+/** A process of an earlier run is ours only if it runs from here and is one of our programs. */
+export function isOwnProcess({ cwd, cmdline }, here) {
+  return (
+    cwd === here &&
+    /(scripts\/dev-local\.mjs|scripts\/postgres\.mjs|scripts\/runtime\.mjs|src\/server\/index\.ts|node_modules\/\.bin\/vite|\/vite\b)/.test(
+      cmdline,
+    )
+  );
+}
 
 /** Any database URL this flow may touch must be on this machine and be a Catus one. */
 export function assertLocalDatabaseUrl(name, value) {
@@ -33,13 +88,15 @@ export function validateDevEnvironment(sources) {
       'NODE_ENV=production não combina com dev:local. Remova a variável para desenvolver.',
     );
   const origin = env.APP_ORIGIN ?? 'http://127.0.0.1:5173';
-  if (!['http://127.0.0.1:5173', 'http://localhost:5173'].includes(origin))
+  const parsed = /^http:\/\/(127\.0\.0\.1|localhost):(\d+)$/.exec(origin);
+  if (!parsed || !validPort(Number(parsed[2])))
     throw new DevLocalError(
-      `APP_ORIGIN=${origin}. O dev:local usa http://127.0.0.1:5173, porque o Vite atende nessa porta e encaminha /api.`,
+      `APP_ORIGIN=${origin}. O dev:local usa http neste computador, como http://127.0.0.1:5173.`,
     );
-  if ((env.PORT ?? '3000') !== '3000')
+  const apiPort = Number(env.PORT ?? 3000);
+  if (!validPort(apiPort))
     throw new DevLocalError(
-      `PORT=${env.PORT}. O dev:local usa a API na porta 3000, para onde o Vite encaminha /api.`,
+      `PORT=${env.PORT}. Use uma porta entre 1024 e 65535; o dev:local só escuta neste computador.`,
     );
   if (env.TLS_CERT_FILE || env.TLS_KEY_FILE)
     throw new DevLocalError(
@@ -52,7 +109,12 @@ export function validateDevEnvironment(sources) {
     throw new DevLocalError(
       'OIDC incompleto no .env: informe OIDC_ISSUER, OIDC_CLIENT_ID e OIDC_CLIENT_SECRET, ou nenhum. Veja docs/DEV_LOCAL.md.',
     );
-  return { origin, oidc: oidc.length === 3 };
+  return {
+    host: parsed[1],
+    webPort: Number(parsed[2]),
+    apiPort,
+    oidc: oidc.length === 3,
+  };
 }
 
 /** Environment for child processes: never carries database URLs or tokens of the shell. */
@@ -75,14 +137,6 @@ export function holderFromSs(output) {
   return match ? { name: match[1], pid: Number(match[2]) } : undefined;
 }
 
-export function portConflictMessage(port, what, holder) {
-  const who = holder ? `${holder.name} (pid ${holder.pid})` : 'outro processo';
-  const hint = holder
-    ? `Encerre esse processo, se puder, com: kill ${holder.pid}`
-    : `Descubra qual é com: ss -ltnp 'sport = :${port}'`;
-  return `A porta ${port}, usada por ${what}, está ocupada por ${who}. ${hint}`;
-}
-
 /** Reads a postmaster.pid: line 1 is the pid, line 2 the data directory, line 4 the port. */
 export function parsePostmaster(text) {
   const lines = text.split('\n');
@@ -91,4 +145,35 @@ export function parsePostmaster(text) {
   return Number.isInteger(pid) && pid > 0
     ? { pid, dataDir: lines[1], port }
     : undefined;
+}
+
+/**
+ * Does what the postinstall of @embedded-postgres does, from the list that package ships:
+ * relative links to its own libraries. No third-party code runs, nothing leaves native/,
+ * and existing files are left alone. Needed because `bun install` skips the script when
+ * node_modules already exists. Returns how many links were created.
+ */
+export function hydrateEmbeddedPostgres(packageDir) {
+  const list = JSON.parse(
+    readFileSync(resolve(packageDir, 'native/pg-symlinks.json'), 'utf8'),
+  );
+  const root = resolve(packageDir, 'native') + sep;
+  let created = 0;
+  for (const { source, target } of list) {
+    const from = resolve(packageDir, source),
+      to = resolve(packageDir, target);
+    if (!from.startsWith(root) || !to.startsWith(root))
+      throw new DevLocalError(
+        `Lista de links do PostgreSQL embarcado aponta para fora do pacote: ${target}`,
+      );
+    if (!existsSync(from)) continue;
+    try {
+      lstatSync(to);
+      continue;
+    } catch {
+      symlinkSync(relative(dirname(to), from), to);
+      created++;
+    }
+  }
+  return created;
 }

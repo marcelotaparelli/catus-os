@@ -3,7 +3,12 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 export default defineConfig({
   // Every browser the pilot supports has native modulepreload: no polyfill to ship.
   plugins: [svelte({ compilerOptions: { discloseVersion: false } })],
-  server: { proxy: { '/api': 'http://127.0.0.1:3000' } },
+  // Development server only; dev:local passes the port the API actually got.
+  server: {
+    proxy: {
+      '/api': `http://127.0.0.1:${process.env.CATUS_DEV_API_PORT ?? 3000}`,
+    },
+  },
   build: {
     outDir: 'dist',
     // About 7 kB less gzip than esbuild on this code, for the same behaviour.
