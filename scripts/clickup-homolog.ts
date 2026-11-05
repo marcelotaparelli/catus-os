@@ -257,11 +257,14 @@ const runWorker = (url: string) => {
   );
   return { code: r.status, out: (r.stdout ?? '') + (r.stderr ?? '') };
 };
+const marker = JSON.parse(readFileSync(MARKER, 'utf8'));
 if (links)
   add(
-    'pending',
-    'Recusa de contas fortes pelo worker',
-    'não verificada agora: já existe lista vinculada e o teste não deve ler nada. Rode antes de vincular.',
+    marker.worker_refusal_verified_at ? 'ok' : 'pending',
+    'Worker real recusa contas fortes',
+    marker.worker_refusal_verified_at
+      ? `verificado em ${marker.worker_refusal_verified_at}, antes do vínculo; não repetido agora para não ler a lista`
+      : 'não verificada: já existe lista vinculada e o teste não deve ler nada. Desvincule, rode de novo e vincule depois.',
   );
 else {
   const results: string[] = [];
@@ -289,6 +292,14 @@ else {
     'Worker real recusa contas fortes',
     results.join('; '),
   );
+  if (ok)
+    writeFileSync(
+      MARKER,
+      JSON.stringify({
+        ...marker,
+        worker_refusal_verified_at: new Date().toISOString(),
+      }) + '\n',
+    );
 }
 
 // ---- 4. Configuration (.env) ---------------------------------------------------------

@@ -72,16 +72,16 @@ O proprietário precisa decidir ou fornecer:
 2. Conta de serviço no ClickUp, com token próprio e acesso só às listas do piloto. Ver o plano do workspace, que define o limite de chamadas.
 3. O ID do workspace, o ID da organização no Catus OS e o ID de uma lista de um projeto.
 
-Depois, no ambiente escolhido e fora deste repositório:
+Num clone novo, só para isso, o fluxo assistido prepara e confere tudo e para antes da primeira chamada ao ClickUp:
 
 ```sh
-DATABASE_URL=<URL administrativa local> bun run clickup:role   # cria a conta de banco do worker
-bun run migrate          # aplica a 012 e a 013
-# no ambiente privado: CLICKUP_ENABLED=true, CLICKUP_API_TOKEN, CLICKUP_ORGANIZATION_ID, CLICKUP_WORKSPACE_ID
-# reiniciar a API para ela enxergar CLICKUP_ENABLED e CLICKUP_ORGANIZATION_ID
-# vincular a lista no painel: projeto > Execução no ClickUp > Listas vinculadas
-bun run clickup:worker -- --once   # uma leitura, para conferir
+bun run clickup:homolog init   # marca o clone; recusa diretório com .local ou .env
+bun run dev:local              # noutro terminal
+bun run clickup:homolog        # banco, migrations, conta e privilégios do worker, OIDC, token e vínculo
+bun run clickup:token          # o proprietário digita o token, sem eco; arquivo 0600 fora do repositório
 ```
+
+O worker lê o token de `CLICKUP_API_TOKEN_FILE` como dado, nunca com `source`. `CLICKUP_API_TOKEN` no ambiente continua aceito, mas não os dois juntos.
 
 Procedimento completo, com ambiente descartável, token fora do repositório, comparação de dados, critérios de aceite e rollback: [`CLICKUP_HOMOLOGACAO.md`](CLICKUP_HOMOLOGACAO.md).
 
