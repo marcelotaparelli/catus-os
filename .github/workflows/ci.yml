@@ -12,6 +12,25 @@ on:
 permissions:
   contents: read
 jobs:
+  dev-local:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Bun instala do bun.lock, que precisa estar em dia com o package.json
+        run: bun install --frozen-lockfile
+      - name: Nenhum script de instalação bloqueado, e nenhum além dos revisados
+        run: |
+          bun pm untrusted | tee /tmp/untrusted.txt
+          ! grep -q '»' /tmp/untrusted.txt
+      - name: Fluxo completo de bun run dev:local, sem Docker
+        run: bun run test:dev-local
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

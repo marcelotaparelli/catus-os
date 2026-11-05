@@ -4,6 +4,15 @@
 
 Monólito modular para operação de uma agência de e-commerce: clientes → projetos → atendimentos/reuniões → solicitações com responsável, estado e próxima ação no Mission Control. Svelte 5 + Vite + TypeScript strict; backend Bun; PostgreSQL real. Identidades, sessões, organizações e papéis substituem o token compartilhado do M0. Atendimento inteligente via adaptador LLM configurável, fila persistente e revisão humana. Sem credenciais/política, inferência indisponível; nenhum mock no aplicativo. Contratos, escopos versionados, change requests e cobertura comercial exigem revisão e autorização humanas explícitas.
 
+## Desenvolvimento local
+
+```sh
+bun install --frozen-lockfile
+bun run dev:local
+```
+
+Um comando, sem Docker: PostgreSQL em `.local/postgres`, permissões, migrations, API e Vite com recarga. Login Google e problemas comuns em [docs/DEV_LOCAL.md](docs/DEV_LOCAL.md).
+
 ## Instalação reproduzível
 
 Node.js >=22.12, npm, Linux/macOS compatível com os binários PostgreSQL. Bun 1.4.4 é instalado localmente pelo npm. Não execute PostgreSQL como root; Windows requer WSL2 ou PostgreSQL externo.
