@@ -1,5 +1,11 @@
 # Progresso
 
+## M6.1 ClickUp somente leitura — branch `feat/m6-1-clickup-readonly` · 05/11/2026
+
+Status: **implementado com dados sintéticos; NÃO VERIFICADO com um workspace real.** Base `feat/pilot-oidc` em `f1067b8`, sem PRs #17 e #19 e sem a branch experimental. Sem credencial real, sem chamada ao ClickUp real, sem merge e sem deploy. Dores D01–D08 e sequência de marcos em [MASTER_PLAN.md](MASTER_PLAN.md); desenho e pendências do piloto em [docs/CLICKUP.md](docs/CLICKUP.md); capturas sintéticas em `docs/quality/clickup/`.
+
+Verificação local em PostgreSQL descartável: `tests/clickup.test.ts` com ClickUp falso sobre HTTP real, contas de banco reais e API real (40 testes); `e2e/clickup-panel.spec.ts` no navegador (3 testes); 31 mutações no código, todas detectadas depois de corrigir um teste fraco que uma delas revelou. Suíte completa com as mesmas 8 falhas da linha de base, todas por falta de Docker ou TLS nesta VM, e `zz-delivery` pelo mesmo motivo; esses casos dependem do CI. Orçamento de JS bruto elevado em commit próprio, para decisão do proprietário.
+
 ## Value-first MVP — branch `feat/value-first-mvp` · 03/11/2026
 
 Mission Control por papel sobre M0–M4, sem migration e sem regra econômica nova. Guia, regras e conferência manual em [docs/VALUE_FIRST.md](docs/VALUE_FIRST.md); capturas em `docs/quality/value-first/`. `GET /api/overview` não grava nada e usa o mesmo cálculo de `POST /api/economics/reports`. Cenário sintético pela API pública, somente em banco descartável. Verificação local em PostgreSQL descartável, sem Docker: testes que dependem de Docker (7 Bun e `e2e/zz-delivery.spec.ts`) só rodam no CI. Baselines visuais do Mission Control pelo processo de docs/QUALITY.md. Sem merge nem deploy.

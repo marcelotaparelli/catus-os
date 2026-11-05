@@ -17,9 +17,11 @@ const org = crypto.randomUUID(),
   // Same agency and people for e2e/ux-tasks.spec.ts, which builds the scenario again.
   orgUx = crypto.randomUUID(),
   // Own tenant for the operational follow-up journeys.
-  orgOps = crypto.randomUUID();
+  orgOps = crypto.randomUUID(),
+  // The only tenant with ClickUp on, as in production: one organization per token.
+  orgClickup = crypto.randomUUID();
 await pool.query(
-  'INSERT INTO organizations(id,name) VALUES($1,$2),($3,$4),($5,$6),($7,$8),($9,$10)',
+  'INSERT INTO organizations(id,name) VALUES($1,$2),($3,$4),($5,$6),($7,$8),($9,$10),($11,$12)',
   [
     org,
     'Browser Catus',
@@ -31,6 +33,8 @@ await pool.query(
     'Agência Demo E-commerce (sintético)',
     orgOps,
     'Agência Operação (sintético)',
+    orgClickup,
+    'Agência Integração (sintético)',
   ],
 );
 for (const [email, name, role, organization] of [
@@ -55,6 +59,8 @@ for (const [email, name, role, organization] of [
   ['ops.po@browser.test', 'Pia PO', 'po', orgOps],
   ['ops.dev@browser.test', 'Dan Dev', 'developer', orgOps],
   ['ops.dev2@browser.test', 'Eva Dev', 'developer', orgOps],
+  ['cu.gestor@browser.test', 'Sócia Sintética', 'manager', orgClickup],
+  ['cu.po@browser.test', 'PO Sintético', 'po', orgClickup],
 ]) {
   const id = crypto.randomUUID();
   await pool.query(
@@ -100,14 +106,20 @@ const aiTimer = setInterval(() => {
       () => (processing = undefined),
     );
 }, 50);
-const handler = createApp(config, oidcProvider(config, await mockOidcFetch()), {
-  extractionProvider: extractor,
-  delivery: deliveryFixture.config,
-  // Browser suites share one loopback peer and exercise multiple users per minute.
-  // Production limits remain unchanged and have dedicated negative integration tests.
-  loginRate: { limit: 200, windowSeconds: 60 },
-  apiRate: { limit: 2000, windowSeconds: 60 },
-});
+const { seedClickup } = await import('./clickup-seed');
+await seedClickup(pool, orgClickup);
+const handler = createApp(
+  { ...config, clickupOrganizationId: orgClickup },
+  oidcProvider(config, await mockOidcFetch()),
+  {
+    extractionProvider: extractor,
+    delivery: deliveryFixture.config,
+    // Browser suites share one loopback peer and exercise multiple users per minute.
+    // Production limits remain unchanged and have dedicated negative integration tests.
+    loginRate: { limit: 200, windowSeconds: 60 },
+    apiRate: { limit: 2000, windowSeconds: 60 },
+  },
+);
 // The same automation as production. The journeys switch a simulated fault on and off with a file.
 const { startFollowupAutomation, evaluate } =
   await import('../../src/server/followup/automation');

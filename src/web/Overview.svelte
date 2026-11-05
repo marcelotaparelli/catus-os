@@ -15,16 +15,21 @@
   import { statusLabels } from '../shared/domain';
   import type { Status, WorkRequest } from '../shared/domain';
   import { href } from './routes';
+  import ExecutionPanel from './ExecutionPanel.svelte';
   let {
     overview,
     error,
     requests,
     userId,
+    api,
+    refresh,
   }: {
     overview: Overview | null;
     error: string;
     requests: WorkRequest[];
     userId: string;
+    api: (path: string, method: string, body: unknown) => Promise<unknown>;
+    refresh: () => Promise<void>;
   } = $props();
   const signs: Record<string, string> = {
     negative: '▼',
@@ -214,6 +219,12 @@
         </div>
       </div>
     {/if}
+    {#if p.execution}<ExecutionPanel
+        execution={p.execution}
+        projectId={p.project_id}
+        {api}
+        {refresh}
+      />{/if}
     {#if r?.pending_minutes}<p class="attention">
         <strong>Atenção:</strong>
         {hoursLabel(r.pending_minutes)} pendentes de decisão ainda não entram em custo,

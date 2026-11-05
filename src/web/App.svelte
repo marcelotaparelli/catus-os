@@ -716,6 +716,8 @@
         {#if mods.overview}<mods.overview
             {overview}
             error={overviewError}
+            {api}
+            refresh={refreshOverview}
             requests={data.requests}
             userId={session.user.id}
           />{:else if mods.overview === null}{@render chunkFailed()}{/if}

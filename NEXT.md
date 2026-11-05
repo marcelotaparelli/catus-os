@@ -1,5 +1,7 @@
 # Próximas etapas — piloto controlado M0–M4
 
+> **Atualização de 05/11/2026:** a arquitetura com ClickUp está em [MASTER_PLAN.md](MASTER_PLAN.md) e substitui a instrução "não iniciar M6" abaixo somente para o M6.1, autorizado pelo proprietário. Para conectar um projeto real, ver [docs/CLICKUP.md](docs/CLICKUP.md).
+
 Branch `feat/pilot-readiness` (base `feat/m5-acceptance @ b4fc3cf`). Runbook: [docs/PILOT.md](docs/PILOT.md). Não iniciar M6. M2 (LLM) e M5 (agentes) permanecem desligados no piloto.
 
 ## Value-first MVP
