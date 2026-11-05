@@ -1,6 +1,9 @@
+import { clickupOrganization } from './clickup/config';
 export interface AppConfig {
   origin: string;
   secureCookies: boolean;
+  /** Set only when ClickUp is enabled: the single tenant that may read it. */
+  clickupOrganizationId?: string;
   oidc?: {
     issuer: string;
     clientId: string;
@@ -30,7 +33,13 @@ export function loadConfig(
   ];
   if (supplied.some(Boolean) && !supplied.every(Boolean))
     throw new Error('Incomplete OIDC configuration');
-  if (!supplied.every(Boolean)) return { origin, secureCookies };
+  const clickupOrganizationId = clickupOrganization(env);
+  const base = {
+    origin,
+    secureCookies,
+    ...(clickupOrganizationId ? { clickupOrganizationId } : {}),
+  };
+  if (!supplied.every(Boolean)) return base;
   const issuer = new URL(env.OIDC_ISSUER!);
   if (
     issuer.protocol !== 'https:' ||
@@ -41,8 +50,7 @@ export function loadConfig(
   )
     throw new Error('OIDC issuer must use HTTPS');
   return {
-    origin,
-    secureCookies,
+    ...base,
     oidc: {
       issuer: env.OIDC_ISSUER!,
       clientId: env.OIDC_CLIENT_ID!,

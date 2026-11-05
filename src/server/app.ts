@@ -48,6 +48,7 @@ import {
 } from './modules/mission-control';
 import { overview } from './economics/overview';
 import { followupRoute, followupSummary } from './followup/service';
+import { clickupRoute, withExecution } from './clickup/service';
 import { createClient } from './modules/clients';
 import { createProject } from './modules/projects';
 import { createInteraction } from './modules/interactions';
@@ -230,7 +231,17 @@ export function createApp(
             : undefined;
         const followupRead =
           method === 'GET' ? await followupRoute(ctx, path, method) : undefined;
+        const clickupRead =
+          method === 'GET'
+            ? await clickupRoute(
+                ctx,
+                config.clickupOrganizationId,
+                path,
+                method,
+              )
+            : undefined;
         if (followupRead !== undefined) result = response(followupRead);
+        else if (clickupRead !== undefined) result = response(clickupRead);
         else if (deliveryRead) result = deliveryRead;
         else if (economicRead) result = economicRead;
         else if (commercialRead) result = commercialRead;
@@ -251,7 +262,11 @@ export function createApp(
               break;
             case '/api/overview':
               result = response({
-                ...(await overview(ctx)),
+                ...(await withExecution(
+                  ctx,
+                  config.clickupOrganizationId,
+                  await overview(ctx),
+                )),
                 followup: await followupSummary(ctx),
               });
               break;
@@ -328,7 +343,15 @@ export function createApp(
             creationKey,
           );
           const followupWrite = await followupRoute(ctx, path, method);
+          const clickupWrite = await clickupRoute(
+            ctx,
+            config.clickupOrganizationId,
+            path,
+            method,
+            body,
+          );
           if (followupWrite !== undefined) result = response(followupWrite);
+          else if (clickupWrite !== undefined) result = response(clickupWrite);
           else if (deliveryWrite) result = deliveryWrite;
           else if (economicWrite) result = economicWrite;
           else if (commercialWrite) result = commercialWrite;

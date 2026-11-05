@@ -2,6 +2,7 @@
 // stored records; a missing input is null (never zero) and is named in `missing`.
 import type { EconomicsResult } from './economics';
 import type { Role } from './identity';
+import type { ProjectExecution } from './clickup';
 
 export type ProjectHealth =
   | 'negative'
@@ -71,6 +72,8 @@ export interface ProjectOverview {
   blocked_requests: number;
   uncovered_requests: number;
   actions: RecommendedAction[];
+  /** Only when ClickUp is enabled for this organization. Never in PO or developer readings. */
+  execution?: ProjectExecution;
 }
 export interface GovernanceCheck {
   id: string;

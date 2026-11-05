@@ -48,13 +48,47 @@ const grants: Record<string, string> = {
   request_events: 'SELECT,INSERT',
   automation_jobs: 'SELECT,INSERT,UPDATE',
   demand_alerts: 'SELECT,INSERT,UPDATE',
+  // ClickUp data is written by its worker only: the web process just reads it.
+  clickup_project_links: 'SELECT,INSERT',
+  clickup_sync_runs: 'SELECT',
+  clickup_people: 'SELECT',
+  clickup_tasks: 'SELECT',
+  clickup_list_tasks: 'SELECT',
+  clickup_status_mappings: 'SELECT,INSERT,UPDATE',
 };
 export const tables = [...Object.keys(grants), 'schema_migrations'];
+/** Only its own tables: the ClickUp worker cannot read economics, contracts or demands. */
+export async function applyClickupGrants(c: PoolClient | Client, role: string) {
+  const name = ident(role);
+  for (const table of Object.keys(grants))
+    if (
+      (await c.query('SELECT to_regclass($1) present', ['public.' + table]))
+        .rows[0].present
+    )
+      await c.query(`REVOKE ALL ON ${ident(table)} FROM ${name}`);
+  if (
+    !(await c.query("SELECT to_regclass('public.clickup_tasks') present"))
+      .rows[0].present
+  )
+    return;
+  await c.query(`GRANT SELECT ON clickup_project_links TO ${name}`);
+  await c.query(
+    `GRANT UPDATE(list_name,next_sync_at,consecutive_failures,last_attempt_at,last_success_at,last_error_code,last_data_warnings) ON clickup_project_links TO ${name}`,
+  );
+  await c.query(
+    `GRANT SELECT,INSERT,UPDATE ON clickup_sync_runs,clickup_tasks,clickup_list_tasks TO ${name}`,
+  );
+  await c.query(`GRANT SELECT ON clickup_people TO ${name}`);
+  await c.query(
+    `GRANT INSERT(organization_id,clickup_user_id,display_name),UPDATE(display_name,updated_at) ON clickup_people TO ${name}`,
+  );
+}
 export async function applyGrants(
   c: PoolClient | Client,
   runtime: string,
   maintenance: string,
   worker?: string,
+  clickupWorker?: string,
 ) {
   for (const [name, access] of Object.entries(grants)) {
     if (
@@ -72,6 +106,7 @@ export async function applyGrants(
     requests:
       'status,owner_user_id,next_action,version,updated_at,origin_proposal_id,suggested_acceptance_criteria,scope_item_id,follow_up_on,blocked_reason,waiting_on',
     sessions: 'last_seen_at,revoked_at',
+    clickup_project_links: 'active,deactivated_by,deactivated_at',
   })) {
     if (
       (await c.query('SELECT to_regclass($1) present', ['public.' + name]))
@@ -143,6 +178,7 @@ export async function applyGrants(
     await c.query(
       `GRANT USAGE ON SEQUENCE audit_events_id_seq TO ${ident(runtime)}`,
     );
+  if (clickupWorker) await applyClickupGrants(c, clickupWorker);
 }
 export async function assertRuntimePrivileges(db: Pool) {
   const c = await db.connect();
