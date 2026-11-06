@@ -29,6 +29,8 @@ export interface TaskRow {
    * linked list of the project the task was read through.
    */
   status_lists: string[];
+  /** The top-level task a task link follows: the project itself, not an activity. */
+  is_root?: boolean;
 }
 export interface StatusMappings {
   organization: Map<string, ManagerialState>;
@@ -76,7 +78,7 @@ export function freshnessOf(links: ExecutionLink[], now: Date) {
 }
 export function summarize(
   links: ExecutionLink[],
-  tasks: TaskRow[],
+  all: TaskRow[],
   mappings: StatusMappings,
   people: Map<string, string>,
   extra: { removed_from_lists: number; data_warnings: number },
@@ -94,6 +96,8 @@ export function summarize(
       last_sync_at: successes[0] ?? null,
       situation: 'unavailable',
       links,
+      roots: [],
+      activity_statuses: [],
       counts: null,
       owners: [],
       attention: [],
@@ -101,13 +105,25 @@ export function summarize(
       removed_from_lists: 0,
       data_warnings: 0,
     };
+  // The root of a task link is the project: shown apart, never counted as an activity, and
+  // its status says nothing about how far the activities are.
+  const roots = all.filter((t) => t.is_root),
+    tasks = all.filter((t) => !t.is_root),
+    rootIds = new Set(roots.map((t) => t.task_id));
   const open = tasks.filter((t) => !isClosed(t));
   const stateOf = (t: TaskRow) => stateFor(t, mappings);
   // Grouped by the list that would own the mapping; null when that list is ambiguous.
   const listNames = new Map(links.map((l) => [l.list_id, l.list_name]));
+  for (const r of roots) {
+    const l = links.find((l) => l.task_id === r.task_id);
+    if (l && r.status_lists.length === 1)
+      listNames.set(r.status_lists[0]!, l.list_name);
+  }
   const unmapped = new Map<string, ExecutionUnmapped>();
-  for (const t of open)
+  let activitiesUnmapped = false;
+  for (const t of [...open, ...roots.filter((r) => !isClosed(r))])
     if (!stateOf(t)) {
+      activitiesUnmapped ||= !t.is_root;
       const list = t.status_lists.length === 1 ? t.status_lists[0]! : null;
       const id = list + '\u0000' + t.status_raw;
       const u = unmapped.get(id) ?? {
@@ -119,12 +135,15 @@ export function summarize(
       u.tasks++;
       unmapped.set(id, u);
     }
-  const known = new Map(tasks.map((t) => [t.task_id, t]));
+  const known = new Map(all.map((t) => [t.task_id, t]));
   const countState = (state: ManagerialState) => {
     const n = open.filter((t) => stateOf(t) === state).length;
     // Zero while some statuses are unmapped would claim something nobody knows.
-    return n === 0 && unmapped.size ? null : n;
+    return n === 0 && activitiesUnmapped ? null : n;
   };
+  // Directly under a root, an activity is a task of the project, not a subtask.
+  const topLevel = (t: TaskRow) =>
+    !t.parent_task_id || rootIds.has(t.parent_task_id);
   const waitingDependency = open.some((t) => t.waiting_on === null)
     ? null
     : open.filter((t) =>
@@ -139,11 +158,10 @@ export function summarize(
     .sort();
   const overdue = open.filter((t) => isOverdue(t, now));
   const counts: ExecutionCounts = {
-    tasks_open: open.filter((t) => !t.parent_task_id).length,
-    tasks_closed: tasks.filter((t) => isClosed(t) && !t.parent_task_id).length,
-    subtasks_open: open.filter((t) => t.parent_task_id).length,
-    subtasks_closed: tasks.filter((t) => isClosed(t) && t.parent_task_id)
-      .length,
+    tasks_open: open.filter(topLevel).length,
+    tasks_closed: tasks.filter((t) => isClosed(t) && topLevel(t)).length,
+    subtasks_open: open.filter((t) => !topLevel(t)).length,
+    subtasks_closed: tasks.filter((t) => isClosed(t) && !topLevel(t)).length,
     overdue: overdue.length,
     without_due_date: open.filter((t) => !t.due_at).length,
     next_due_at: dues[0] ?? null,
@@ -201,6 +219,26 @@ export function summarize(
     last_sync_at: successes[0] ?? null,
     situation,
     links,
+    roots: roots.map((r) => ({
+      id: r.task_id,
+      name: r.name,
+      url: r.url,
+      status: r.status_raw,
+      state: stateOf(r) ?? null,
+      due_at: r.due_at ? new Date(r.due_at).toISOString() : null,
+      overdue: isOverdue(r, now),
+      owners: r.assignee_ids.map(name),
+    })),
+    activity_statuses: [
+      ...tasks
+        .reduce(
+          (m, t) => m.set(t.status_raw, (m.get(t.status_raw) ?? 0) + 1),
+          new Map<string, number>(),
+        )
+        .entries(),
+    ]
+      .map(([status, n]) => ({ status, tasks: n }))
+      .sort((a, b) => b.tasks - a.tasks || a.status.localeCompare(b.status)),
     counts,
     owners: [...byOwner.values()].sort(
       (a, b) =>

@@ -23,14 +23,14 @@ async function executionByProject(ctx: Context, now: Date) {
   const org = ctx.organizationId;
   const links = (
     await ctx.db.query(
-      'SELECT id,project_id,list_id,list_name,last_success_at,last_attempt_at,last_error_code,last_data_warnings FROM clickup_project_links WHERE organization_id=$1 AND active ORDER BY created_at,id',
+      'SELECT id,project_id,list_id,root_task_id,list_name,last_success_at,last_attempt_at,last_error_code,last_data_warnings FROM clickup_project_links WHERE organization_id=$1 AND active ORDER BY created_at,id',
       [org],
     )
   ).rows;
   const byProject = new Map<string, Map<string, TaskRow>>();
   const removed = new Map<string, Set<string>>();
   const { rows: tasks } = await ctx.db.query(
-    `SELECT l.project_id,l.list_id,t.home_list_id,m.missing_since,t.task_id,t.name,t.url,t.parent_task_id,t.status_raw,t.status_type,t.assignee_ids,t.waiting_on,t.due_at,t.due_has_time
+    `SELECT l.project_id,l.list_id,l.root_task_id,t.home_list_id,m.missing_since,t.task_id,t.name,t.url,t.parent_task_id,t.status_raw,t.status_type,t.assignee_ids,t.waiting_on,t.due_at,t.due_has_time
  FROM clickup_list_tasks m JOIN clickup_project_links l ON l.id=m.link_id AND l.organization_id=m.organization_id
  JOIN clickup_tasks t ON t.organization_id=m.organization_id AND t.task_id=m.task_id
  WHERE m.organization_id=$1 AND l.active`,
@@ -46,12 +46,14 @@ async function executionByProject(ctx: Context, now: Date) {
     }
     if (!byProject.has(t.project_id)) byProject.set(t.project_id, new Map());
     const live = byProject.get(t.project_id)!,
-      seen = live.get(t.task_id)?.status_lists ?? [];
+      prior = live.get(t.task_id),
+      seen = prior?.status_lists ?? [];
     live.set(t.task_id, {
       ...t,
       status_lists: t.home_list_id
         ? [t.home_list_id]
-        : [...new Set([...seen, t.list_id])].sort(),
+        : [...new Set([...seen, t.list_id].filter(Boolean))].sort(),
+      is_root: !!prior?.is_root || t.task_id === t.root_task_id,
     });
   }
   const mappings: StatusMappings = {
@@ -89,6 +91,7 @@ async function executionByProject(ctx: Context, now: Date) {
     const views: ExecutionLink[] = own.map((l) => ({
       id: l.id,
       list_id: l.list_id,
+      task_id: l.root_task_id,
       list_name: l.list_name,
       last_success_at: iso(l.last_success_at),
       last_attempt_at: iso(l.last_attempt_at),
@@ -130,13 +133,34 @@ export async function withExecution<T extends Overview>(
     })),
   };
 }
+/** The Task ID, or the task's address as copied from ClickUp (…/t/<id>). Custom IDs are not read. */
+export function taskIdFrom(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  const id =
+    /^https:\/\/app\.clickup\.com\/t\/([A-Za-z0-9_-]{1,64})\/?(?:[?#].*)?$/.exec(
+      text,
+    )?.[1] ?? text;
+  return /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : null;
+}
 async function createLink(ctx: Context, body: Record<string, unknown>) {
   const projectId = uuid(body.project_id);
-  if (typeof body.list_id !== 'string' || !/^\d{1,20}$/.test(body.list_id))
+  let listId: string | null = null,
+    taskId: string | null = null;
+  // A top-level task of a shared list follows one client project; a list, a whole list.
+  if (body.task_id !== undefined) {
+    taskId = taskIdFrom(body.task_id);
+    if (!taskId)
+      throw new InputError('Informe o ID da tarefa principal do ClickUp');
+  } else if (
+    typeof body.list_id !== 'string' ||
+    !/^\d{1,20}$/.test(body.list_id)
+  )
     throw new InputError('Informe o ID numérico da lista do ClickUp');
+  else listId = body.list_id;
   const { rows } = await ctx.db.query(
-    'INSERT INTO clickup_project_links(organization_id,project_id,list_id,created_by) VALUES($1,$2,$3,$4) RETURNING id,project_id,list_id',
-    [ctx.organizationId, projectId, body.list_id, ctx.userId],
+    'INSERT INTO clickup_project_links(organization_id,project_id,list_id,root_task_id,created_by) VALUES($1,$2,$3,$4,$5) RETURNING id,project_id,list_id,root_task_id',
+    [ctx.organizationId, projectId, listId, taskId, ctx.userId],
   );
   await audit(ctx, 'clickup_link', rows[0].id, 'created');
   return rows[0];

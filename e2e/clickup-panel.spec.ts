@@ -28,8 +28,8 @@ test('partners see real figures, and old or absent data says so instead of showi
       .locator('.kv')
       .filter({ has: page.getByText(name, { exact: true }) })
       .locator('dd');
-  await expect(figure('Tarefas abertas')).toHaveText('3');
-  await expect(figure('Tarefas concluídas')).toHaveText('1');
+  await expect(figure('Atividades abertas')).toHaveText('3');
+  await expect(figure('Atividades concluídas')).toHaveText('1');
   await expect(figure('Subtarefas abertas')).toHaveText('1');
   await expect(figure('Atrasadas, com subtarefas')).toHaveText('1');
   await expect(figure('Abertas sem responsável')).toHaveText('1');
@@ -46,7 +46,7 @@ test('partners see real figures, and old or absent data says so instead of showi
   const failed = panel(page, 'CU Falhou');
   await expect(failed).toContainText('Dados desatualizados');
   await expect(failed).toContainText('o ClickUp respondeu com erro');
-  await expect(figure('Tarefas abertas', failed)).toHaveText('2');
+  await expect(figure('Atividades abertas', failed)).toHaveText('2');
 
   const never = panel(page, 'CU Nunca lido');
   await expect(never.getByRole('heading')).toHaveText(
@@ -57,6 +57,32 @@ test('partners see real figures, and old or absent data says so instead of showi
 
   await expect(panel(page, 'CU Antigo')).toContainText('Dados desatualizados');
   await expect(panel(page, 'CU Sem vínculo').locator('.kv')).toHaveCount(0);
+
+  // A project followed through its top-level task: its own status apart, the seven
+  // subtasks as activities, nothing of the neighbour in the same list.
+  const apollo = panel(page, 'CU APOLLO');
+  await expect(
+    figure('Projeto “APOLLO ÔNIBUS” (Pessoa Um), status “em produção”', apollo),
+  ).toHaveText('Sem significado definido');
+  await expect(figure('Prazo do projeto', apollo)).toHaveText(
+    /^\d{2}\/\d{2}\/\d{4}, \d{2}:\d{2}$/,
+  );
+  for (const [status, n] of [
+    ['a fazer', '2'],
+    ['concluído', '2'],
+    ['em andamento', '2'],
+    ['impedido', '1'],
+  ] as const)
+    await expect(figure(`Atividades em “${status}”`, apollo)).toHaveText(n);
+  await expect(figure('Atividades abertas', apollo)).toHaveText('5');
+  await expect(figure('Atividades concluídas', apollo)).toHaveText('2');
+  await expect(figure('Atrasadas, com subtarefas', apollo)).toHaveText('1');
+  await expect(apollo).not.toContainText('VIZINHO');
+  await expect(apollo).not.toContainText('%');
+  await apollo.getByText('Vínculos (1)').click();
+  await expect(apollo).toContainText('Projetos (tarefa p0)');
+  await apollo.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${EVIDENCE}/panel-task-link.png` });
 
   await fresh.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${EVIDENCE}/panel-1280.png`, fullPage: true });
@@ -78,11 +104,18 @@ test('partners see real figures, and old or absent data says so instead of showi
 
   // Linking a list starts as unknown, and an invalid id is refused in place.
   const empty = panel(page, 'CU Sem vínculo');
-  await empty.getByText('Listas vinculadas (0)').click();
-  await empty.getByLabel('ID da lista do ClickUp').fill('não é número');
+  await empty.getByText('Vínculos (0)').click();
+  // A top-level task by default: the way Catus organizes client projects in ClickUp.
+  await empty.getByLabel('ID do ClickUp').fill('tem espaço');
+  await empty.getByRole('button', { name: 'Vincular' }).click();
+  await expect(empty.getByRole('alert')).toContainText(
+    'ID da tarefa principal',
+  );
+  await empty.getByLabel('Vincular por').selectOption('list_id');
+  await empty.getByLabel('ID do ClickUp').fill('não é número');
   await empty.getByRole('button', { name: 'Vincular' }).click();
   await expect(empty.getByRole('alert')).toContainText('ID numérico');
-  await empty.getByLabel('ID da lista do ClickUp').fill('9100');
+  await empty.getByLabel('ID do ClickUp').fill('9100');
   await empty.getByRole('button', { name: 'Vincular' }).click();
   await expect(empty).toContainText('nenhuma leitura concluída');
   await expect(empty.locator('.kv')).toHaveCount(0);

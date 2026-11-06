@@ -12,7 +12,10 @@ export type ClickUpErrorCode =
   | 'invalid_response'
   | 'too_large'
   | 'too_many_pages'
-  | 'workspace_mismatch';
+  | 'workspace_mismatch'
+  | 'not_top_level'
+  | 'hierarchy_mismatch'
+  | 'too_many_tasks';
 export class ClickUpError extends Error {
   constructor(
     readonly code: ClickUpErrorCode,
@@ -122,6 +125,9 @@ export function createClickUpClient(options: ClickUpClientOptions) {
   return {
     calls: () => calls,
     getList: (listId: string) => get(`/list/${encodeURIComponent(listId)}`),
+    /** One task and the subtasks Get Task returns with it; nothing of its siblings. */
+    getTask: (taskId: string) =>
+      get(`/task/${encodeURIComponent(taskId)}`, { include_subtasks: 'true' }),
     getTasksPage: (listId: string, page: number) =>
       get(`/list/${encodeURIComponent(listId)}/task`, {
         page: String(page),

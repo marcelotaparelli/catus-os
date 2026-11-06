@@ -4,12 +4,23 @@ Procedimento para a primeira leitura real, de um único projeto, num ambiente is
 
 **Estado atual:** ensaiado com dados sintéticos, um ClickUp simulado e login OIDC real contra um emissor de ensaio. Nenhuma chamada ao ClickUp real foi feita. Merge, deploy e início do M6.2 continuam em HOLD.
 
+**Modelo da Catus:** uma lista compartilhada `Projetos`, em que cada tarefa principal é um projeto de cliente e as subtarefas são as atividades de execução. Por isso o piloto se vincula pela **tarefa principal** (seção "Vínculo por tarefa principal"), não pela lista inteira. O vínculo por lista continua disponível para listas dedicadas a um só projeto.
+
 ## 1. Pré-condições
 
 1. Autorização explícita do proprietário para esta homologação, registrada fora do repositório.
-2. Revisão dos PRs #20 (M6.1) e do PR de preparação da homologação (escopo de status por lista). A homologação roda a partir da branch, sem merge.
-3. Um projeto piloto com uma única lista do ClickUp, de preferência com status personalizados, responsáveis, subtarefas, prazos e pelo menos uma dependência, para exercitar todas as leituras.
+2. Revisão dos PRs #20 (M6.1), #21 e #22 (preparação e homologação assistida) e do PR do vínculo por tarefa principal. A homologação roda a partir da branch, sem merge.
+3. Um projeto piloto: uma tarefa principal da lista `Projetos`, de preferência com subtarefas em status diferentes, responsáveis, prazos, uma subtarefa concluída e, se houver, uma subtarefa de segundo nível.
 4. O proprietário escolhe a máquina. Ela não pode ser a instalação do Arch em uso nem a VPS de produção.
+
+### Vínculo por tarefa principal
+
+- **O que é lido:** só a tarefa vinculada e as descendentes dela, cada uma por `GET /task/{id}?include_subtasks=true`. A lista nunca é lida, e nenhum outro projeto da lista é pedido ou guardado.
+- **O que não se presume:** a documentação do ClickUp não diz se `subtasks` traz um nível ou todos, nem se traz subtarefas fechadas. Por isso cada subtarefa é lida individualmente e precisa apontar como `parent` a tarefa que a listou, e `top_level_parent`, quando vier, precisa ser o projeto. Toda subtarefa citada em qualquer nível precisa ser alcançada pelo próprio pai. Uma tarefa guardada na leitura anterior e ausente agora é lida de novo: se continua no projeto (por exemplo, foi fechada), volta; se foi apagada ou mudou de projeto, sai dos números.
+- **Falhas:** hierarquia incoerente (`hierarchy_mismatch`), tarefa vinculada que não é principal (`not_top_level`) ou mais de 500 tarefas ou 10 níveis (`too_many_tasks`) fazem a leitura falhar inteira. Nada é gravado, e o painel mantém a última leitura completa, marcada como desatualizada, ou mostra "Não disponível".
+- **No painel:** o status da tarefa principal aparece à parte, como o status gerencial do projeto ("Projeto “…”"), e nunca entra nas contagens das atividades. As atividades aparecem por status, com responsáveis, prazos, atrasos e bloqueios só por mapeamento explícito. Não há percentual nem previsão.
+- **Custo:** uma chamada por tarefa do projeto a cada leitura. Um projeto com 7 atividades faz 8 chamadas.
+- **IDs personalizados** (por exemplo `CAT-123`) não são aceitos: use o Task ID ou o endereço `app.clickup.com/t/<id>`.
 
 ## 2. Fluxo assistido
 
@@ -37,7 +48,7 @@ Em outro terminal, no mesmo diretório, rode `bun run clickup:homolog` quantas v
 | Configuração do ClickUp     | Grava só chaves não secretas: organização, ritmo de 30 chamadas por minuto, caminho do arquivo do token e, com `--workspace`, o workspace e `CLICKUP_ENABLED=true`                                  |
 | Login OIDC                  | Confere `OIDC_*` sem exibir o segredo, mostra a URI de redirecionamento a cadastrar, testa o emissor e se a API está com login ativo                                                                |
 | Administrador               | Com `--admin-email`, autoriza o primeiro administrador (`bootstrap:admin`)                                                                                                                          |
-| Token e vínculo             | Valida o arquivo do token sem exibi-lo e mostra qual lista está vinculada a qual projeto                                                                                                            |
+| Token e vínculo             | Valida o arquivo do token sem exibi-lo e mostra qual tarefa principal ou lista está vinculada a qual projeto                                                                                        |
 
 **Descartar:** encerrar o `dev:local` (Ctrl+C) e apagar `~/catus-homolog-clickup`. Isso remove banco, contas de banco e dados lidos do ClickUp.
 
@@ -55,7 +66,7 @@ Reinicie o `dev:local` mais uma vez para a API ver a integração ligada. O pain
 
 Credenciais nunca passam pelo chat, por e-mail ou pelo repositório. O proprietário cria e grava o token diretamente na máquina de homologação.
 
-1. No ClickUp, criar um usuário de serviço (por exemplo `catus-leitura@<domínio da agência>`) com acesso **somente** à lista do piloto. Se o plano permitir, papel convidado com permissão de visualização.
+1. No ClickUp, criar um usuário de serviço (por exemplo `catus-leitura@<domínio da agência>`) como convidado com permissão de visualização. O menor acesso possível é compartilhar com ele **só a tarefa principal do piloto**. Antes da leitura, confira entrando como esse usuário que as subtarefas aparecem. Se não aparecerem, o passo seguinte é acesso de visualização à lista `Projetos`. Mesmo nesse caso, o Catus só pede a tarefa vinculada e as descendentes dela.
 2. Entrar como esse usuário e gerar o token pessoal (Settings > Apps > API Token).
 3. No clone de homologação, num terminal interativo:
 
@@ -71,24 +82,25 @@ O launcher do worker lê esse arquivo **como dado**, nunca com `source`. Ele rec
 
 ## 4. Identificadores
 
-| Identificador        | Onde obter                                                    | Validação pelo sistema                                                                                                                        | Validação humana                                             |
-| -------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Workspace ID         | URL `app.clickup.com/<workspace>/...`                         | só dígitos, senão o fluxo recusa e a integração fica desligada. Tarefa de outro workspace faz a leitura falhar inteira (`workspace_mismatch`) | o nome do workspace no ClickUp é o esperado                  |
-| List ID              | URL da lista, `.../v/li/<lista>`                              | só dígitos, senão o vínculo é recusado                                                                                                        | depois da 1ª leitura, o nome da lista no painel é o esperado |
-| Organização no Catus | gravada pelo fluxo: a organização padrão do banco descartável | UUID, senão a integração fica desligada                                                                                                       | o projeto piloto aparece no painel                           |
+| Identificador                     | Onde obter                                                    | Validação pelo sistema                                                                                                                        | Validação humana                                               |
+| --------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Workspace ID                      | URL `app.clickup.com/<workspace>/...`                         | só dígitos, senão o fluxo recusa e a integração fica desligada. Tarefa de outro workspace faz a leitura falhar inteira (`workspace_mismatch`) | o nome do workspace no ClickUp é o esperado                    |
+| Task ID do projeto                | URL da tarefa principal, `app.clickup.com/t/<id>`             | letras, dígitos, `-` e `_`, ou o endereço inteiro; senão o vínculo é recusado. Subtarefa vinculada faz a leitura falhar (`not_top_level`)     | depois da 1ª leitura, o nome do projeto no painel é o esperado |
+| List ID (só no vínculo por lista) | URL da lista, `.../v/li/<lista>`                              | só dígitos, senão o vínculo é recusado                                                                                                        | depois da 1ª leitura, o nome da lista no painel é o esperado   |
+| Organização no Catus              | gravada pelo fluxo: a organização padrão do banco descartável | UUID, senão a integração fica desligada                                                                                                       | o projeto piloto aparece no painel                             |
 
 Os identificadores reais ficam só no `.env` da máquina de homologação.
 
 ## 5. Primeira leitura (exige autorização)
 
-Com todos os itens em `OK`, a lista vinculada no painel ao projeto piloto, e só depois da sua autorização explícita:
+Com todos os itens em `OK`, a tarefa principal do piloto vinculada no painel (Vínculos > "Tarefa principal"), e só depois da sua autorização explícita:
 
 ```sh
 bun run clickup:worker -- --once
 bun run clickup:homolog report
 ```
 
-O worker confere a própria conta de banco antes de qualquer chamada e para se ela tiver privilégios a mais. A saída esperada é `ClickUp sync cycle: 1 list(s) processed`. Em caso de erro, aparece só a classe do erro (`unauthorized`, `not_found`, `rate_limited`, `workspace_mismatch`...), nunca o token ou a resposta do ClickUp.
+O worker confere a própria conta de banco antes de qualquer chamada e para se ela tiver privilégios a mais. A saída esperada é `ClickUp sync cycle: 1 list(s) processed`; a mensagem conta vínculos, seja de lista ou de tarefa. Em caso de erro, aparece só a classe do erro (`unauthorized`, `not_found`, `rate_limited`, `workspace_mismatch`...), nunca o token ou a resposta do ClickUp.
 
 `report` mostra, sem gravar nada, as contagens por status, por responsável, sem responsável, atrasadas e sem lista principal. São esses números que se comparam com o ClickUp na seção 6.
 
@@ -109,7 +121,17 @@ Fica para o proprietário: o login com o cliente Google real, que depende de red
 
 ## 6. Comparação com o ClickUp
 
-A leitura inclui tarefas fechadas e subtarefas e exclui tarefas arquivadas. No ClickUp, use a visualização de lista com "Mostrar fechadas" e "Subtarefas: expandidas", sem filtros.
+A leitura inclui tarefas fechadas e subtarefas e exclui tarefas arquivadas. No ClickUp, abra a tarefa principal do piloto e confira a seção de subtarefas com as fechadas visíveis. Para listas, use a visualização de lista com "Mostrar fechadas" e "Subtarefas: expandidas", sem filtros.
+
+Específico do vínculo por tarefa principal, todos obrigatórios:
+
+- **Nada dos vizinhos:** `SELECT count(*) FROM clickup_tasks` é exatamente 1 (a tarefa principal) mais o número de subtarefas do projeto em todos os níveis, sem arquivadas.
+- **Uma chamada por tarefa:** na primeira leitura, `http_calls = tasks_seen` em `clickup_sync_runs`.
+- **Subtarefas fechadas:** o total de atividades concluídas bate com o ClickUp. Se faltar alguma, foi porque `include_subtasks` não traz fechadas. Nesse caso, registre e não aprove até decidir com o proprietário: as que fecharem depois da primeira leitura são recuperadas, mas as que já estavam fechadas antes não.
+- **Segundo nível:** se o piloto tiver subtarefa de subtarefa, ela aparece em "Subtarefas abertas/concluídas", com o pai certo em `parent_task_id`.
+- **Status separado:** o status da tarefa principal no painel é o do ClickUp e não muda as contagens de atividades.
+
+O `report` já separa a tarefa principal das atividades. Nas consultas abaixo, para um vínculo por tarefa, acrescente `AND t.task_id <> '<Task ID do projeto>'` para ver só as atividades.
 
 `bun run clickup:homolog report` já mostra as contagens. Para conferir tarefa a tarefa, as consultas somente leitura abaixo rodam no banco de homologação:
 
@@ -160,16 +182,16 @@ Todos obrigatórios:
 6. Nenhuma escrita no ClickUp: o histórico de atividade da lista no ClickUp não mostra ações do usuário de serviço.
 7. O token não aparece em nenhuma saída: `grep -r "pk_" ~/catus-homolog-clickup/.local` e a saída do worker não encontram nada.
 8. PO e desenvolvedor da organização de homologação não veem o painel de execução, e nenhum valor econômico aparece nas tabelas `clickup_*`.
-9. Todo status aberto da lista tem mapeamento explícito, no escopo da lista.
+9. Todo status aberto do projeto, da tarefa principal e das atividades, tem mapeamento explícito no escopo da lista `Projetos`.
 10. O proprietário assina o resultado.
 
 Só depois disso o M6.2 pode começar, e só com nova autorização.
 
 ## 8. Rollback
 
-Do mais leve ao completo. Nenhum passo apaga dados do Catus OS fora do ambiente descartável, e nenhum exige migration de reversão: 012 e 013 são aditivas, e o teste `tests/clickup-upgrade.test.ts` comprova que o código do M6.1 continua funcionando no esquema com a 013.
+Do mais leve ao completo. Nenhum passo apaga dados do Catus OS fora do ambiente descartável, e nenhum exige migration de reversão: 012, 013 e 014 são aditivas, e o teste `tests/clickup-upgrade.test.ts` comprova que os vínculos por lista continuam lidos como antes. Para voltar a um código sem vínculo por tarefa, desative antes esses vínculos (`UPDATE clickup_project_links SET active=false WHERE root_task_id IS NOT NULL`). Sem isso, o worker antigo tentaria lê-los como lista e falharia.
 
-1. **Desvincular a lista** no painel. O worker para de ler essa lista, e o projeto volta a "não vinculado". O histórico fica guardado.
+1. **Desvincular** a tarefa ou a lista no painel. O worker para de ler esse vínculo, e o projeto volta a "não vinculado". O histórico fica guardado.
 2. **Desligar a integração:** `CLICKUP_ENABLED=false` e reiniciar. O painel some e as rotas `/api/clickup/*` respondem 404.
 3. **Revogar o token** no ClickUp (regerar). Nenhuma leitura volta a funcionar com o anterior.
 4. **Descartar o ambiente:** encerrar o `dev:local` e apagar o diretório do clone de homologação e `~/.config/catus-homolog`.

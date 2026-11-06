@@ -1,5 +1,9 @@
 # Progresso
 
+## M6.1 vínculo por tarefa principal — branch `feat/m6-1-clickup-task-link` · 06/11/2026
+
+Status: **implementado com dados sintéticos; NÃO VERIFICADO com o ClickUp real. HOLD para a primeira leitura real, merge, deploy e M6.2.** Empilhada sobre o PR #22, que fica intacto. Corrige o modelo: na Catus, a lista `Projetos` é compartilhada, cada tarefa principal é um projeto de cliente e as subtarefas são as atividades. Um projeto do Catus OS agora pode se vincular a uma tarefa principal, pelo Task ID ou pelo endereço. O worker lê só essa tarefa e as descendentes, uma a uma, por Get Task, conferindo a hierarquia, e nunca lê a lista. O painel mostra o status da tarefa principal à parte e as atividades por status, sem percentual. O vínculo por lista continua. A migration 014 é aditiva. Desenho e limites em [docs/CLICKUP.md](docs/CLICKUP.md) e [docs/CLICKUP_HOMOLOGACAO.md](docs/CLICKUP_HOMOLOGACAO.md). Orçamento de JS: 222.479 de 222.500, dentro da exceção do M6.1, nenhum limite alterado.
+
 ## M6.1 fluxo assistido de homologação — branch `feat/m6-1-homologation-assist` · 05/11/2026
 
 Status: **pré-requisitos de homologação prontos; HOLD para ClickUp real, merge, deploy, produção e M6.2.** Empilhada sobre o PR #21, que fica intacto. `clickup:homolog` (init, verificação, report) prepara e confere clone, banco, migrations, conta e privilégios do worker, OIDC, administrador, token e vínculo, e para antes do ClickUp. `clickup:token` captura o token sem eco, só em terminal interativo, e grava 0600 fora do repositório. O launcher lê `CLICKUP_API_TOKEN_FILE` como dado, nunca com `source`. Ensaio com login OIDC real, por um emissor HTTPS de ensaio, painel e vínculo pelo navegador: [docs/CLICKUP_HOMOLOGACAO.md](docs/CLICKUP_HOMOLOGACAO.md). Nenhum orçamento alterado e nenhuma mudança de interface.

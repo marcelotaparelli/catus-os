@@ -24,11 +24,13 @@ flowchart LR
 | `scripts/clickup-worker.ts`                  | Processo que detém o token                                             |
 | `db/migrations/012_clickup_readonly.sql`     | Tabelas novas, somente aditivas                                        |
 | `db/migrations/013_clickup_status_scope.sql` | Lista principal da tarefa e mapeamento por lista, somente aditivos     |
+| `db/migrations/014_clickup_task_links.sql`   | Vínculo por tarefa principal, somente aditivo                          |
 
 ### Decisões
 
 - **Tarefas ficam à parte.** Vivem em `clickup_tasks` e nunca viram `requests`. Uma tarefa em várias listas é uma linha só, ligada às listas por `clickup_list_tasks`.
-- **Lê tudo, depois grava.** A lista inteira é lida sem transação aberta e gravada de uma vez. Falha ou HTTP 429 em qualquer página não altera nada.
+- **Vínculo por tarefa principal ou por lista.** Na Catus, a lista `Projetos` é compartilhada: cada tarefa principal é um projeto de cliente, e as subtarefas são as atividades. O vínculo por tarefa lê só essa tarefa e as descendentes, com `GET /task/{id}?include_subtasks=true` por tarefa, e nunca a lista. Os outros clientes não são pedidos nem guardados. O vínculo por lista continua para listas de um projeto só. Ver "Vínculo por tarefa principal".
+- **Lê tudo, depois grava.** A lista inteira, ou a árvore inteira da tarefa, é lida sem transação aberta e gravada de uma vez. Falha ou HTTP 429 em qualquer chamada não altera nada.
 - **Ausência só por leitura completa.** Tarefa que sumiu recebe `missing_since` e não é apagada; se voltar, a marca sai.
 - **Token só no worker.** O lançador da web o remove do ambiente. A conta de banco do worker não lê economia, contratos, demandas nem usuários; a conta da web não grava as tabelas que o worker preenche.
 - **Uma organização e um workspace por token.** O worker só atende `CLICKUP_ORGANIZATION_ID` e recusa a leitura inteira se uma tarefa vier de outro workspace. A API web esconde as rotas das demais organizações.
@@ -64,13 +66,27 @@ No ClickUp, os status são definidos por espaço, pasta ou lista. O mesmo nome, 
 
 A API aceita `list_id` opcional em `POST /api/clickup/status-mappings`. A lista precisa estar vinculada na organização ou ser a lista principal de uma tarefa guardada. A alteração é auditada como `clickup_list_status_mapping`.
 
+### Vínculo por tarefa principal
+
+| Regra                          | Como funciona                                                                                                                                                                                                                                        |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entrada                        | Task ID ou endereço `https://app.clickup.com/t/<id>`, em Vínculos > "Tarefa principal". IDs personalizados não são aceitos                                                                                                                           |
+| Hierarquia                     | Cada subtarefa é lida por conta própria e precisa ter como `parent` quem a listou; `top_level_parent`, quando vem, precisa ser o projeto; toda subtarefa citada precisa ser alcançada pelo próprio pai. Senão, `hierarchy_mismatch` e nada é gravado |
+| Tarefa que não é principal     | `not_top_level`, nada é gravado                                                                                                                                                                                                                      |
+| Tamanho                        | Até 500 tarefas e 10 níveis; acima disso, `too_many_tasks`, nada é gravado                                                                                                                                                                           |
+| Ausente desde a última leitura | Lida de novo: fechada mas ainda no projeto, volta; apagada ou em outro projeto, sai dos números                                                                                                                                                      |
+| Painel                         | A tarefa principal aparece à parte, com o próprio status e o significado mapeado, prazo e responsáveis. Ela não entra em nenhuma contagem. As atividades (filhas diretas) e as subtarefas delas são contadas por status                              |
+| Mapeamento                     | O mesmo da lista principal (`Projetos`), para a tarefa principal e para as atividades. O status da tarefa principal sem mapeamento não torna desconhecidos os bloqueios das atividades                                                               |
+
+A documentação do ClickUp não diz se `subtasks` traz um nível ou todos, nem se inclui fechadas. O código não depende disso, e os testes cobrem os dois comportamentos. Se `include_subtasks` não trouxer as fechadas, as que já estavam fechadas antes da primeira leitura ficam de fora. A homologação confere isso (`CLICKUP_HOMOLOGACAO.md`, seção 6).
+
 ## O que falta para conectar um projeto real
 
 O proprietário precisa decidir ou fornecer:
 
 1. Autorização para a primeira leitura e o local dela. A recomendação é um banco novo e separado, para não tocar no banco local do Arch.
-2. Conta de serviço no ClickUp, com token próprio e acesso só às listas do piloto. Ver o plano do workspace, que define o limite de chamadas.
-3. O ID do workspace, o ID da organização no Catus OS e o ID de uma lista de um projeto.
+2. Conta de serviço no ClickUp, com token próprio e acesso só ao projeto do piloto (de preferência a tarefa principal compartilhada com ela, senão a lista). Ver o plano do workspace, que define o limite de chamadas.
+3. O ID do workspace, o ID da organização no Catus OS e o Task ID da tarefa principal do projeto (ou o ID de uma lista dedicada).
 
 Num clone novo, só para isso, o fluxo assistido prepara e confere tudo e para antes da primeira chamada ao ClickUp:
 
@@ -96,7 +112,7 @@ Procedimento completo, com ambiente descartável, token fora do repositório, co
 
 ## Limites conhecidos
 
-- A leitura completa consome uma chamada por página a cada 15 minutos por lista.
+- A leitura completa consome uma chamada por página a cada 15 minutos por lista, ou uma chamada por tarefa do projeto num vínculo por tarefa.
 - Limite de 200 páginas (20.000 tarefas) por lista; acima disso a leitura falha, visivelmente, sem gravar.
 - Prazo sem horário usa a tolerância de um dia porque o fuso do workspace não é lido.
 - `clickup_people.user_id` existe, mas ainda não há tela para ligar uma pessoa do ClickUp a um usuário do Catus OS.
