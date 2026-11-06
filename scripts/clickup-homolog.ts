@@ -264,7 +264,7 @@ if (links)
     'Worker real recusa contas fortes',
     marker.worker_refusal_verified_at
       ? `verificado em ${marker.worker_refusal_verified_at}, antes do vínculo; não repetido agora para não ler a lista`
-      : 'não verificada: já existe lista vinculada e o teste não deve ler nada. Desvincule, rode de novo e vincule depois.',
+      : 'não verificada: já existe vínculo ativo e o teste não deve ler nada. Desvincule, rode de novo e vincule depois.',
   );
 else {
   const results: string[] = [];
@@ -476,17 +476,17 @@ else
   }
 const linked = (
   await db.query(
-    'SELECT l.list_id,p.name FROM clickup_project_links l JOIN projects p ON p.id=l.project_id WHERE l.active ORDER BY l.created_at',
+    'SELECT l.list_id,l.root_task_id,p.name FROM clickup_project_links l JOIN projects p ON p.id=l.project_id WHERE l.active ORDER BY l.created_at',
   )
 ).rows;
 add(
   linked.length === 1 ? 'ok' : 'pending',
-  'Lista do piloto vinculada',
+  'Projeto piloto vinculado',
   linked.length === 1
-    ? `lista ${linked[0].list_id} → projeto "${linked[0].name}"`
+    ? `${linked[0].root_task_id ? `tarefa principal ${linked[0].root_task_id}` : `lista ${linked[0].list_id}`} → projeto "${linked[0].name}"`
     : linked.length
-      ? `${linked.length} listas vinculadas; o piloto usa uma só`
-      : 'no painel: projeto > Execução no ClickUp > Listas vinculadas',
+      ? `${linked.length} vínculos; o piloto usa um só`
+      : 'no painel: projeto > Execução no ClickUp > Vínculos (tarefa principal do projeto)',
 );
 await db.end();
 
@@ -530,21 +530,31 @@ function runningApi() {
 async function report() {
   const links = (
     await db.query(
-      `SELECT l.id,l.list_id,l.list_name,p.name project,l.last_success_at,l.last_error_code,l.last_data_warnings
+      `SELECT l.id,l.list_id,l.root_task_id,l.list_name,p.name project,l.last_success_at,l.last_error_code,l.last_data_warnings
  FROM clickup_project_links l JOIN projects p ON p.id=l.project_id WHERE l.active ORDER BY l.created_at`,
     )
   ).rows;
-  if (!links.length) console.log('Nenhuma lista vinculada.');
+  if (!links.length) console.log('Nenhum vínculo ativo.');
   for (const l of links) {
     console.log(
-      `\n== Lista ${l.list_id} "${l.list_name ?? '?'}" → projeto "${l.project}"\nÚltima leitura OK: ${l.last_success_at?.toISOString() ?? 'nunca'}; erro: ${l.last_error_code ?? 'nenhum'}; avisos de dados: ${l.last_data_warnings}`,
+      `\n== ${l.root_task_id ? `Tarefa principal ${l.root_task_id}, na lista` : `Lista ${l.list_id}`} "${l.list_name ?? '?'}" → projeto "${l.project}"\nÚltima leitura OK: ${l.last_success_at?.toISOString() ?? 'nunca'}; erro: ${l.last_error_code ?? 'nenhum'}; avisos de dados: ${l.last_data_warnings}`,
     );
-    const live = `FROM clickup_list_tasks m JOIN clickup_tasks t USING (organization_id,task_id) WHERE m.link_id=$1 AND m.missing_since IS NULL`;
+    // For a task link the root is the project itself: shown on its own, outside the activities.
+    if (l.root_task_id)
+      console.table(
+        (
+          await db.query(
+            'SELECT t.name projeto,t.status_raw status,t.status_type tipo,t.due_at prazo FROM clickup_project_links l JOIN clickup_tasks t ON t.organization_id=l.organization_id AND t.task_id=l.root_task_id WHERE l.id=$1',
+            [l.id],
+          )
+        ).rows,
+      );
+    const live = `FROM clickup_list_tasks m JOIN clickup_tasks t USING (organization_id,task_id) WHERE m.link_id=$1 AND m.missing_since IS NULL AND t.task_id IS DISTINCT FROM $2`;
     console.table(
       (
         await db.query(
-          `SELECT t.status_raw status,t.status_type tipo,count(*) FILTER (WHERE t.parent_task_id IS NULL)::int tarefas,count(*) FILTER (WHERE t.parent_task_id IS NOT NULL)::int subtarefas ${live} GROUP BY 1,2 ORDER BY 1`,
-          [l.id],
+          `SELECT t.status_raw status,t.status_type tipo,count(*) FILTER (WHERE t.parent_task_id IS NOT DISTINCT FROM $2)::int tarefas,count(*) FILTER (WHERE t.parent_task_id IS DISTINCT FROM $2)::int subtarefas ${live} GROUP BY 1,2 ORDER BY 1`,
+          [l.id, l.root_task_id],
         )
       ).rows,
     );
@@ -555,7 +565,7 @@ async function report() {
  FROM (SELECT t.organization_id,unnest(t.assignee_ids) a ${live} AND t.status_type NOT IN ('closed','done')) x
  LEFT JOIN clickup_people p ON p.organization_id=x.organization_id AND p.clickup_user_id=x.a
  GROUP BY 1 ORDER BY 2 DESC,1`,
-          [l.id],
+          [l.id, l.root_task_id],
         )
       ).rows,
     );
@@ -565,7 +575,7 @@ async function report() {
           `SELECT count(*) FILTER (WHERE t.status_type NOT IN ('closed','done') AND cardinality(t.assignee_ids)=0)::int sem_responsavel,
  count(*) FILTER (WHERE t.status_type NOT IN ('closed','done') AND t.due_at IS NOT NULL AND (CASE WHEN t.due_has_time THEN t.due_at ELSE t.due_at+interval '1 day' END)<now())::int atrasadas,
  count(*) FILTER (WHERE t.home_list_id IS NULL)::int sem_lista_principal ${live}`,
-          [l.id],
+          [l.id, l.root_task_id],
         )
       ).rows,
     );

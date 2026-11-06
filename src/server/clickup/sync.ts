@@ -1,13 +1,17 @@
-// Reads a whole list first and only then writes, in one transaction. So a failure or a 429
-// on any page leaves the previous picture untouched, and absence is only ever concluded
-// from a read that reached its last page. No transaction stays open during HTTP.
+// Reads a whole list, or one top-level task and its descendants, first and only then
+// writes, in one transaction. So a failure or a 429 on any request leaves the previous
+// picture untouched, and absence is only ever concluded from a complete read. No
+// transaction stays open during HTTP.
 import type { Pool, PoolClient } from 'pg';
 import { ClickUpError } from './client';
 import type { ClickUpClient } from './client';
-import { parseListName, parseTaskPage } from './parse';
-import type { ParsedTask } from './parse';
+import { parseListName, parseTaskNode, parseTaskPage } from './parse';
+import type { ParsedNode, ParsedTask } from './parse';
 
 export const MAX_PAGES = 200;
+/** A project with more tasks or levels than this is refused, never read in part. */
+export const MAX_TREE_TASKS = 500,
+  MAX_TREE_DEPTH = 10;
 const LEASE_SECONDS = 600,
   MAX_BACKOFF_MINUTES = 360;
 export interface SyncOptions {
@@ -18,7 +22,8 @@ export interface SyncOptions {
 interface Claim {
   run_id: string;
   link_id: string;
-  list_id: string;
+  list_id: string | null;
+  root_task_id: string | null;
 }
 /** Takes the next due list, at most one run per link across processes. */
 export async function claimDueLink(pool: Pool, organizationId: string) {
@@ -31,12 +36,12 @@ export async function claimDueLink(pool: Pool, organizationId: string) {
     );
     const { rows } = await db.query<Claim>(
       `WITH due AS (
-  SELECT id,list_id FROM clickup_project_links l WHERE organization_id=$1 AND active AND next_sync_at<=now()
+  SELECT id,list_id,root_task_id FROM clickup_project_links l WHERE organization_id=$1 AND active AND next_sync_at<=now()
   AND NOT EXISTS(SELECT 1 FROM clickup_sync_runs r WHERE r.link_id=l.id AND r.state='running')
   ORDER BY next_sync_at LIMIT 1 FOR UPDATE SKIP LOCKED)
- INSERT INTO clickup_sync_runs(organization_id,link_id,list_id,lease_until)
- SELECT $1,id,list_id,now()+make_interval(secs=>$2) FROM due
- ON CONFLICT DO NOTHING RETURNING id run_id,link_id,list_id`,
+ INSERT INTO clickup_sync_runs(organization_id,link_id,list_id,root_task_id,lease_until)
+ SELECT $1,id,list_id,root_task_id,now()+make_interval(secs=>$2) FROM due
+ ON CONFLICT DO NOTHING RETURNING id run_id,link_id,list_id,root_task_id`,
       [organizationId, LEASE_SECONDS],
     );
     await db.query('COMMIT');
@@ -72,6 +77,103 @@ async function readWholeList(
   return {
     listName,
     pages,
+    tasks: [...tasks.values()],
+    warnings: warnings.count,
+  };
+}
+const mismatch = () => new ClickUpError('hierarchy_mismatch');
+/**
+ * One top-level task and its descendants, nothing else of its list: every task is fetched
+ * by id with Get Task, never by reading the list. The documentation does not say whether
+ * `subtasks` holds one level or all, nor whether closed ones are included, so nothing is
+ * assumed: each subtask is read on its own and must name the task that listed it as parent,
+ * every subtask listed anywhere must be reached through its own parent, and a task stored
+ * by the previous read but absent now is read again before it is called gone.
+ */
+async function readTaskTree(
+  client: ClickUpClient,
+  rootId: string,
+  workspaceId: string,
+  previouslySeen: string[],
+) {
+  const warnings = { count: 0 },
+    tasks = new Map<string, ParsedTask>(),
+    depth = new Map<string, number>(),
+    listed = new Set<string>(),
+    archived = new Set<string>();
+  let requests = 0;
+  const read = async (id: string) => {
+    if (++requests > MAX_TREE_TASKS) throw new ClickUpError('too_many_tasks');
+    const node = parseTaskNode(await client.getTask(id), workspaceId, warnings);
+    if (node.task.id !== id) throw mismatch();
+    if (node.topLevelParent !== null && node.topLevelParent !== rootId)
+      throw id === rootId ? new ClickUpError('not_top_level') : mismatch();
+    return node;
+  };
+  const keep = (node: ParsedNode, level: number, queue: ParsedNode[]) => {
+    if (level > MAX_TREE_DEPTH) throw new ClickUpError('too_many_tasks');
+    if (node.archived) return archived.add(node.task.id);
+    tasks.set(node.task.id, node.task);
+    depth.set(node.task.id, level);
+    queue.push(node);
+  };
+  const walk = async (queue: ParsedNode[]) => {
+    while (queue.length) {
+      const node = queue.shift()!;
+      for (const s of node.subtasks) {
+        if (s.topLevelParent !== null && s.topLevelParent !== rootId)
+          throw mismatch();
+        if (s.archived) {
+          archived.add(s.id);
+          continue;
+        }
+        listed.add(s.id);
+        // A deeper level listed early is read through its own parent.
+        if (s.parent !== node.task.id || tasks.has(s.id)) continue;
+        const child = await read(s.id);
+        if (child.task.parent !== node.task.id) throw mismatch();
+        keep(child, depth.get(node.task.id)! + 1, queue);
+      }
+    }
+  };
+  const root = await read(rootId);
+  if (root.task.parent !== null) throw new ClickUpError('not_top_level');
+  const queue: ParsedNode[] = [];
+  keep(root, 0, queue);
+  await walk(queue);
+  // Seen before, absent now: maybe left out of `subtasks` (closed, for instance). Only a
+  // task still under this tree comes back; one moved elsewhere or deleted stays out.
+  const absent = new Map<string, ParsedNode>();
+  for (const id of previouslySeen) {
+    if (tasks.has(id) || archived.has(id)) continue;
+    try {
+      absent.set(id, await read(id));
+    } catch (e) {
+      // Deleted, or now under another top-level task: gone from this project.
+      if (
+        !(e instanceof ClickUpError) ||
+        !['not_found', 'hierarchy_mismatch'].includes(e.code)
+      )
+        throw e;
+    }
+  }
+  // Parents first, whatever the order they were stored in.
+  for (let found = true; found; ) {
+    found = false;
+    for (const [id, node] of absent) {
+      const parent = node.task.parent;
+      if (tasks.has(id) || archived.has(id) || !parent || !tasks.has(parent))
+        continue;
+      keep(node, depth.get(parent)! + 1, queue);
+      await walk(queue);
+      found = true;
+    }
+  }
+  for (const id of listed)
+    if (!tasks.has(id) && !archived.has(id)) throw mismatch();
+  return {
+    listName: root.listName,
+    pages: requests,
     tasks: [...tasks.values()],
     warnings: warnings.count,
   };
@@ -183,11 +285,19 @@ export async function syncClaimed(
   const before = client.calls(),
     used = () => client.calls() - before;
   try {
-    const read = await readWholeList(
-      client,
-      claim.list_id,
-      options.workspaceId,
-    );
+    const read = claim.root_task_id
+      ? await readTaskTree(
+          client,
+          claim.root_task_id,
+          options.workspaceId,
+          (
+            await pool.query<{ task_id: string }>(
+              'SELECT task_id FROM clickup_list_tasks WHERE link_id=$1 AND organization_id=$2 AND missing_since IS NULL',
+              [claim.link_id, options.organizationId],
+            )
+          ).rows.map((r) => r.task_id),
+        )
+      : await readWholeList(client, claim.list_id!, options.workspaceId);
     const db = await pool.connect();
     let stale = false;
     try {

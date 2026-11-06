@@ -36,17 +36,21 @@ export async function seedClickup(pool: Pool, organizationId: string) {
       [organizationId],
     )
   ).rows[0].id;
-  const project = async (name: string, listId?: string) => {
+  const project = async (
+    name: string,
+    listId?: string,
+    rootTaskId?: string,
+  ) => {
     const id = (
       await pool.query(
         'INSERT INTO projects(id,organization_id,client_id,name) VALUES(gen_random_uuid(),$1,$2,$3) RETURNING id',
         [organizationId, client, name],
       )
     ).rows[0].id;
-    if (listId)
+    if (listId || rootTaskId)
       await pool.query(
-        'INSERT INTO clickup_project_links(organization_id,project_id,list_id,created_by) VALUES($1,$2,$3,$4)',
-        [organizationId, id, listId, creator],
+        'INSERT INTO clickup_project_links(organization_id,project_id,list_id,root_task_id,created_by) VALUES($1,$2,$3,$4,$5)',
+        [organizationId, id, listId ?? null, rootTaskId ?? null, creator],
       );
     return id;
   };
@@ -55,7 +59,39 @@ export async function seedClickup(pool: Pool, organizationId: string) {
   await project('CU Nunca lido', '9003');
   await project('CU Antigo', '9004');
   await project('CU Sem vínculo');
+  // One client project of the shared "Projetos" list: a top-level task and its activities.
+  await project('CU APOLLO', undefined, 'p0');
   const now = Date.now();
+  const status = (s: string, type = 'custom') => ({ status: s, type });
+  const shared = [
+    task('p0', {
+      name: 'APOLLO ÔNIBUS',
+      status: status('em produção'),
+      due_date: String(now + 30 * day),
+    }),
+    ...(
+      [
+        ['a fazer', 'open'],
+        ['a fazer', 'open'],
+        ['em andamento', 'custom'],
+        ['em andamento', 'custom'],
+        ['impedido', 'custom'],
+        ['concluído', 'closed'],
+        ['concluído', 'closed'],
+      ] as const
+    ).map(([s, type], i) =>
+      task('p' + (i + 1), {
+        name: 'Atividade sintética ' + (i + 1),
+        parent: 'p0',
+        status: status(s, type),
+        due_date: i === 3 ? String(now - 2 * day) : null,
+        due_date_time: true,
+      }),
+    ),
+    // A neighbour in the same list: never requested by the APOLLO link.
+    task('n0', { name: 'VIZINHO SINTÉTICO' }),
+  ];
+  const byId = new Map(shared.map((t) => [t.id, t]));
   const lists: Record<string, unknown[]> = {
     '9001': [
       task('a1', {
@@ -81,7 +117,20 @@ export async function seedClickup(pool: Pool, organizationId: string) {
     token: 'synthetic',
     requestsPerMinute: 600000,
     fetch: (async (input: URL) => {
-      const m = /\/list\/(\d+)(\/task)?$/.exec(new URL(input).pathname)!;
+      const path = new URL(input).pathname;
+      const one = /\/task\/([^/]+)$/.exec(path);
+      if (one) {
+        const t = byId.get(one[1]!);
+        if (!t) return new Response('', { status: 404 });
+        return Response.json({
+          ...t,
+          list: { id: '9500', name: 'Projetos' },
+          subtasks: shared
+            .filter((s) => s.parent === t.id)
+            .map(({ team_id: _w, ...s }) => ({ ...s, top_level_parent: 'p0' })),
+        });
+      }
+      const m = /\/list\/(\d+)(\/task)?$/.exec(path)!;
       if (down.has(m[1]!)) return new Response('', { status: 500 });
       if (!m[2])
         return Response.json({ id: m[1], name: 'Lista sintética ' + m[1] });

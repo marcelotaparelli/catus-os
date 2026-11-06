@@ -180,6 +180,62 @@ export function parseTaskPage(
     finished: value.last_page === true || tasks.length === 0,
   };
 }
+/** A subtask as listed inside its ancestor: only what the hierarchy check needs. */
+export interface SubtaskRef {
+  id: string;
+  parent: string;
+  topLevelParent: string | null;
+  archived: boolean;
+}
+export interface ParsedNode {
+  task: ParsedTask;
+  topLevelParent: string | null;
+  archived: boolean;
+  /** Name of the home list, from the task's own `list` object. */
+  listName: string | null;
+  subtasks: SubtaskRef[];
+}
+/**
+ * Get Task with include_subtasks. Its `subtasks` are partial objects (no team_id), so they
+ * only say which tasks to read next; each one is then read and checked on its own. An entry
+ * whose place in the hierarchy cannot be told fails the read instead of being guessed.
+ */
+export function parseTaskNode(
+  value: unknown,
+  workspaceId: string,
+  warnings: Warnings,
+): ParsedNode {
+  const task = parseTask(value, workspaceId, warnings);
+  const v = value as Record<string, unknown>;
+  // Documented as present only when asked for; a leaf may leave it out.
+  if (v.subtasks !== undefined && !Array.isArray(v.subtasks)) throw invalid();
+  const subtasks = ((v.subtasks as unknown[] | undefined) ?? []).map((s) => {
+    if (!isObject(s) || typeof s.id !== 'string' || !TASK_ID.test(s.id))
+      throw invalid();
+    if (typeof s.parent !== 'string' || !TASK_ID.test(s.parent))
+      throw new ClickUpError('hierarchy_mismatch');
+    const top = s.top_level_parent;
+    if (top !== undefined && top !== null && typeof top !== 'string')
+      throw new ClickUpError('hierarchy_mismatch');
+    return {
+      id: s.id,
+      parent: s.parent,
+      topLevelParent: top ?? null,
+      archived: s.archived === true,
+    };
+  });
+  const list = isObject(v.list) ? v.list : {};
+  const top = v.top_level_parent;
+  if (top !== undefined && top !== null && typeof top !== 'string')
+    throw new ClickUpError('hierarchy_mismatch');
+  return {
+    task,
+    topLevelParent: top ?? null,
+    archived: v.archived === true,
+    listName: typeof list.name === 'string' ? list.name.slice(0, 500) : null,
+    subtasks,
+  };
+}
 export function parseListName(value: unknown) {
   if (!isObject(value) || typeof value.id !== 'string') throw invalid();
   return typeof value.name === 'string' ? value.name.slice(0, 500) : null;

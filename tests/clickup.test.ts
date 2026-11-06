@@ -96,6 +96,45 @@ const task = (id: string, extra: Record<string, unknown> = {}) => ({
   start_date: null,
   ...extra,
 });
+// ---- The shared "Projetos" list, answered by Get Task as documented: the task itself (with
+// team_id and its home list) and `subtasks` as partial objects without team_id. Whether
+// ClickUp lists one level or all, and whether it lists closed subtasks, is not documented:
+// both behaviours are switchable so the reader is tested against each.
+const PROJETOS = '900100';
+const shared = new Map<string, Record<string, unknown>>();
+const getTaskMode = { levels: 'direct' as 'direct' | 'all', hideClosed: false };
+const rootOf = (id: string): string => {
+  const p = shared.get(id)?.parent as string | null;
+  return p ? rootOf(p) : id;
+};
+function getTaskAnswer(t: Record<string, unknown>) {
+  const below = (id: string): Record<string, unknown>[] =>
+    [...shared.values()]
+      .filter((s) => s.parent === id)
+      .flatMap((s) =>
+        getTaskMode.levels === 'all' ? [s, ...below(s.id as string)] : [s],
+      );
+  const subtasks = below(t.id as string)
+    .filter(
+      (s) =>
+        !(
+          getTaskMode.hideClosed &&
+          (s.status as { type: string }).type === 'closed'
+        ),
+    )
+    .map(({ team_id: _t, list: _l, ...s }) => ({
+      ...s,
+      top_level_parent: rootOf(s.id as string),
+    }));
+  return {
+    ...t,
+    top_level_parent: t.parent ? rootOf(t.id as string) : null,
+    list: { id: PROJETOS, name: 'Projetos', access: true },
+    subtasks,
+  };
+}
+const put = (id: string, extra: Record<string, unknown> = {}) =>
+  shared.set(id, task(id, { archived: false, ...extra }));
 const fake = Bun.serve({
   hostname: '127.0.0.1',
   port: 0,
@@ -112,6 +151,12 @@ const fake = Bun.serve({
     if (fault) {
       const r = await fault(url);
       if (r.status !== 299) return r;
+    }
+    const one = /^\/task\/([^/]+)$/.exec(url.pathname);
+    if (one) {
+      const t = shared.get(decodeURIComponent(one[1]!));
+      if (!t) return new Response('{"err":"Task not found"}', { status: 404 });
+      return Response.json(getTaskAnswer(t));
     }
     const m = /^\/list\/(\d+)(\/task)?$/.exec(url.pathname);
     const items = m && lists.get(m[1]!);
@@ -311,6 +356,8 @@ afterAll(async () => {
 beforeEach(async () => {
   fault = null;
   pageSize = 2;
+  getTaskMode.levels = 'direct';
+  getTaskMode.hideClosed = false;
   seen.length = 0;
   mine = [];
   // Each test owns its lists: anything left from another test is not due.
@@ -358,6 +405,7 @@ test('the code has one network exit, which cannot express another verb', () => {
   expect(Object.keys(client()).sort()).toEqual([
     'calls',
     'getList',
+    'getTask',
     'getTasksPage',
   ]);
   // No other server module knows the provider.
@@ -1147,6 +1195,7 @@ test('freshness turns stale by age, and stale data keeps its real numbers, not z
   const l = (success: string | null, error: string | null = null) => ({
     id: 'l',
     list_id: '1',
+    task_id: null,
     list_name: null,
     last_success_at: success,
     last_attempt_at: null,
@@ -1649,4 +1698,511 @@ test('database accounts: worker reaches only its tables, web cannot write what t
     runtime,
     'UPDATE clickup_project_links SET last_success_at=now()',
   );
+});
+
+// ---- Task links: one top-level task of a shared list is one client project ----
+const day = 86400000;
+const ms = (offsetDays: number) => String(Date.now() + offsetDays * day);
+const st = (status: string, type = 'custom') => ({
+  status,
+  type,
+  color: '#000',
+  orderindex: 0,
+});
+/** APOLLO ÔNIBUS and two neighbouring projects of the same "Projetos" list. */
+function projetos(prefix: string) {
+  const id = (s: string) => `${prefix}${s}`;
+  put(id('apollo'), {
+    name: 'APOLLO ÔNIBUS',
+    status: st('em produção'),
+    assignees: [{ id: 501, username: 'Ana PO' }],
+    due_date: ms(30),
+  });
+  const activities: [string, ReturnType<typeof st>, string | null][] = [
+    ['a1', st('a fazer', 'open'), ms(10)],
+    ['a2', st('a fazer', 'open'), null],
+    ['a3', st('em andamento'), ms(5)],
+    ['a4', st('em andamento'), ms(-3)],
+    ['a5', st('impedido'), ms(2)],
+    ['a6', st('concluído', 'closed'), ms(-20)],
+    ['a7', st('concluído', 'closed'), ms(-10)],
+  ];
+  for (const [s, status, due] of activities)
+    put(id(s), {
+      name: 'Atividade ' + s,
+      parent: id('apollo'),
+      status,
+      due_date: due,
+      assignees: s === 'a2' ? [] : [{ id: 502, username: 'Dev Bruno' }],
+    });
+  // Neighbours: other clients, never to be requested nor stored.
+  put(id('zeus'), { name: 'ZEUS TRANSPORTES', status: st('briefing') });
+  for (const s of ['z1', 'z2', 'z3'])
+    put(id(s), { parent: id('zeus'), status: st('a fazer', 'open') });
+  put(id('hera'), { name: 'HERA', status: st('pausado') });
+  return id;
+}
+const linkTask = async (taskId: unknown, projectId?: string) => {
+  const project =
+    projectId ?? (await newProject(crypto.randomUUID().slice(0, 8)));
+  const l = await call('manager', 'clickup/links', 'POST', {
+    project_id: project,
+    task_id: taskId,
+  });
+  mine.push(l.id);
+  return { projectId: project, linkId: l.id as string };
+};
+const storedIds = async (prefix: string) =>
+  (
+    await db.query(
+      "SELECT task_id FROM clickup_tasks WHERE organization_id=$1 AND task_id LIKE $2||'%' ORDER BY task_id",
+      [org, prefix],
+    )
+  ).rows.map((r) => r.task_id.slice(prefix.length));
+
+test('APOLLO ÔNIBUS: the top-level task is the project, its seven subtasks the activities, nothing of the neighbours', async () => {
+  const p = 'ap' + randomBytes(3).toString('hex') + '_';
+  const id = projetos(p);
+  // Copied from the browser address bar or typed: both reach the same task.
+  const { projectId, linkId } = await linkTask(
+    `https://app.clickup.com/t/${id('apollo')}`,
+  );
+  expect(
+    (
+      await db.query(
+        'SELECT list_id,root_task_id FROM clickup_project_links WHERE id=$1',
+        [linkId],
+      )
+    ).rows[0],
+  ).toEqual({ list_id: null, root_task_id: id('apollo') });
+  await sync();
+
+  // Only Get Task for the project and its own subtasks: no list read, no neighbour.
+  const paths = seen.map((r) => r.url.pathname).sort();
+  expect(paths).toEqual(
+    ['apollo', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7']
+      .map((s) => `/task/${id(s)}`)
+      .sort(),
+  );
+  for (const r of seen) {
+    expect(r.method).toBe('GET');
+    expect([...r.url.searchParams.entries()]).toEqual([
+      ['include_subtasks', 'true'],
+    ]);
+  }
+  expect(await storedIds(p)).toEqual(
+    ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'apollo'].sort(),
+  );
+
+  const e = await execution(projectId);
+  expect(e.freshness).toBe('fresh');
+  expect(e.links).toEqual([
+    expect.objectContaining({
+      list_id: null,
+      task_id: id('apollo'),
+      list_name: 'Projetos',
+    }),
+  ]);
+  // The project's own status, apart, as the team set it: no mapping yet, so no meaning.
+  expect(e.roots).toEqual([
+    {
+      id: id('apollo'),
+      name: 'APOLLO ÔNIBUS',
+      url: `https://app.clickup.com/t/${id('apollo')}`,
+      status: 'em produção',
+      state: null,
+      due_at: new Date(
+        Number(shared.get(id('apollo'))!.due_date),
+      ).toISOString(),
+      overdue: false,
+      owners: ['Ana PO'],
+    },
+  ]);
+  // The activities, separately: never the root, never a percentage.
+  expect(e.activity_statuses).toEqual([
+    { status: 'a fazer', tasks: 2 },
+    { status: 'concluído', tasks: 2 },
+    { status: 'em andamento', tasks: 2 },
+    { status: 'impedido', tasks: 1 },
+  ]);
+  expect(e.counts).toMatchObject({
+    tasks_open: 5,
+    tasks_closed: 2,
+    subtasks_open: 0,
+    subtasks_closed: 0,
+    overdue: 1,
+    without_due_date: 1,
+    unassigned_open: 1,
+    // Statuses without mapping: blocks are unknown, not zero.
+    blocked: null,
+    waiting_client: null,
+  });
+  expect(e.owners).toEqual([{ name: 'Dev Bruno', open: 4, overdue: 1 }]);
+  expect(JSON.stringify(e)).not.toMatch(/percent|progress|forecast/i);
+  expect(
+    e.unmapped_statuses.map((u) => [u.status, u.tasks, u.list_name]),
+  ).toEqual([
+    ['a fazer', 2, 'Projetos'],
+    ['em andamento', 2, 'Projetos'],
+    ['em produção', 1, 'Projetos'],
+    ['impedido', 1, 'Projetos'],
+  ]);
+
+  // Explicit mappings of the shared list: "impedido" is a block; the root's own status
+  // gets its meaning without becoming a count of the activities.
+  for (const [status, state] of [
+    ['impedido', 'blocked'],
+    ['a fazer', 'not_started'],
+    ['em andamento', 'in_progress'],
+  ])
+    await call('manager', 'clickup/status-mappings', 'POST', {
+      status,
+      state,
+      list_id: PROJETOS,
+    });
+  // The root's status still without meaning does not make the activities' blocks unknown.
+  const partly = await execution(projectId);
+  expect(partly.roots[0]!.state).toBeNull();
+  expect(partly.counts).toMatchObject({ blocked: 1, waiting_client: 0 });
+  await call('manager', 'clickup/status-mappings', 'POST', {
+    status: 'em produção',
+    state: 'in_progress',
+    list_id: PROJETOS,
+  });
+  const mapped = await execution(projectId);
+  expect(mapped.roots[0]!.state).toBe('in_progress');
+  expect(mapped.counts).toMatchObject({
+    blocked: 1,
+    waiting_client: 0,
+    tasks_open: 5,
+  });
+  expect(mapped.situation).toBe('blocked');
+  expect(mapped.attention.map((a) => [a.id, a.reasons])).toEqual([
+    [id('a5'), ['blocked']],
+    [id('a4'), ['overdue']],
+  ]);
+
+  // Repeating the read adds and rewrites nothing.
+  const count = async () =>
+    (
+      await db.query(
+        'SELECT (SELECT count(*) FROM clickup_tasks WHERE organization_id=$1)::int t,(SELECT count(*) FROM clickup_list_tasks WHERE link_id=$2)::int m',
+        [org, linkId],
+      )
+    ).rows[0];
+  const before = await count();
+  await makeDue();
+  await sync();
+  expect(await count()).toEqual(before);
+  expect(await lastRun(linkId)).toMatchObject({
+    state: 'succeeded',
+    root_task_id: id('apollo'),
+    list_id: null,
+    tasks_seen: 8,
+    tasks_inserted: 0,
+    tasks_updated: 0,
+    tasks_missing: 0,
+    http_calls: 8,
+  });
+  const again = await execution(projectId);
+  expect({ ...again, last_sync_at: null, links: [] }).toEqual({
+    ...mapped,
+    last_sync_at: null,
+    links: [],
+  });
+});
+
+test('nested subtasks are read level by level, whether Get Task lists one level or all of them', async () => {
+  for (const levels of ['direct', 'all'] as const) {
+    getTaskMode.levels = levels;
+    seen.length = 0;
+    const p = 'nx' + randomBytes(3).toString('hex') + '_';
+    const id = (s: string) => p + s;
+    put(id('root'), { status: st('ativo') });
+    put(id('c1'), { parent: id('root') });
+    put(id('c2'), { parent: id('root'), status: st('feito', 'closed') });
+    put(id('g1'), { parent: id('c1') });
+    put(id('g2'), { parent: id('c1'), due_date: ms(-5) });
+    put(id('gg'), { parent: id('g1') });
+    const { projectId } = await linkTask(id('root'));
+    await sync();
+    expect([levels, await storedIds(p)]).toEqual([
+      levels,
+      ['c1', 'c2', 'g1', 'g2', 'gg', 'root'],
+    ]);
+    // Each task once, never twice, even when an ancestor already listed it.
+    expect(seen.length).toBe(6);
+    const stored = (
+      await db.query(
+        "SELECT task_id,parent_task_id FROM clickup_tasks WHERE organization_id=$1 AND task_id LIKE $2||'%' ORDER BY task_id",
+        [org, p],
+      )
+    ).rows.map((r) => [
+      r.task_id.slice(p.length),
+      r.parent_task_id?.slice(p.length) ?? null,
+    ]);
+    expect(stored).toEqual([
+      ['c1', 'root'],
+      ['c2', 'root'],
+      ['g1', 'c1'],
+      ['g2', 'c1'],
+      ['gg', 'g1'],
+      ['root', null],
+    ]);
+    const e = await execution(projectId);
+    expect([levels, e.counts]).toMatchObject([
+      levels,
+      {
+        tasks_open: 1,
+        tasks_closed: 1,
+        subtasks_open: 3,
+        subtasks_closed: 0,
+        overdue: 1,
+      },
+    ]);
+  }
+});
+
+test('a hierarchy that does not add up fails the read and stores nothing', async () => {
+  const cases: [string, (id: (s: string) => string) => void, string][] = [
+    // Linked by mistake to an activity instead of the project.
+    ['sub', (id) => put(id('x'), { parent: id('root') }), 'not_top_level'],
+    // Listed under the root, but its own answer names another parent.
+    [
+      'liar',
+      (id) => {
+        put(id('x'), { parent: id('root') });
+        fault = (url) => {
+          if (url.pathname !== `/task/${id('x')}`)
+            return new Response('', { status: 299 });
+          return Response.json({
+            ...getTaskAnswer(shared.get(id('x'))!),
+            parent: id('other'),
+          });
+        };
+      },
+      'hierarchy_mismatch',
+    ],
+    // A subtask whose top-level parent is another project.
+    [
+      'foreign',
+      (id) => {
+        put(id('x'), { parent: id('root') });
+        fault = (url) => {
+          if (url.pathname !== `/task/${id('root')}`)
+            return new Response('', { status: 299 });
+          const a = getTaskAnswer(shared.get(id('root'))!);
+          return Response.json({
+            ...a,
+            subtasks: [{ ...a.subtasks[0], top_level_parent: id('zz') }],
+          });
+        };
+      },
+      'hierarchy_mismatch',
+    ],
+    // Listed deeper by the root, but never reachable through its own parent.
+    [
+      'orphan',
+      (id) => {
+        getTaskMode.levels = 'all';
+        put(id('x'), { parent: id('root') });
+        put(id('y'), { parent: id('x') });
+        fault = (url) => {
+          if (url.pathname !== `/task/${id('x')}`)
+            return new Response('', { status: 299 });
+          return Response.json({
+            ...getTaskAnswer(shared.get(id('x'))!),
+            subtasks: [],
+          });
+        };
+      },
+      'hierarchy_mismatch',
+    ],
+    // Deeper than any project should be: refused, not cut short.
+    [
+      'deep',
+      (id) => {
+        let parent = id('root');
+        for (let i = 0; i < 12; i++) {
+          put(id('d' + i), { parent });
+          parent = id('d' + i);
+        }
+      },
+      'too_many_tasks',
+    ],
+    // The subtasks field in an unknown shape.
+    [
+      'shape',
+      (id) => {
+        fault = (url) =>
+          url.pathname === `/task/${id('root')}`
+            ? Response.json({
+                ...getTaskAnswer(shared.get(id('root'))!),
+                subtasks: 'x',
+              })
+            : new Response('', { status: 299 });
+      },
+      'invalid_response',
+    ],
+  ];
+  for (const [name, arrange, code] of cases) {
+    fault = null;
+    getTaskMode.levels = 'direct';
+    const p = 'hx' + name + randomBytes(2).toString('hex') + '_';
+    const id = (s: string) => p + s;
+    put(id('root'));
+    arrange(id);
+    const target = name === 'sub' ? id('x') : id('root');
+    const { projectId, linkId } = await linkTask(target);
+    await sync();
+    expect([name, (await lastRun(linkId)).error_code]).toEqual([name, code]);
+    expect([name, await storedIds(p)]).toEqual([name, []]);
+    const e = await execution(projectId);
+    expect([name, e.situation, e.counts, e.roots]).toEqual([
+      name,
+      'unavailable',
+      null,
+      [],
+    ]);
+  }
+});
+
+test('a failed or partial read after a good one keeps the last complete picture, marked as old', async () => {
+  const p = 'pf' + randomBytes(3).toString('hex') + '_';
+  const id = projetos(p);
+  const { projectId, linkId } = await linkTask(id('apollo'));
+  await sync();
+  const good = await execution(projectId);
+  // The fifth request fails: four answers already arrived and none of them is written.
+  let left = 4;
+  fault = () =>
+    left-- > 0
+      ? new Response('', { status: 299 })
+      : new Response('', { status: 502 });
+  shared.get(id('a1'))!.status = st('concluído', 'closed');
+  await makeDue();
+  await sync();
+  expect((await lastRun(linkId)).error_code).toBe('upstream');
+  const after = await execution(projectId);
+  expect(after.freshness).toBe('failing');
+  expect(after.counts).toEqual(good.counts);
+  expect(after.activity_statuses).toEqual(good.activity_statuses);
+  // A rate limit stops the cycle the same way.
+  fault = () =>
+    new Response('', {
+      status: 429,
+      headers: {
+        'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 30),
+      },
+    });
+  await makeDue();
+  expect((await sync()).pauseSeconds).toBeGreaterThan(0);
+  expect((await execution(projectId)).counts).toEqual(good.counts);
+});
+
+test('a closed subtask left out of Get Task is read again, a deleted or moved one leaves the numbers', async () => {
+  getTaskMode.hideClosed = true;
+  const p = 'cl' + randomBytes(3).toString('hex') + '_';
+  const id = (s: string) => p + s;
+  put(id('root'), { status: st('em produção') });
+  for (const s of ['s1', 's2', 's3', 's4'])
+    put(id(s), { parent: id('root'), status: st('a fazer', 'open') });
+  put(id('k1'), { parent: id('s1'), status: st('a fazer', 'open') });
+  put(id('other'), { status: st('em produção') });
+  const { projectId, linkId } = await linkTask(id('root'));
+  await sync();
+  expect((await execution(projectId)).counts).toMatchObject({
+    tasks_open: 4,
+    subtasks_open: 1,
+  });
+
+  // s1 is closed (and its subtask k1 with it), s2 deleted, s3 moved under another project.
+  shared.get(id('s1'))!.status = st('concluído', 'closed');
+  shared.get(id('k1'))!.status = st('concluído', 'closed');
+  shared.delete(id('s2'));
+  shared.get(id('s3'))!.parent = id('other');
+  await makeDue();
+  seen.length = 0;
+  await sync();
+  const run = await lastRun(linkId);
+  expect(run).toMatchObject({ state: 'succeeded', tasks_missing: 2 });
+  const e = await execution(projectId);
+  // Closed, not vanished: s1 and k1 count as concluded.
+  expect(e.counts).toMatchObject({
+    tasks_open: 1,
+    tasks_closed: 1,
+    subtasks_open: 0,
+    subtasks_closed: 1,
+  });
+  expect(e.removed_from_lists).toBe(2);
+  // The moved task was looked at, but nothing of the other project was kept from it.
+  const moved = (
+    await db.query(
+      'SELECT parent_task_id FROM clickup_tasks WHERE organization_id=$1 AND task_id=$2',
+      [org, id('s3')],
+    )
+  ).rows[0];
+  expect(moved.parent_task_id).toBe(id('root'));
+  expect(seen.some((r) => r.url.pathname === `/task/${id('other')}`)).toBe(
+    false,
+  );
+});
+
+test('task links: partners only, one per task, validated, invisible to other organizations', async () => {
+  const p = 'is' + randomBytes(3).toString('hex') + '_';
+  const id = projetos(p);
+  const projectId = await newProject('iso' + p);
+  for (const bad of [
+    '',
+    'tem espaço',
+    'https://evil.example/t/abc',
+    '../x',
+    'a'.repeat(65),
+    7,
+  ])
+    expect(
+      (
+        await raw('manager', 'clickup/links', 'POST', {
+          project_id: projectId,
+          task_id: bad,
+        })
+      ).status,
+    ).toBe(422);
+  await linkTask(id('apollo'), projectId);
+  // The same project twice in one organization would count its activities twice.
+  expect(
+    (
+      await raw('manager', 'clickup/links', 'POST', {
+        project_id: projectId,
+        task_id: id('apollo'),
+      })
+    ).status,
+  ).toBe(409);
+  for (const who of ['po', 'dev'])
+    expect(
+      (
+        await raw(who, 'clickup/links', 'POST', {
+          project_id: projectId,
+          task_id: id('hera'),
+        })
+      ).status,
+    ).toBe(403);
+  expect(
+    (
+      await raw('foreign', 'clickup/links', 'POST', {
+        project_id: projectId,
+        task_id: id('hera'),
+      })
+    ).status,
+  ).toBe(404);
+  await sync();
+  const foreign = await call<FinancialOverview>('foreign', 'overview');
+  expect(JSON.stringify(foreign)).not.toContain(id('apollo'));
+  expect(JSON.stringify(foreign)).not.toContain('APOLLO');
+  // Audited like a list link.
+  const audited = await db.query(
+    "SELECT action FROM audit_events WHERE organization_id=$1 AND entity_type='clickup_link' AND entity_id::text=(SELECT id::text FROM clickup_project_links WHERE root_task_id=$2)",
+    [org, id('apollo')],
+  );
+  expect(audited.rows.map((r) => r.action)).toEqual(['created']);
 });

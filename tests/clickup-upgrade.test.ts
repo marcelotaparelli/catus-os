@@ -81,6 +81,14 @@ async function panel(now = new Date()) {
   return (await withExecution(ctx(), org, overview, now)).projects[0]!
     .execution as ProjectExecution;
 }
+let at013: { columns: Record<string, unknown>[]; rows: object[][] } | null =
+  null;
+const linkRows = async () =>
+  (
+    (await db.query(
+      'SELECT * FROM clickup_project_links ORDER BY id; SELECT * FROM clickup_sync_runs ORDER BY id',
+    )) as unknown as pg.QueryResult[]
+  ).map((r) => r.rows as object[]);
 const columnsOf = async () =>
   (
     await db.query(
@@ -166,7 +174,7 @@ test('013 on top of M6.1 data: nothing existing changes, the panel reads the sam
     )) as unknown as pg.QueryResult[]
   ).map((r) => r.rows);
 
-  const out = await migrateUpTo('999');
+  const out = await migrateUpTo('013_clickup_status_scope.sql');
   expect(out).toContain('Applied 013_clickup_status_scope.sql');
   expect(out).not.toContain('Applied 012');
   runtime = new pg.Pool({ connectionString: roles.RUNTIME_DATABASE_URL });
@@ -204,6 +212,13 @@ test('013 on top of M6.1 data: nothing existing changes, the panel reads the sam
     rowsBefore[0]!.map((t: object) => ({ ...t, home_list_id: null })),
   );
   expect(rowsAfter.slice(1)).toEqual(rowsBefore.slice(1));
+
+  // The current code needs 014 as well; the 013 schema was checked above and is kept for
+  // the next test, which checks what 014 changes.
+  at013 = { columns: after, rows: await linkRows() };
+  const next = await migrateUpTo('014_clickup_task_links.sql');
+  expect(next).toContain('Applied 014_clickup_task_links.sql');
+  expect(next).not.toContain('Applied 013');
 
   // The same reading as M6.1: legacy org-wide mappings still apply, nothing unmapped.
   const e = await panel();
@@ -252,4 +267,86 @@ test('013 on top of M6.1 data: nothing existing changes, the panel reads the sam
     }
     expect([sql, failed]).toEqual([sql, ok ? '' : '42501']);
   }
+});
+test('014 on top of 013 data: list links read the same, a link is a list or a task, never both', async () => {
+  const before = at013!.columns,
+    rowsBefore = at013!.rows;
+  // Additive: list_id stops being mandatory (for task links only, see the check below), and
+  // two nullable columns appear. Everything else is identical.
+  const after = await columnsOf();
+  const key = (c: Record<string, unknown>) =>
+    `${c.table_name}.${c.column_name}`;
+  const relaxed = [
+    'clickup_project_links.list_id',
+    'clickup_sync_runs.list_id',
+  ];
+  expect(
+    after.filter(
+      (c) => !relaxed.includes(key(c)) && before.some((b) => key(b) === key(c)),
+    ),
+  ).toEqual(before.filter((c) => !relaxed.includes(key(c))));
+  for (const k of relaxed)
+    expect(after.find((c) => key(c) === k)).toMatchObject({
+      is_nullable: 'YES',
+    });
+  expect(
+    after
+      .filter((c) => !before.some((b) => key(b) === key(c)))
+      .map((c) => [key(c), c.is_nullable, c.column_default]),
+  ).toEqual([
+    ['clickup_project_links.root_task_id', 'YES', null],
+    ['clickup_sync_runs.root_task_id', 'YES', null],
+  ]);
+  const rowsAfter = await linkRows();
+  expect(rowsAfter[0]).toEqual(
+    rowsBefore[0]!.map((l: object) => ({ ...l, root_task_id: null })),
+  );
+  expect(rowsAfter[1]).toEqual(
+    rowsBefore[1]!.map((r: object) => ({ ...r, root_task_id: null })),
+  );
+  // A list link has no root: every task stays an activity, as before.
+  const e = await panel();
+  expect(e.links.map((l) => [l.list_id, l.task_id])).toEqual([['4001', null]]);
+  expect(e.roots).toEqual([]);
+
+  // The previous code's insert of a list link still works; a link with neither or both fails.
+  for (const [list, task, ok] of [
+    ['4002', null, true],
+    [null, 'abc123', true],
+    [null, null, false],
+    ['4003', 'abc124', false],
+  ] as const) {
+    let failed = '';
+    try {
+      await runtime.query(
+        'INSERT INTO clickup_project_links(organization_id,project_id,list_id,root_task_id,created_by) VALUES($1,$2,$3,$4,$5)',
+        [org, project, list, task, user],
+      );
+    } catch (err) {
+      failed = (err as { code: string }).code;
+    }
+    expect([list, task, failed]).toEqual([list, task, ok ? '' : '23514']);
+  }
+  // One active link per top-level task in an organization.
+  let duplicate = '';
+  try {
+    await runtime.query(
+      "INSERT INTO clickup_project_links(organization_id,project_id,root_task_id,created_by) VALUES($1,$2,'abc123',$3)",
+      [org, project, user],
+    );
+  } catch (err) {
+    duplicate = (err as { code: string }).code;
+  }
+  expect(duplicate).toBe('23505');
+  // The worker still cannot create or repoint links.
+  let denied = '';
+  try {
+    await worker.query(
+      "UPDATE clickup_project_links SET root_task_id='zzz' WHERE organization_id=$1",
+      [org],
+    );
+  } catch (err) {
+    denied = (err as { code: string }).code;
+  }
+  expect(denied).toBe('42501');
 });

@@ -18,6 +18,7 @@
     refresh: () => Promise<void>;
   } = $props();
   let listId = $state('');
+  let kind = $state('task_id');
   let failure = $state('');
   const when = (iso: string | null) =>
     iso
@@ -70,7 +71,8 @@
   {#if e.counts}
     {@const c = e.counts}
     <dl>
-      {#each [['Tarefas abertas', c.tasks_open], ['Tarefas concluídas', c.tasks_closed], ['Subtarefas abertas', c.subtasks_open], ['Subtarefas concluídas', c.subtasks_closed], ['Atrasadas, com subtarefas', c.overdue], ['Abertas sem prazo', c.without_due_date], ['Próximo prazo', when(c.next_due_at)], ['Bloqueadas', c.blocked], ['Aguardando cliente', c.waiting_client], ['Com dependência aberta', c.waiting_dependency], ['Abertas sem responsável', c.unassigned_open]] as [k, v]}
+      <!-- Long texts go in the label, which wraps; the value stays short. -->
+      {#each [...e.roots.flatMap( (r) => [[`Projeto “${r.name}” (${r.owners.join(', ') || 'sem responsável'}), status “${r.status}”`, r.state ? managerialLabels[r.state] : 'Sem significado definido'], ['Prazo do projeto', when(r.due_at) + (r.overdue ? ', atrasado' : '')]], ), ...e.activity_statuses.map( (s) => [`Atividades em “${s.status}”`, s.tasks], ), ['Atividades abertas', c.tasks_open], ['Atividades concluídas', c.tasks_closed], ['Subtarefas abertas', c.subtasks_open], ['Subtarefas concluídas', c.subtasks_closed], ['Atrasadas, com subtarefas', c.overdue], ['Abertas sem prazo', c.without_due_date], ['Próximo prazo', when(c.next_due_at)], ['Bloqueadas', c.blocked], ['Aguardando cliente', c.waiting_client], ['Com dependência aberta', c.waiting_dependency], ['Abertas sem responsável', c.unassigned_open]] as [k, v]}
         <div class="kv">
           <dt>{k}</dt>
           <dd>{v ?? 'Não disponível'}</dd>
@@ -92,9 +94,8 @@
         <summary>Atrasos e bloqueios ({e.attention.length})</summary>
         <ul class="plain">
           {#each e.attention as a (a.id)}<li>
-              {#if a.url}<a class="text-link" href={a.url} rel="noreferrer"
-                  >{a.name}</a
-                >{:else}{a.name}{/if}: {a.reasons
+              <!-- Without a URL, an anchor without href: plain text, not a link. -->
+              <a class="text-link" href={a.url} rel="noreferrer">{a.name}</a>: {a.reasons
                 .map((r) => reasonLabels[r])
                 .join(', ')}; status “{a.status}”; prazo {when(a.due_at)};
               {a.owners.join(', ') || 'sem responsável'}
@@ -148,10 +149,12 @@
     {/if}
   {/if}
   <details>
-    <summary>Listas vinculadas ({e.links.length})</summary>
+    <summary>Vínculos ({e.links.length})</summary>
     <ul class="plain">
       {#each e.links as l (l.id)}<li>
-          {l.list_name ?? 'Nome ainda não lido'} (lista {l.list_id}):
+          {l.list_name ?? 'Nome ainda não lido'} ({l.task_id
+            ? 'tarefa ' + l.task_id
+            : 'lista ' + l.list_id}):
           {when(l.last_success_at)}
           <button
             class="secondary"
@@ -163,13 +166,17 @@
     <form
       onsubmit={async (ev) => {
         ev.preventDefault();
-        await post('links', { project_id: projectId, list_id: listId });
+        await post('links', { project_id: projectId, [kind]: listId });
         if (!failure) listId = '';
       }}
     >
+      <select bind:value={kind} aria-label="Vincular por">
+        <option value="task_id">Tarefa principal</option>
+        <option value="list_id">Lista inteira</option>
+      </select>
       <label>
-        ID da lista do ClickUp
-        <input bind:value={listId} inputmode="numeric" required />
+        ID do ClickUp
+        <input bind:value={listId} required />
       </label>
       <button class="secondary">Vincular</button>
     </form>
